@@ -11,18 +11,21 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "express": "^4.21.0",
+    "@qaforge/shared-types": "workspace:*",
+    "@supabase/supabase-js": "^2.47.0",
     "cors": "^2.8.5",
-    "socket.io": "^4.8.0",
-    "zod": "^3.23.0",
     "dotenv": "^16.4.0",
-    "@qaforge/shared-types": "workspace:*"
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.5.0",
+    "socket.io": "^4.8.0",
+    "winston": "^3.17.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
-    "tsx": "^4.19.0",
-    "typescript": "^5.7.0",
-    "@types/express": "^5.0.0",
     "@types/cors": "^2.8.0",
-    "@types/node": "^22.0.0"
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
   }
 }

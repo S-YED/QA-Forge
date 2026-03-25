@@ -1,36 +1,68 @@
-import express from 'express';
+import express, { type Express } from 'express';
 import cors from 'cors';
-import type { ApiError } from '@qaforge/shared-types';
+import { env } from './config/env.js';
+import { defaultLimiter } from './middleware/rate-limiter.js';
+import { errorHandler } from './middleware/error-handler.js';
+import { authenticate } from './middleware/auth.middleware.js';
+import authRouter from './routes/auth.routes.js';
+import projectsRouter from './routes/projects.routes.js';
+import apiKeysRouter from './routes/api-keys.routes.js';
 
-const app = express();
+const app: Express = express();
 
-// ── Middleware ─────────────────────────────────────────────────────────────────
+// ── 1. Body parser ─────────────────────────────────────────────────────────────
+// 10MB limit for context uploads in post-MVP AI routes
+app.use(express.json({ limit: '10mb' }));
 
-app.use(express.json());
+// ── 2. CORS ────────────────────────────────────────────────────────────────────
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: (origin, cb) => {
+      // Allow requests with no origin (e.g. server-to-server, curl)
+      if (!origin || env.CORS_ORIGINS.includes(origin)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
   }),
 );
 
-// ── Health Check ──────────────────────────────────────────────────────────────
+// ── 3. Rate limiter — applied globally ────────────────────────────────────────
+app.use(defaultLimiter);
 
+// ── 4. Health check (unauthenticated) ─────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
+    version: '1.0.0-mvp',
   });
 });
 
-// ── 404 Catch-All ─────────────────────────────────────────────────────────────
+// ── 5. Auth routes ─────────────────────────────────────────────────────────────
+// authenticate is applied per-route inside the router (GET/PUT /me)
+app.use('/api/auth', authRouter);
 
-app.use((_req, res) => {
-  const error: ApiError = {
-    error: 'Not Found',
-    message: 'Route not found',
-    statusCode: 404,
-  };
-  res.status(404).json(error);
+// ── 6. Project routes (all protected) ─────────────────────────────────────────
+app.use('/api/projects', authenticate, projectsRouter);
+
+// ── 7. API key routes (all protected) ─────────────────────────────────────────
+app.use('/api/api-keys', authenticate, apiKeysRouter);
+
+// ── 8. 404 catch-all ──────────────────────────────────────────────────────────
+app.use((req, res) => {
+  res.status(404).json({
+    error: {
+      code: 'NOT_FOUND',
+      message: `Route ${req.method} ${req.path} not found`,
+      details: null,
+    },
+  });
 });
+
+// ── 9. Global error handler (must be last) ────────────────────────────────────
+app.use(errorHandler);
 
 export default app;
