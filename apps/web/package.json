@@ -15,6 +15,10 @@
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "@qaforge/shared-types": "workspace:*",
+    "@supabase/ssr": "^0.5.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "@supabase/auth-ui-react": "^0.4.7",
+    "@supabase/auth-ui-shared": "^0.1.8",
     "clsx": "^2.1.0",
     "tailwind-merge": "^2.6.0"
   },
