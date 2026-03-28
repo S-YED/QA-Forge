@@ -1,0 +1,1787 @@
+﻿I have created the following plan after thorough exploration and analysis of the codebase. Follow the below plan verbatim. Trust the files and references. Do not re-verify what's written in the plan. Explore only when absolutely necessary. First implement all the proposed file changes and then I'll review all the changes together at the end.
+
+<task_completion_requirement>
+This project uses a task-tracking convention. After completing all changes, create the file \`~/.traycer/yolo_artifacts/287146d0-51d4-4e4e-9e4e-8fde2142d33c.json\` with content \`{}\`. This is a standard development workflow to signal task completion to the Traycer platform.
+</task_completion_requirement>
+
+## Observations
+
+The workspace is a fully implemented pnpm + Turborepo monorepo with all four MVP phases complete. Every source file has been read and verified: 17 migration files, all Express routes, all Next.js pages and components, shared-types, seed data, and config files. The \`artifacts/\` folder does not yet exist at the workspace root.
+
+## Approach
+
+Create the \`artifacts/\` folder at the workspace root and write all 7 markdown files using the exact content sourced from the codebase. No placeholders — every variable name, file path, migration filename, SQL decision, and implementation detail is drawn directly from the actual source files read above.
+
+---
+
+## Implementation Instructions
+
+### Step 1 — Create the \`artifacts/\` folder
+
+Create the directory \`artifacts/\` at \`c:\\Users\\Syed Khaja Moinuddin\\Desktop\\QA Forge\\artifacts\\\`.
+
+---
+
+### Step 2 — Create \`artifacts/00-Local-Setup-Guide.md\`
+
+Write the following complete content:
+
+\`\`\`\`markdown
+# QAForge — Local Setup Guide
+
+A complete step-by-step guide for running QAForge on your local machine.
+
+---
+
+## Prerequisites
+
+Install the following tools before proceeding:
+
+| Tool | Version | Install Command | Verify |
+|---|---|---|---|
+| Docker Desktop | Latest | [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop) | \`docker --version\` |
+| Node.js | ≥ 18 | [nodejs.org](https://nodejs.org) | \`node --version\` |
+| pnpm | ≥ 8 | \`npm install -g pnpm\` | \`pnpm --version\` |
+| Supabase CLI | Latest | \`npm install -g supabase\` | \`supabase --version\` |
+
+> **Docker Desktop must be running** before you start Supabase. All Supabase local services run inside Docker containers.
+
+---
+
+## Step 1 — Start Supabase Locally
+
+\`\`\`bash
+supabase start
+supabase db reset
+supabase status
+\`\`\`
+
+**What each command does:**
+
+- \`supabase start\` — Pulls and starts all Supabase Docker containers (PostgreSQL on port 54322, API on port 54321, Studio on port 54323, Inbucket email on port 54324).
+- \`supabase db reset\` — Drops and recreates the local database, applies all 17 migration files in \`supabase/migrations/\` in order, then runs \`supabase/seed.sql\` to populate demo data. Run this any time you want a clean slate.
+- \`supabase status\` — Prints the connection details you need for your \`.env\` files:
+
+\`\`\`
+API URL: http://127.0.0.1:54321
+anon key: eyJ...
+service_role key: eyJ...
+DB URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+Studio URL: http://127.0.0.1:54323
+\`\`\`
+
+Copy these values — you will paste them into the next two steps.
+
+---
+
+## Step 2 — Create \`apps/api/.env\`
+
+This file does **not** exist yet. You must create it manually.
+
+Create the file at \`apps/api/.env\` with the following content:
+
+\`\`\`
+PORT=4000
+NODE_ENV=development
+CORS_ORIGIN=http://localhost:3000
+SUPABASE_URL=<paste API URL from supabase status>
+SUPABASE_SERVICE_ROLE_KEY=<paste service_role key from supabase status>
+DATABASE_URL=<paste DB URL from supabase status>
+ENCRYPTION_KEY=<generate with command below>
+JWT_SECRET=<any random string of 32+ characters>
+REDIS_URL=
+\`\`\`
+
+**Variable explanations:**
+
+| Variable | Description |
+|---|---|
+| \`PORT\` | The port the Express server listens on. Default: \`4000\`. |
+| \`NODE_ENV\` | Sets development mode — enables pretty Winston logs and non-redacted error messages. |
+| \`CORS_ORIGIN\` | Allows the Next.js frontend at \`http://localhost:3000\` to call the API. Supports comma-separated values for multiple origins. |
+| \`SUPABASE_URL\` | The local Supabase API endpoint. Paste the API URL from \`supabase status\` — typically \`http://127.0.0.1:54321\`. |
+| \`SUPABASE_SERVICE_ROLE_KEY\` | The service role key that bypasses Row-Level Security. **Backend-only — never expose this to the frontend or commit it to version control.** |
+| \`DATABASE_URL\` | Direct PostgreSQL connection string. Paste the DB URL from \`supabase status\` — typically \`postgresql://postgres:postgres@127.0.0.1:54322/postgres\`. |
+| \`ENCRYPTION_KEY\` | A 64-character hex string (32 bytes) used for AES-256-GCM encryption of stored API keys. Must be exactly 64 hex characters — Zod enforces \`.length(64)\` at startup. |
+| \`JWT_SECRET\` | Used for internal token validation. Any random string of 32 or more characters. |
+| \`REDIS_URL\` | Intentionally blank. BullMQ job queues are a post-MVP feature. The Redis client is a no-op stub in MVP. |
+
+**Generate your \`ENCRYPTION_KEY\`:**
+
+\`\`\`bash
+node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"
+\`\`\`
+
+This outputs a 64-character hex string. Paste it as the value of \`ENCRYPTION_KEY\`.
+
+---
+
+## Step 3 — Fill \`apps/web/.env.local\`
+
+This file already exists at \`apps/web/.env.local\` but its values are empty. Fill in the three variables:
+
+\`\`\`
+NEXT_PUBLIC_SUPABASE_URL=<paste API URL from supabase status>
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<paste anon key from supabase status>
+NEXT_PUBLIC_API_URL=http://localhost:4000
+\`\`\`
+
+**Variable explanations:**
+
+| Variable | Description |
+|---|---|
+| \`NEXT_PUBLIC_SUPABASE_URL\` | The Supabase endpoint used by the browser client (\`createBrowserClient\`). Paste the API URL from \`supabase status\`. |
+| \`NEXT_PUBLIC_SUPABASE_ANON_KEY\` | The public anon key. Safe to expose in the browser — Row-Level Security enforces data isolation at the database layer. |
+| \`NEXT_PUBLIC_API_URL\` | The base URL of the Express API. The typed \`apiClient\` in \`lib/api/client.ts\` prepends this to all requests. |
+
+---
+
+## Step 4 — Install Dependencies
+
+From the workspace root:
+
+\`\`\`bash
+pnpm install
+\`\`\`
+
+pnpm resolves all workspace packages (\`apps/web\`, \`apps/api\`, \`packages/shared-types\`, \`packages/ai-engine\`, \`packages/playwright-runner\`, \`packages/export-engine\`, \`packages/integrations\`) in a single pass with strict hoisting control.
+
+---
+
+## Step 5 — Run Both Apps
+
+\`\`\`bash
+pnpm dev
+\`\`\`
+
+Turborepo starts both apps concurrently:
+
+- \`apps/api\` — Express server with \`tsx watch src/index.ts\` (hot-reload on file changes) → **port 4000**
+- \`apps/web\` — Next.js App Router with \`next dev\` → **port 3000**
+
+---
+
+## Access URLs
+
+| Service | URL |
+|---|---|
+| Frontend (Next.js) | http://localhost:3000 |
+| Backend API (Express) | http://localhost:4000 |
+| API Health Check | http://localhost:4000/api/health |
+| Supabase Studio | http://localhost:54323 |
+
+The health check returns:
+\`\`\`json
+{ \"status\": \"ok\", \"timestamp\": \"...\", \"version\": \"1.0.0-mvp\" }
+\`\`\`
+
+---
+
+## Seed Data
+
+\`supabase db reset\` automatically runs \`supabase/seed.sql\` after applying all migrations. The seed creates fully reproducible demo data with fixed UUIDs:
+
+| Entity | Details |
+|---|---|
+| Users | \`alice@qaforge.dev\` (role: admin) and \`bob@qaforge.dev\` (role: tester) — password: \`Password123!\` |
+| Projects | \"E-Commerce Platform\" (\`https://shop.example.com\`) and \"Admin Dashboard\" (\`https://admin.example.com\`) — both owned by Alice |
+| Test Suites | \"Authentication\" (root suite) and \"Login Flows\" (child of Authentication) |
+| Test Cases | 3 cases: \"Successful login with valid credentials\" (critical), \"Login fails with incorrect password\" (high), \"Password reset email is sent\" (medium, AI-generated) |
+| Test Runs | 2 runs: one \`passed\` (chromium, ai_driven, 4230ms) and one \`failed\` (firefox, ai_driven, 1850ms) |
+| Recorded Session | \"Checkout Flow Recording\" (chromium, completed, 18450ms) |
+
+Log in at http://localhost:3000/login with either seed account to explore the platform.
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| \`supabase start\` fails immediately | Docker Desktop is not running. Start it first and wait for it to fully initialize. |
+| Port conflicts on 54321/54322/54323 | Check \`supabase/config.toml\` — the \`[api]\`, \`[db]\`, and \`[studio]\` sections define the ports. Change them if needed. |
+| \`ENCRYPTION_KEY\` validation error on API startup | The key must be exactly 64 hex characters (32 bytes). Regenerate with \`node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"\`. |
+| \`pnpm: command not found\` | Run \`npm install -g pnpm\` then restart your terminal. |
+| \`supabase: command not found\` | Run \`npm install -g supabase\` then restart your terminal. |
+| API returns 401 on all requests | The \`SUPABASE_URL\` or \`SUPABASE_SERVICE_ROLE_KEY\` in \`apps/api/.env\` is wrong. Re-run \`supabase status\` and paste the correct values. |
+| Frontend shows blank page | Check that \`NEXT_PUBLIC_SUPABASE_URL\` and \`NEXT_PUBLIC_SUPABASE_ANON_KEY\` in \`apps/web/.env.local\` are filled in. |
+\`\`\`\`
+
+---
+
+### Step 3 — Create \`artifacts/01-Production-Deployment-Guide.md\`
+
+Write the following complete content:
+
+\`\`\`\`markdown
+# QAForge — Production Deployment Guide
+
+Deploy QAForge to production using the free stack: **Supabase Cloud** (database + auth) + **Railway** (Express API) + **Vercel** (Next.js frontend).
+
+---
+
+## Architecture Overview
+
+\`\`\`
+Browser → Vercel (Next.js apps/web) → Railway (Express apps/api) → Supabase Cloud (PostgreSQL + Auth)
+\`\`\`
+
+---
+
+## Part 1: Supabase Cloud — Database & Auth (Free Tier)
+
+### 1.1 Create a New Project
+
+1. Go to [supabase.com](https://supabase.com) → **New Project**
+2. Fill in: project name, database password (save this), and region (choose closest to your users)
+3. Wait approximately 2 minutes for provisioning to complete
+
+### 1.2 Enable pgvector Extension
+
+The \`app_contexts\` table uses \`extensions.vector(1536)\` for AI embedding storage. You must enable this before pushing migrations.
+
+1. Dashboard → **Database** → **Extensions**
+2. Search for \`vector\`
+3. Toggle it on → set schema to \`extensions\`
+
+### 1.3 Link the Supabase CLI
+
+\`\`\`bash
+supabase login
+supabase link --project-ref <your-project-ref>
+\`\`\`
+
+Your project ref is the string in your Supabase dashboard URL: \`https://supabase.com/dashboard/project/<project-ref>\`.
+
+### 1.4 Push Migrations
+
+\`\`\`bash
+supabase db push
+\`\`\`
+
+This applies all 17 migration files from \`supabase/migrations/\` to your cloud database in order, creating all 15 tables with RLS policies and triggers.
+
+> **Do not run \`supabase db reset\` against production** — it drops and recreates the database.
+
+### 1.5 Get Your Credentials
+
+Dashboard → **Project Settings** → **API**:
+
+| Credential | Used As |
+|---|---|
+| Project URL | \`SUPABASE_URL\` (API) and \`NEXT_PUBLIC_SUPABASE_URL\` (web) |
+| \`anon\` public key | \`NEXT_PUBLIC_SUPABASE_ANON_KEY\` (web) |
+| \`service_role\` secret key | \`SUPABASE_SERVICE_ROLE_KEY\` (API only — never expose to frontend) |
+
+Database connection string: Dashboard → **Project Settings** → **Database** → **Connection string** (URI format) → \`DATABASE_URL\` (API).
+
+---
+
+## Part 2: Railway — Express API (~Free Tier)
+
+### 2.1 Create a New Project
+
+1. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**
+2. Select your QAForge repository
+3. Set **Root Directory** to \`apps/api\`
+
+### 2.2 Configure Build & Start Commands
+
+| Setting | Value |
+|---|---|
+| Build Command | \`pnpm install && pnpm build\` |
+| Start Command | \`node dist/index.js\` |
+
+\`pnpm build\` runs \`tsc\` which compiles \`apps/api/src/\` to \`apps/api/dist/\`. The start command runs the compiled output.
+
+### 2.3 Set Environment Variables
+
+Add all of the following in Railway → **Variables**:
+
+\`\`\`
+PORT=4000
+NODE_ENV=production
+CORS_ORIGIN=https://your-vercel-app.vercel.app
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service_role key from Supabase dashboard>
+DATABASE_URL=<connection string from Supabase dashboard → Project Settings → Database>
+ENCRYPTION_KEY=<generate fresh 64-char hex — see command below>
+JWT_SECRET=<generate a strong random string of 32+ characters>
+REDIS_URL=
+\`\`\`
+
+> **Important:** Generate a **fresh** \`ENCRYPTION_KEY\` for production — do not reuse your local development key. Any keys encrypted with the local key will not be decryptable with a different production key.
+
+\`\`\`bash
+node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"
+\`\`\`
+
+> **Note:** \`CORS_ORIGIN\` must be updated after you deploy to Vercel (Step 3). Set a placeholder now and update it once you have the Vercel URL.
+
+### 2.4 Deploy & Verify
+
+Railway auto-assigns a URL like \`https://qaforge-api.up.railway.app\`.
+
+Test the health check:
+\`\`\`
+GET https://your-railway-url.up.railway.app/api/health
+\`\`\`
+
+Expected response:
+\`\`\`json
+{ \"status\": \"ok\", \"timestamp\": \"...\", \"version\": \"1.0.0-mvp\" }
+\`\`\`
+
+---
+
+## Part 3: Vercel — Next.js Frontend (Free Tier)
+
+### 3.1 Create a New Project
+
+1. Go to [vercel.com](https://vercel.com) → **New Project** → **Import from GitHub**
+2. Select your QAForge repository
+3. Set **Root Directory** to \`apps/web\`
+4. Framework: **Next.js** (auto-detected)
+
+### 3.2 Set Environment Variables
+
+Add the following in Vercel → **Environment Variables**:
+
+\`\`\`
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key from Supabase dashboard>
+NEXT_PUBLIC_API_URL=https://your-railway-url.up.railway.app
+\`\`\`
+
+### 3.3 Deploy
+
+Click **Deploy**. Vercel assigns a URL like \`https://qaforge.vercel.app\`.
+
+### 3.4 Post-Deploy: Update CORS on Railway
+
+Go back to Railway → **Variables** → update \`CORS_ORIGIN\` to your exact Vercel URL:
+
+\`\`\`
+CORS_ORIGIN=https://qaforge.vercel.app
+\`\`\`
+
+The Express CORS middleware in \`apps/api/src/app.ts\` splits \`CORS_ORIGIN\` by comma, so you can add multiple origins if needed (e.g., preview deployments).
+
+### 3.5 Post-Deploy: Configure Supabase Auth Redirects
+
+Go to Supabase Dashboard → **Authentication** → **URL Configuration**:
+
+- **Site URL**: \`https://qaforge.vercel.app\`
+- **Redirect URLs**: Add \`https://qaforge.vercel.app/dashboard/projects\`
+
+This ensures Supabase Auth redirects users to your production frontend after email confirmation.
+
+---
+
+## Post-Deploy Checklist
+
+- [ ] \`supabase db push\` completed without errors (all 17 migrations applied)
+- [ ] pgvector extension enabled in Supabase Cloud
+- [ ] Railway API health check returns HTTP 200 with \`{\"status\":\"ok\"}\`
+- [ ] Vercel frontend loads at \`/login\` without errors
+- [ ] Login with a test account works end-to-end
+- [ ] Creating a project works (tests the full browser → Vercel → Railway → Supabase round trip)
+- [ ] \`CORS_ORIGIN\` on Railway matches the Vercel URL exactly (no trailing slash)
+- [ ] Supabase Auth redirect URLs include the Vercel URL
+
+---
+
+## Free Tier Limits
+
+| Service | Free Tier Limit |
+|---|---|
+| Supabase | 500 MB database storage, 2 active projects, 50,000 monthly active users |
+| Vercel | 100 GB bandwidth/month, unlimited deployments, 1 concurrent build |
+| Railway | \$5 credit/month (~500 hours of a 512 MB container at ~\$0.01/hour) |
+
+Railway's free credit is sufficient for a low-traffic MVP. Upgrade to a paid plan when you need persistent uptime beyond the credit limit.
+\`\`\`\`
+
+---
+
+### Step 4 — Create \`artifacts/Epic-Briefs.md\`
+
+Write the following complete content:
+
+\`\`\`\`markdown
+# QAForge — Epic Briefs (All MVP-1 Phases)
+
+Comprehensive documentation of all four MVP-1 phases: what was built, why, key technical decisions, and outcomes.
+
+---
+
+## MVP-1A: Monorepo Foundation & Tooling
+
+### Summary
+
+Established the pnpm + Turborepo monorepo structure with TypeScript across all packages and apps. Created the workspace skeleton: \`apps/web\` (Next.js 14), \`apps/api\` (Express), \`packages/shared-types\`, \`packages/ai-engine\`, \`packages/playwright-runner\`, \`packages/export-engine\`, \`packages/integrations\`.
+
+### Problem / Context
+
+No project structure existed. The platform needed a strict monorepo that enforces shared types, consistent tooling, and parallel builds from day one — before any application code was written.
+
+### What Was Built
+
+**Root workspace files:**
+- \`pnpm-workspace.yaml\` — defines \`apps/*\` and \`packages/*\` as workspace members
+- \`turbo.json\` — Turborepo pipeline: \`build\` (depends on \`^build\`, outputs \`dist/**\` and \`.next/**\`), \`dev\` (persistent, no cache), \`lint\`, \`type-check\`
+- \`package.json\` — root scripts: \`dev\`, \`build\`, \`lint\`, \`format\`, \`type-check\`; devDependencies: \`turbo ^2.3.0\`, \`typescript ^5.7.0\`, \`prettier ^3.4.0\`, \`eslint ^8.57.0\`, \`@typescript-eslint/*\`
+- \`tsconfig.json\` — root TypeScript config with path aliases
+- \`.eslintrc.cjs\` — ESLint config shared across all workspaces
+- \`.prettierrc\` — Prettier config
+- \`.gitignore\` — ignores \`node_modules\`, \`.next\`, \`dist\`, \`.env*\`
+- \`.env.example\` — template for environment variables
+
+**App packages:**
+- \`apps/web/package.json\` — \`@qaforge/web\`, Next.js 14, React 18, \`@qaforge/shared-types: workspace:*\`, Supabase packages, Tailwind CSS
+- \`apps/api/package.json\` — \`@qaforge/api\`, Express, Zod, Winston, Socket.io, \`tsx\` for dev, \`@qaforge/shared-types: workspace:*\`
+
+**Library packages (all with \`package.json\`, \`tsconfig.json\`, \`src/index.ts\`):**
+- \`packages/shared-types\` — single source of truth for all shared TypeScript types
+- \`packages/ai-engine\` — stub for MVP-2 AI generation
+- \`packages/playwright-runner\` — stub for MVP-2 test execution
+- \`packages/export-engine\` — stub for future export features
+- \`packages/integrations\` — stub for future Jira/GitHub integrations
+
+### Key Technical Decisions
+
+- **pnpm workspaces** over npm/yarn for strict hoisting control and disk efficiency
+- **Turborepo** for parallel task execution, dependency-aware ordering, and build caching
+- **\`\"type\": \"module\"\`** in all packages for native ESM
+- **\`@qaforge/*\` namespace** for all internal packages — prevents naming collisions and makes workspace dependencies explicit
+- **\`workspace:*\`** protocol for internal dependencies — pnpm resolves these to local packages at install time
+
+### Outcome
+
+Clean monorepo that compiles with zero TypeScript errors. \`pnpm install\` from root resolves all 7 workspace packages. \`pnpm dev\` starts both apps concurrently via Turborepo. \`pnpm build\` produces \`dist/\` for \`apps/api\` and \`.next/\` for \`apps/web\`.
+
+---
+
+## MVP-1B: Database Schema & Supabase Setup
+
+### Summary
+
+Designed and implemented the complete PostgreSQL database schema via 17 Supabase migration files. Established Row-Level Security on all 15 tables, created triggers for profile auto-creation and \`updated_at\` timestamps, and wrote comprehensive seed data.
+
+### Problem / Context
+
+No database existed. The platform needed a fully relational schema with security enforced at the database layer — not just the application layer — so that even direct database access cannot bypass user isolation.
+
+### What Was Built
+
+**17 migration files in \`supabase/migrations/\` (applied in order):**
+
+| # | File | What It Creates |
+|---|---|---|
+| 1 | \`20240101000001_enable_extensions.sql\` | \`uuid-ossp\`, \`vector\` (pgvector), \`moddatetime\` extensions in \`extensions\` schema |
+| 2 | \`20240101000002_create_profiles.sql\` | \`profiles\` table + \`handle_new_user()\` trigger + \`on_auth_user_created\` trigger on \`auth.users\` |
+| 3 | \`20240101000003_create_api_keys.sql\` | \`api_keys\` table with \`UNIQUE(user_id, provider)\` constraint |
+| 4 | \`20240101000004_create_projects.sql\` | \`projects\` table with \`user_id\` index and \`created_at DESC\` index |
+| 5 | \`20240101000005_create_test_suites.sql\` | \`test_suites\` table with self-referential \`parent_suite_id\` FK |
+| 6 | \`20240101000006_create_test_cases.sql\` | \`test_cases\` table with \`steps JSONB\`, \`tags TEXT[]\`, priority/type/source enums |
+| 7 | \`20240101000007_create_test_runs.sql\` | \`test_runs\` table with status/mode enums, no \`updated_at\` by design |
+| 8 | \`20240101000008_create_test_steps.sql\` | \`test_steps\` table with \`metadata JSONB\`, no \`updated_at\` by design |
+| 9 | \`20240101000009_create_recorded_sessions.sql\` | \`recorded_sessions\` table with status enum, no \`updated_at\` by design |
+| 10 | \`20240101000010_create_session_actions.sql\` | \`session_actions\` table with \`action_type\` enum, \`coordinates JSONB\` |
+| 11 | \`20240101000011_create_bugs.sql\` | \`bugs\` table with severity/status enums, \`assigned_to\` FK (no cascade) |
+| 12 | \`20240101000012_create_integrations.sql\` | \`integrations\` table with \`COALESCE\` unique index for nullable \`project_id\` |
+| 13 | \`20240101000013_create_export_schemas.sql\` | \`export_schemas\` table with \`columns JSONB\` |
+| 14 | \`20240101000014_create_app_contexts.sql\` | \`app_contexts\` table with \`embedding extensions.vector(1536)\` + HNSW index |
+| 15 | \`20240101000015_create_sprint_changes.sql\` | \`sprint_changes\` table with \`affected_areas TEXT[]\`, no \`updated_at\` |
+| 16 | \`20240101000016_create_media_attachments.sql\` | \`media_attachments\` polymorphic table (no FK — \`entity_type\` discriminator) |
+| 17 | \`20240101000017_create_updated_at_triggers.sql\` | \`update_updated_at()\` function + \`set_updated_at\` trigger on 9 tables |
+
+**Supporting files:**
+- \`supabase/config.toml\` — local dev config: API port 54321, DB port 54322, Studio port 54323, pgvector enabled
+- \`supabase/seed.sql\` — 2 users (alice/bob), 2 projects, 2 suites, 3 cases, 2 runs, 5 test steps, 1 recorded session — all with fixed UUIDs for reproducibility
+- \`supabase/SETUP.md\` — comprehensive setup guide
+
+**Shared types (\`packages/shared-types/src/\`):**
+- \`database.ts\` — TypeScript interfaces: \`Profile\`, \`ApiKey\`, \`Project\`, \`TestRun\`, \`TestStep\`, \`RecordedSession\`, \`SessionAction\`
+- \`enums.ts\` — TypeScript enums: \`TestRunStatus\`, \`TestRunMode\`, \`TestStepStatus\`, \`ActionType\`, \`ApiKeyProvider\`, \`UserRole\`, \`SessionStatus\`, \`BugSeverity\`, \`BugStatus\`
+- \`api.ts\` — Request/response DTOs: \`CreateProjectRequest\`, \`UpdateProjectRequest\`, \`CreateApiKeyRequest\`, \`ApiKeyResponse\` (omits \`encrypted_key\`), \`CreateTestRunRequest\`, \`PaginatedResponse<T>\`, \`ApiError\`
+- \`websocket.ts\` — Socket.io event payload types: \`TestStepStartEvent\`, \`TestStepCompleteEvent\`, \`TestScreenshotEvent\`, \`TestCompleteEvent\`, \`RecordingActionEvent\`, \`SessionFrameEvent\`
+
+### Key Technical Decisions
+
+- **RLS on every table** — security enforced at the DB layer; the service role key on the backend bypasses RLS intentionally, but direct DB access from untrusted clients is blocked
+- **Cascading deletes on all FKs** — deleting a project cascades to suites → cases → runs → steps; deleting a user cascades to all owned data
+- **AES-256-GCM encryption for \`api_keys.encrypted_key\`** — plaintext API keys are never stored; the \`encrypted_key\` column stores \`iv_hex:authTag_hex:ciphertext_hex\`
+- **pgvector \`vector(1536)\`** — matches OpenAI \`text-embedding-ada-002\` / \`text-embedding-3-small\` dimensions; HNSW index with cosine distance for fast ANN search
+- **\`handle_new_user()\` trigger** — \`SECURITY DEFINER\` function that auto-creates a \`profiles\` row on every \`auth.users\` INSERT; extracts \`full_name\` and \`avatar_url\` from \`raw_user_meta_data\`
+- **\`update_updated_at()\` trigger** — applied to 9 tables that have \`updated_at\`; 6 tables (\`test_runs\`, \`test_steps\`, \`recorded_sessions\`, \`session_actions\`, \`sprint_changes\`, \`media_attachments\`) deliberately omit \`updated_at\` as they are append-only
+- **Polymorphic \`media_attachments\`** — \`entity_type\` + \`entity_id\` pattern; no FK constraint possible on polymorphic references; RLS policy branches on \`entity_type\`
+- **\`COALESCE\` unique index on \`integrations\`** — handles nullable \`project_id\` correctly since \`NULL != NULL\` in SQL
+
+### Outcome
+
+15 tables live with full RLS. \`supabase db reset\` applies all 17 migrations and seed data in under 30 seconds. Schema verified via Supabase Studio at http://localhost:54323.
+
+---
+
+## MVP-1C: Backend API Base (Express + Auth + Routes)
+
+### Summary
+
+Built the complete Express.js API with Supabase JWT authentication middleware, Zod environment validation, AES-256-GCM encryption utilities, Winston logging, rate limiting, and full CRUD routes for projects and API keys.
+
+### Problem / Context
+
+No backend existed. The frontend needed a secure API that validates Supabase JWTs on every request, encrypts sensitive data at rest, and provides typed endpoints for all core resources.
+
+### What Was Built
+
+**Entry point & app setup:**
+- \`apps/api/src/index.ts\` — imports \`dotenv/config\` first (before any local module), creates HTTP server, attaches Socket.io, starts listening on \`env.PORT\`
+- \`apps/api/src/app.ts\` — Express app: JSON body parser (10MB limit), CORS with origin allowlist, global rate limiter, \`/api/health\` (unauthenticated), auth/projects/api-keys routers, 404 catch-all, global error handler
+
+**Config:**
+- \`apps/api/src/config/env.ts\` — Zod schema validates all 9 env vars at startup; fails fast with \`process.exit(1)\` on invalid config; \`ENCRYPTION_KEY\` enforced as \`.length(64)\`; \`REDIS_URL\` is optional
+- \`apps/api/src/config/supabase.ts\` — \`createClient\` with service role key; \`autoRefreshToken: false\`, \`persistSession: false\` for server-side use
+- \`apps/api/src/config/redis.ts\` — no-op stub; \`redisClient = null\`; \`connectRedis()\` logs a skip message; no \`ioredis\` dependency
+
+**Middleware:**
+- \`apps/api/src/middleware/auth.middleware.ts\` — \`authenticate()\`: extracts Bearer token, calls \`supabase.auth.getUser(token)\` (live network call — detects revoked tokens), fetches \`profiles\` row for role, attaches \`{ id, email, role }\` to \`req.user\`
+- \`apps/api/src/middleware/error-handler.ts\` — \`AppError\` class with \`code\`, \`statusCode\`, \`message\`, \`details\`; global \`errorHandler\` function; production mode redacts error messages
+- \`apps/api/src/middleware/rate-limiter.ts\` — \`defaultLimiter\`: 100 req/min global; \`aiLimiter\`: 10 req/min for AI-heavy routes (MVP-2+)
+- \`apps/api/src/middleware/validation.ts\` — \`validate(schema, target)\` factory: parses \`req.body\`/\`req.query\`/\`req.params\` with Zod; replaces raw input with parsed value; calls \`next(AppError('VALIDATION_ERROR', 400, ...))\` on failure
+
+**Utilities:**
+- \`apps/api/src/utils/encryption.ts\` — \`encrypt(plaintext)\`: AES-256-GCM with random 96-bit IV per call, returns \`iv_hex:authTag_hex:ciphertext_hex\`; \`decrypt(encrypted)\`: splits on \`:\`, sets auth tag before \`update()\`, throws \`EncryptionError\` on failure
+- \`apps/api/src/utils/logger.ts\` — Winston logger: \`debug\` level in dev (colorized simple format), \`warn\` level in production (JSON with timestamp)
+- \`apps/api/src/utils/encryption.test.ts\` — manual test script: round-trip, IV randomness, tampered ciphertext rejection
+
+**Types:**
+- \`apps/api/src/types/express.d.ts\` — augments \`Express.Request\` with \`user: { id: string; email: string; role: string }\`
+
+**Routes:**
+
+| Method | Route | Auth | Handler File | Description |
+|---|---|---|---|---|
+| GET | \`/api/health\` | No | \`app.ts\` | Returns \`{ status, timestamp, version }\` |
+| GET | \`/api/auth/me\` | Yes | \`auth.routes.ts\` | Fetches own profile from \`profiles\` table |
+| PUT | \`/api/auth/me\` | Yes | \`auth.routes.ts\` | Updates \`full_name\` and/or \`avatar_url\` |
+| GET | \`/api/projects\` | Yes | \`projects.routes.ts\` | Lists user's projects ordered by \`created_at DESC\` |
+| POST | \`/api/projects\` | Yes | \`projects.routes.ts\` | Creates project; validates \`name\` (required), \`description\`, \`base_url\` |
+| GET | \`/api/projects/:id\` | Yes | \`projects.routes.ts\` | Gets project + aggregated run stats (\`total_runs\`, \`passed_runs\`, \`failed_runs\`) |
+| PUT | \`/api/projects/:id\` | Yes | \`projects.routes.ts\` | Updates project fields; ownership enforced via \`user_id\` in query |
+| DELETE | \`/api/projects/:id\` | Yes | \`projects.routes.ts\` | Deletes project; ownership enforced via \`user_id\` in query |
+| GET | \`/api/api-keys\` | Yes | \`api-keys.routes.ts\` | Lists keys; **never selects \`encrypted_key\`** |
+| POST | \`/api/api-keys\` | Yes | \`api-keys.routes.ts\` | Encrypts key, stores \`key_hint\` (last 4 chars), enforces \`UNIQUE(user_id, provider)\` |
+| PUT | \`/api/api-keys/:id\` | Yes | \`api-keys.routes.ts\` | Re-encrypts key, updates \`key_hint\`, sets \`is_valid: true\` |
+| DELETE | \`/api/api-keys/:id\` | Yes | \`api-keys.routes.ts\` | Deletes key; ownership enforced |
+| POST | \`/api/api-keys/:id/validate\` | Yes | \`api-keys.routes.ts\` | Decrypts key, calls provider health check, persists \`is_valid\` result |
+
+**Provider health checks** (\`api-keys.routes.ts\`):
+- OpenAI: \`GET https://api.openai.com/v1/models\` → HTTP 200
+- Anthropic: \`POST https://api.anthropic.com/v1/messages\` → HTTP 200 or 400 (400 = auth passed, minimal payload rejected)
+- Gemini: \`GET https://generativelanguage.googleapis.com/v1beta/models?key=<key>\` → HTTP 200
+
+**WebSocket:**
+- \`apps/api/src/websocket/socket-server.ts\` — \`createSocketServer(httpServer)\`: Socket.io with CORS from \`env.CORS_ORIGINS\`, JWT auth middleware via \`supabase.auth.getUser()\`, \`test:start\` stub (MVP-2), \`recording:start\` stub (MVP-3)
+
+### Key Technical Decisions
+
+- **Service role key on backend** — bypasses RLS; the backend is the only trusted caller; never exposed to the frontend
+- **Live \`supabase.auth.getUser()\` on every request** — detects revoked/expired tokens; no local JWT verification that could miss revocations
+- **AES-256-GCM with random 96-bit IV per encryption** — no IV reuse; \`encrypt()\` called twice on the same plaintext produces different ciphertext
+- **\`ENCRYPTION_KEY\` must be exactly 64 hex chars** — Zod \`.length(64)\` enforces this at startup; wrong length = immediate \`process.exit(1)\`
+- **\`REDIS_URL\` optional in Zod schema** — Redis is intentionally stubbed; no \`ioredis\` or \`@upstash/redis\` dependency added
+- **\`dotenv/config\` must be the first import in \`index.ts\`** — if any local module (e.g., \`config/env.ts\`) is evaluated before dotenv, \`process.env\` is empty and Zod validation fails
+
+### Outcome
+
+API compiles with zero TypeScript errors. All routes tested manually. JWT validation rejects invalid tokens with HTTP 401. Encryption round-trip verified by \`encryption.test.ts\`. Rate limiting returns HTTP 429 after threshold.
+
+---
+
+## MVP-1D: Frontend Baseline & Auth Pipeline (Next.js)
+
+### Summary
+
+Built the complete Next.js App Router frontend with Supabase SSR authentication, server-side route protection via middleware, a fixed left-sidebar dashboard layout, Projects management (card grid + creation modal), Settings (AI Keys, Profile, Integrations placeholder), and a typed API client.
+
+### Problem / Context
+
+\`apps/web\` was a blank Next.js shell. No user could access the platform. The fully-built backend had no frontend consumer. Developers could only validate backend work via raw API calls.
+
+### What Was Built
+
+**Auth infrastructure:**
+- \`apps/web/lib/supabase/client.ts\` — \`createClient()\` using \`createBrowserClient\` from \`@supabase/ssr\`; marked \`'use client'\`
+- \`apps/web/lib/supabase/server.ts\` — \`createServerSupabaseClient()\` using \`createServerClient\` from \`@supabase/ssr\`; reads/writes cookies via \`next/headers\`
+- \`apps/web/lib/supabase/middleware.ts\` — \`createMiddlewareClient(request)\`: creates server client with cookie getter/setter pattern; returns \`{ supabase, get response() }\` — the getter ensures callers always read the post-refresh response
+- \`apps/web/middleware.ts\` — root middleware: calls \`supabase.auth.getUser()\` to refresh session; unauthenticated + \`/dashboard/*\` → redirect to \`/login\`; authenticated + \`/login\` → redirect to \`/dashboard/projects\`; matcher excludes \`_next/static\`, \`_next/image\`, \`favicon.ico\`
+
+**API client:**
+- \`apps/web/lib/api/client.ts\` — \`apiClient\` with \`get\`, \`post\`, \`put\`, \`del\` methods; \`getAuthHeaders()\` fetches session from browser Supabase client and attaches \`Authorization: Bearer <token>\`; \`handleResponse<T>()\` handles 401 (signs out + redirects to \`/login\`), non-OK responses (throws with error body message), 204 No Content
+
+**Auth pages:**
+- \`apps/web/app/(auth)/layout.tsx\` — centered layout: \`flex min-h-screen items-center justify-center\`
+- \`apps/web/app/(auth)/login/page.tsx\` — \`'use client'\`; \`@supabase/auth-ui-react\` \`<Auth>\` component with \`ThemeSupa\`, \`providers={[]}\` (email+password only), \`onAuthStateChange\` listener redirects to \`/dashboard/projects\` on \`SIGNED_IN\`
+
+**Dashboard layout:**
+- \`apps/web/app/(dashboard)/layout.tsx\` — Server Component; calls \`createServerSupabaseClient().auth.getUser()\`; redirects to \`/login\` if no user; renders \`<Sidebar>\` + \`<main>\`
+- \`apps/web/components/layout/sidebar.tsx\` — \`'use client'\`; fixed \`w-64\` sidebar; QF logo; nav links: Projects (\`/dashboard/projects\`), AI Keys (\`/dashboard/settings/ai-keys\`), Profile (\`/dashboard/settings/profile\`), Integrations (\`/dashboard/settings/integrations\`); active state via \`usePathname()\`; Sign Out button calls \`supabase.auth.signOut()\` + \`router.push('/login')\`
+
+**Projects:**
+- \`apps/web/app/(dashboard)/dashboard/projects/page.tsx\` — Server Component; fetches \`GET /api/projects\` with access token from session; passes \`initialProjects\` to \`<ProjectsGrid>\`
+- \`apps/web/components/projects/projects-grid.tsx\` — \`'use client'\`; card grid (2-col sm, 3-col lg); empty state with \"Create Project\" CTA; \`refreshProjects()\` via \`apiClient.get('/api/projects')\`; opens \`<CreateProjectModal>\`
+- \`apps/web/components/projects/create-project-modal.tsx\` — \`'use client'\`; modal with backdrop; form: \`name\` (required), \`description\`, \`base_url\`; calls \`apiClient.post('/api/projects', body)\` using \`CreateProjectRequest\` type; calls \`onCreated()\` on success
+- \`apps/web/app/(dashboard)/dashboard/projects/[id]/page.tsx\` — \"Coming in MVP-2\" stub with project ID display
+
+**Settings — AI Keys:**
+- \`apps/web/app/(dashboard)/dashboard/settings/ai-keys/page.tsx\` — Server Component; fetches \`GET /api/api-keys\` with access token; passes \`initialKeys\` to \`<AiKeysManager>\`
+- \`apps/web/components/settings/ai-keys-manager.tsx\` — \`'use client'\`; table: Provider, Key Hint (\`••••{key_hint}\`), Status badge (Valid/Unverified), Actions; \`handleValidate()\` calls \`apiClient.post('/api/api-keys/:id/validate')\`; \`handleDelete()\` calls \`apiClient.del('/api/api-keys/:id')\`; opens \`<AddApiKeyModal>\`
+- \`apps/web/components/settings/add-api-key-modal.tsx\` — \`'use client'\`; provider select using \`ApiKeyProvider\` enum (OpenAI/Anthropic/Gemini); password-type key input; calls \`apiClient.post('/api/api-keys', body)\` using \`CreateApiKeyRequest\` type
+
+**Settings — Profile:**
+- \`apps/web/app/(dashboard)/dashboard/settings/profile/page.tsx\` — Server Component; fetches \`GET /api/auth/me\` with access token; passes \`profile\` to \`<ProfileForm>\`
+- \`apps/web/components/settings/profile-form.tsx\` — \`'use client'\`; form: email (read-only, disabled), \`full_name\` (editable), \`avatar_url\` (editable), role (read-only display); calls \`apiClient.put('/api/auth/me', body)\`; shows success/error feedback
+
+**Settings — Integrations:**
+- \`apps/web/app/(dashboard)/dashboard/settings/integrations/page.tsx\` — \"Coming Soon\" placeholder
+
+**Environment:**
+- \`apps/web/.env.local\` — template with \`NEXT_PUBLIC_SUPABASE_URL\`, \`NEXT_PUBLIC_SUPABASE_ANON_KEY\`, \`NEXT_PUBLIC_API_URL=http://localhost:4000\`
+
+### Key Technical Decisions
+
+- **\`@supabase/ssr\` (not deprecated \`auth-helpers\`)** — correct package for Next.js App Router cookie-based sessions
+- **\`middleware.ts\` at root** — hard server-side redirects enforced before any page renders; not client-side guards that can be bypassed
+- **Server Components fetch data directly** — pages fetch with the access token from the server-side session; no client-side loading states for initial render
+- **\`apiClient\` uses browser Supabase client for JWT** — auto-redirects to \`/login\` on 401; no manual token management in components
+- **No \`@tanstack/react-query\`, no \`axios\`** — native \`fetch\` with a thin typed wrapper; keeps the bundle lean
+- **\`createMiddlewareClient\` getter pattern** — \`get response()\` ensures callers always read the latest \`supabaseResponse\` after \`setAll()\` may have reassigned it during a token refresh
+
+### Packages Added to \`apps/web\`
+
+| Package | Version | Purpose |
+|---|---|---|
+| \`@supabase/ssr\` | \`^0.5.0\` | App Router cookie-based session management |
+| \`@supabase/supabase-js\` | \`^2.45.0\` | Supabase client |
+| \`@supabase/auth-ui-react\` | \`^0.4.7\` | Pre-built Auth UI component |
+| \`@supabase/auth-ui-shared\` | \`^0.1.8\` | \`ThemeSupa\` theme for Auth UI |
+
+### Outcome
+
+Full auth pipeline working end-to-end. Protected routes enforced at middleware layer. Projects CRUD connected to live API. AI key management connected to live API with provider validation. Profile editing connected to live API. All pages render with server-fetched initial data.
+\`\`\`\`
+
+---
+
+### Step 5 — Create \`artifacts/Tickets-MVP-1A.md\`
+
+Write the following complete content:
+
+\`\`\`\`markdown
+# QAForge — Implementation Tickets: MVP-1A
+
+Monorepo Foundation & Tooling
+
+---
+
+### TICKET-1A-01: Initialize pnpm Workspace & Turborepo
+
+**Status:** Done
+
+**Description:** Create the root workspace configuration files that define the monorepo structure, build pipeline, and shared tooling.
+
+**Files Created:**
+- \`pnpm-workspace.yaml\` — declares \`apps/*\` and \`packages/*\` as workspace members
+- \`turbo.json\` — Turborepo pipeline: \`build\` (dependsOn \`^build\`, outputs \`dist/**\` and \`.next/**\`), \`dev\` (persistent, cache: false), \`lint\` (dependsOn \`^lint\`), \`type-check\` (dependsOn \`^type-check\`)
+- \`package.json\` — root scripts (\`dev\`, \`build\`, \`lint\`, \`format\`, \`type-check\`); devDependencies: \`turbo ^2.3.0\`, \`typescript ^5.7.0\`, \`prettier ^3.4.0\`, \`eslint ^8.57.0\`, \`@typescript-eslint/eslint-plugin ^7.0.0\`, \`@typescript-eslint/parser ^7.0.0\`
+- \`tsconfig.json\` — root TypeScript config with path aliases
+- \`.eslintrc.cjs\` — ESLint config (CJS format required for ESLint config files even in ESM projects)
+- \`.prettierrc\` — Prettier config
+- \`.gitignore\` — ignores \`node_modules\`, \`.next\`, \`dist\`, \`.env*\`, \`.turbo\`
+- \`.env.example\` — template documenting all required environment variables
+
+**Acceptance Criteria:**
+- \`pnpm install\` succeeds from root with zero errors
+- \`turbo build\` runs without errors
+- All workspace packages resolve correctly via \`workspace:*\` protocol
+
+---
+
+### TICKET-1A-02: Scaffold apps/web (Next.js)
+
+**Status:** Done
+
+**Description:** Initialize the Next.js 14 App Router application with Tailwind CSS, shadcn/ui configuration, TypeScript, and the \`@qaforge/shared-types\` workspace dependency.
+
+**Files Created:**
+- \`apps/web/package.json\` — name: \`@qaforge/web\`; dependencies: \`next ^14.2.0\`, \`react ^18.3.0\`, \`react-dom ^18.3.0\`, \`@qaforge/shared-types: workspace:*\`, \`clsx ^2.1.0\`, \`tailwind-merge ^2.6.0\`; devDependencies: \`typescript ^5.7.0\`, \`@types/react ^18.3.0\`, \`tailwindcss ^3.4.0\`, \`postcss ^8.4.0\`, \`autoprefixer ^10.4.0\`
+- \`apps/web/next.config.js\` — Next.js config
+- \`apps/web/tsconfig.json\` — TypeScript config with \`@/*\` path alias pointing to the app root
+- \`apps/web/tailwind.config.ts\` — Tailwind config with content paths for \`app/**\` and \`components/**\`
+- \`apps/web/postcss.config.js\` — PostCSS config with Tailwind and Autoprefixer
+- \`apps/web/components.json\` — shadcn/ui config
+- \`apps/web/app/layout.tsx\` — root layout with \`<html>\` and \`<body>\` tags, Tailwind base styles
+- \`apps/web/app/page.tsx\` — placeholder homepage
+- \`apps/web/app/globals.css\` — Tailwind directives (\`@tailwind base/components/utilities\`) + CSS custom properties for shadcn/ui theming
+- \`apps/web/lib/utils.ts\` — \`cn()\` utility combining \`clsx\` and \`tailwind-merge\`
+- \`apps/web/.env.local\` — template with empty Supabase values and \`NEXT_PUBLIC_API_URL=http://localhost:4000\`
+
+---
+
+### TICKET-1A-03: Scaffold apps/api (Express)
+
+**Status:** Done
+
+**Description:** Initialize the Express + TypeScript API with \`tsx\` for development hot-reload and all production dependencies declared.
+
+**Files Created:**
+- \`apps/api/package.json\` — name: \`@qaforge/api\`; scripts: \`dev: tsx watch src/index.ts\`, \`build: tsc\`, \`start: node dist/index.js\`; dependencies: \`@qaforge/shared-types: workspace:*\`, \`@supabase/supabase-js ^2.47.0\`, \`cors ^2.8.5\`, \`dotenv ^16.4.0\`, \`express ^4.21.0\`, \`express-rate-limit ^7.5.0\`, \`socket.io ^4.8.0\`, \`winston ^3.17.0\`, \`zod ^3.23.0\`; devDependencies: \`@types/cors\`, \`@types/express ^5.0.0\`, \`@types/node ^22.0.0\`, \`tsx ^4.19.0\`, \`typescript ^5.7.0\`
+- \`apps/api/tsconfig.json\` — TypeScript config targeting ESNext modules, \`outDir: dist\`, \`rootDir: src\`
+
+---
+
+### TICKET-1A-04: Scaffold packages/shared-types
+
+**Status:** Done
+
+**Description:** Create the shared-types package as the single source of truth for all TypeScript types shared between the frontend and backend. Both \`apps/web\` and \`apps/api\` depend on this package via \`workspace:*\`.
+
+**Files Created:**
+- \`packages/shared-types/package.json\` — name: \`@qaforge/shared-types\`; \`\"type\": \"module\"\`; \`\"main\": \"src/index.ts\"\` (resolved directly in dev via workspace protocol)
+- \`packages/shared-types/tsconfig.json\` — TypeScript config
+- \`packages/shared-types/src/index.ts\` — barrel export re-exporting from \`database.ts\`, \`enums.ts\`, \`api.ts\`, \`websocket.ts\`
+
+**Key Decision:** The package exports TypeScript source directly (not compiled output) — workspace consumers import the \`.ts\` files directly, which is resolved by each app's own TypeScript compiler. This avoids a separate build step for the shared-types package during development.
+
+---
+
+### TICKET-1A-05: Scaffold packages/ai-engine, playwright-runner, export-engine, integrations
+
+**Status:** Done
+
+**Description:** Create stub packages for future phases. Each package has the minimum required files to be a valid pnpm workspace member and TypeScript project. The \`src/index.ts\` in each contains a \`TODO\` comment indicating the phase in which it will be implemented.
+
+**Files Created (per package):**
+- \`packages/ai-engine/package.json\` — name: \`@qaforge/ai-engine\`
+- \`packages/ai-engine/tsconfig.json\`
+- \`packages/ai-engine/src/index.ts\` — \`// TODO: MVP-2 — AI test generation engine\`
+- \`packages/playwright-runner/package.json\` — name: \`@qaforge/playwright-runner\`
+- \`packages/playwright-runner/tsconfig.json\`
+- \`packages/playwright-runner/src/index.ts\` — \`// TODO: MVP-2 — Playwright test execution runner\`
+- \`packages/export-engine/package.json\` — name: \`@qaforge/export-engine\`
+- \`packages/export-engine/tsconfig.json\`
+- \`packages/export-engine/src/index.ts\` — \`// TODO: MVP-3 — Test report export engine\`
+- \`packages/integrations/package.json\` — name: \`@qaforge/integrations\`
+- \`packages/integrations/tsconfig.json\`
+- \`packages/integrations/src/index.ts\` — \`// TODO: MVP-3 — Third-party integrations (Jira, GitHub, Slack)\`
+\`\`\`\`
+
+---
+
+### Step 6 — Create \`artifacts/Tickets-MVP-1B.md\`
+
+Write the following complete content:
+
+\`\`\`\`markdown
+# QAForge — Implementation Tickets: MVP-1B
+
+Database Schema & Supabase Setup
+
+---
+
+### TICKET-1B-01: Enable PostgreSQL Extensions
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000001_enable_extensions.sql\`
+
+**Description:** Enable the three PostgreSQL extensions required by the QAForge schema before any tables are created.
+
+**Key SQL Decisions:**
+- \`uuid-ossp\` in \`extensions\` schema — provides \`uuid_generate_v4()\` (though \`gen_random_uuid()\` is used in most tables, this extension is declared for compatibility)
+- \`vector\` (pgvector) in \`extensions\` schema — required for \`app_contexts.embedding extensions.vector(1536)\` and the HNSW index
+- \`moddatetime\` in \`extensions\` schema — available for automatic timestamp management (the project uses a custom \`update_updated_at()\` function instead)
+- All extensions use \`CREATE EXTENSION IF NOT EXISTS\` — idempotent, safe to re-run
+
+---
+
+### TICKET-1B-02: Create profiles Table + Auth Trigger
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000002_create_profiles.sql\`
+
+**Description:** Create the \`profiles\` table that mirrors \`auth.users\`, and install the trigger that auto-populates it on every new user signup.
+
+**Key SQL Decisions:**
+- \`id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE\` — 1:1 with auth.users; deleting the auth user cascades to the profile
+- \`role TEXT CHECK (role IN ('admin', 'tester', 'viewer')) DEFAULT 'tester'\` — inline enum via CHECK constraint
+- **RLS policies:** SELECT allows own profile OR admin role; INSERT requires \`auth.uid() = id\`; UPDATE and DELETE scoped to own row
+- **\`handle_new_user()\` function:** \`SECURITY DEFINER\` + \`SET search_path = public\` — required to write to \`public.profiles\` from the \`auth\` schema context; extracts \`full_name\` and \`avatar_url\` from \`NEW.raw_user_meta_data\`
+- **\`on_auth_user_created\` trigger:** \`AFTER INSERT ON auth.users FOR EACH ROW\` — fires automatically on every Supabase Auth signup
+
+---
+
+### TICKET-1B-03: Create api_keys Table
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000003_create_api_keys.sql\`
+
+**Description:** Create the \`api_keys\` table for storing AES-256-GCM encrypted AI provider API keys.
+
+**Key SQL Decisions:**
+- \`provider TEXT CHECK (provider IN ('openai', 'anthropic', 'gemini'))\` — inline enum
+- \`encrypted_key TEXT NOT NULL\` — stores \`iv_hex:authTag_hex:ciphertext_hex\`; plaintext never stored
+- \`key_hint TEXT\` — last 4 characters of the raw key; shown in UI as \`••••{hint}\`
+- \`is_valid BOOLEAN DEFAULT true\` — set to \`false\` on insert; confirmed only after explicit \`/validate\` call
+- \`CONSTRAINT api_keys_user_provider_unique UNIQUE (user_id, provider)\` — one key per provider per user
+- **RLS:** all 4 policies scoped to \`user_id = auth.uid()\`
+
+---
+
+### TICKET-1B-04: Create projects Table
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000004_create_projects.sql\`
+
+**Description:** Create the \`projects\` table — the top-level container for all QAForge testing artifacts.
+
+**Key SQL Decisions:**
+- \`user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE\` — deleting a user cascades to all their projects
+- \`base_url TEXT\` — nullable; used as the default URL for test execution
+- Indexes: \`idx_projects_user_id\` (B-tree) and \`idx_projects_created_at DESC\` for efficient list queries
+- **RLS SELECT policy:** allows own projects OR admin role (admins can see all projects)
+- **RLS INSERT/UPDATE/DELETE:** scoped to \`user_id = auth.uid()\`
+
+---
+
+### TICKET-1B-05: Create test_suites Table
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000005_create_test_suites.sql\`
+
+**Description:** Create the \`test_suites\` table with self-referential hierarchy support.
+
+**Key SQL Decisions:**
+- \`parent_suite_id UUID REFERENCES public.test_suites(id) ON DELETE SET NULL\` — self-referential FK; \`SET NULL\` (not CASCADE) so deleting a parent suite does not delete child suites
+- \`project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE\` — deleting a project cascades to all its suites
+- Indexes: \`idx_test_suites_project_id\` and \`idx_test_suites_parent_suite_id\`
+- **RLS:** all policies use a subquery \`project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid())\` — ownership verified via the parent project
+
+---
+
+### TICKET-1B-06: Create test_cases Table
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000006_create_test_cases.sql\`
+
+**Description:** Create the \`test_cases\` table with rich metadata support for AI-generated and manually authored test cases.
+
+**Key SQL Decisions:**
+- \`steps JSONB NOT NULL DEFAULT '[]'\` — stores structured step objects: \`{ step, action, selector, value }\`
+- \`tags TEXT[] DEFAULT '{}'\` — PostgreSQL native array for multi-value tags
+- \`priority TEXT CHECK (priority IN ('critical', 'high', 'medium', 'low')) DEFAULT 'medium'\`
+- \`type TEXT CHECK (type IN ('functional', 'regression', 'smoke', 'edge_case', 'accessibility', 'negative')) DEFAULT 'functional'\`
+- \`source TEXT CHECK (source IN ('manual', 'ai_generated', 'recorded')) DEFAULT 'manual'\`
+- \`is_ai_generated BOOLEAN DEFAULT false\` — redundant with \`source\` but kept for fast boolean filtering
+- Indexes: \`idx_test_cases_suite_id\`, \`idx_test_cases_type\`, \`idx_test_cases_priority\`
+- **RLS:** two-level join — \`suite_id IN (SELECT id FROM test_suites WHERE project_id IN (SELECT id FROM projects WHERE user_id = auth.uid()))\`
+
+---
+
+### TICKET-1B-07: Create test_runs Table
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000007_create_test_runs.sql\`
+
+**Description:** Create the \`test_runs\` table for tracking test execution records.
+
+**Key SQL Decisions:**
+- \`test_case_id UUID REFERENCES public.test_cases(id) ON DELETE SET NULL\` — nullable; \`SET NULL\` so deleting a test case does not delete its run history
+- \`status TEXT CHECK (status IN ('pending', 'running', 'passed', 'failed', 'error', 'skipped')) DEFAULT 'pending'\`
+- \`mode TEXT CHECK (mode IN ('ai_driven', 'manual_recording', 'replay')) NOT NULL\`
+- **No \`updated_at\` column** — test runs are append-only records; status transitions are tracked via \`status\` field
+- Indexes: \`idx_test_runs_project_created\` (composite, DESC), \`idx_test_runs_user_id\`, \`idx_test_runs_status\`, \`idx_test_runs_mode\`
+- **RLS:** both \`project_id\` ownership AND \`user_id = auth.uid()\` required
+
+---
+
+### TICKET-1B-08: Create test_steps Table
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000008_create_test_steps.sql\`
+
+**Description:** Create the \`test_steps\` table for individual Playwright action records within a test run.
+
+**Key SQL Decisions:**
+- \`test_run_id UUID NOT NULL REFERENCES public.test_runs(id) ON DELETE CASCADE\` — deleting a run cascades to all its steps
+- \`status TEXT CHECK (status IN ('pending', 'running', 'passed', 'failed', 'skipped')) NOT NULL\`
+- \`metadata JSONB NOT NULL DEFAULT '{}'\` — extensible metadata for future use
+- **No \`updated_at\` column** — steps are written once during execution and never updated
+- Index: \`idx_test_steps_run_step\` (composite on \`test_run_id, step_number\`) for ordered step retrieval
+- **RLS:** \`test_run_id IN (SELECT id FROM test_runs WHERE user_id = auth.uid())\`
+
+---
+
+### TICKET-1B-09: Create recorded_sessions Table
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000009_create_recorded_sessions.sql\`
+
+**Description:** Create the \`recorded_sessions\` table for browser recording sessions.
+
+**Key SQL Decisions:**
+- \`status TEXT CHECK (status IN ('recording', 'completed', 'error')) DEFAULT 'recording'\`
+- \`base_url TEXT NOT NULL\` — required; the URL being recorded
+- \`browser TEXT NOT NULL DEFAULT 'chromium'\`
+- **No \`updated_at\` column** — session state is tracked via \`status\` and \`completed_at\`
+- **RLS:** both \`project_id\` ownership AND \`user_id = auth.uid()\` required
+
+---
+
+### TICKET-1B-10: Create session_actions Table
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000010_create_session_actions.sql\`
+
+**Description:** Create the \`session_actions\` table for individual browser actions captured during a recording session.
+
+**Key SQL Decisions:**
+- \`action_type TEXT CHECK (action_type IN ('click', 'dblclick', 'type', 'keypress', 'navigate', 'scroll', 'hover', 'select', 'drag', 'screenshot', 'assert')) NOT NULL\`
+- \`coordinates JSONB\` — stores \`{ x: number, y: number }\` for click/scroll actions
+- \`timestamp_ms INTEGER NOT NULL\` — milliseconds from session start for replay ordering
+- \`metadata JSONB NOT NULL DEFAULT '{}'\` — extensible
+- **No \`updated_at\` column** — actions are written once during recording
+- Index: \`idx_session_actions_session_number\` (composite on \`session_id, action_number\`)
+- **RLS:** \`session_id IN (SELECT id FROM recorded_sessions WHERE user_id = auth.uid())\`
+
+---
+
+### TICKET-1B-11: Create bugs Table
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000011_create_bugs.sql\`
+
+**Description:** Create the \`bugs\` table for bug reports discovered during or linked to test runs.
+
+**Key SQL Decisions:**
+- \`test_run_id UUID REFERENCES public.test_runs(id) ON DELETE SET NULL\` — nullable; \`SET NULL\` so deleting a run does not delete its bug reports
+- \`severity TEXT CHECK (severity IN ('critical', 'high', 'medium', 'low')) DEFAULT 'medium'\`
+- \`status TEXT CHECK (status IN ('open', 'in_progress', 'resolved', 'closed', 'wont_fix')) DEFAULT 'open'\`
+- \`screenshot_urls TEXT[] DEFAULT '{}'\` — array of screenshot URLs
+- \`console_logs JSONB NOT NULL DEFAULT '[]'\` and \`network_errors JSONB NOT NULL DEFAULT '[]'\` — structured log storage
+- \`assigned_to UUID REFERENCES public.profiles(id)\` — **no ON DELETE CASCADE** — profile deletions must not cascade-delete bugs; they remain with \`NULL\` assignee
+- \`external_id TEXT\` and \`external_url TEXT\` — for Jira/GitHub issue linking
+- Indexes: \`idx_bugs_project_status\` (composite), \`idx_bugs_severity\`, \`idx_bugs_test_run_id\`
+- **RLS:** \`project_id IN (SELECT id FROM projects WHERE user_id = auth.uid())\`
+
+---
+
+### TICKET-1B-12: Create integrations Table
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000012_create_integrations.sql\`
+
+**Description:** Create the \`integrations\` table for third-party integration configurations.
+
+**Key SQL Decisions:**
+- \`provider TEXT CHECK (provider IN ('jira', 'testrail', 'notion', 'github')) NOT NULL\`
+- \`project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE\` — nullable for global (user-wide) integrations
+- \`config JSONB NOT NULL DEFAULT '{}'\` — provider-specific configuration (credentials, URLs, etc.)
+- **\`COALESCE\` unique index** instead of standard \`UNIQUE(user_id, project_id, provider)\` — standard UNIQUE fails when \`project_id IS NULL\` because \`NULL != NULL\` in SQL; \`COALESCE(project_id, '00000000-0000-0000-0000-000000000000'::uuid)\` uses a sentinel UUID to enforce uniqueness correctly
+- **RLS:** \`user_id = auth.uid()\` (direct ownership)
+
+---
+
+### TICKET-1B-13: Create export_schemas Table
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000013_create_export_schemas.sql\`
+
+**Description:** Create the \`export_schemas\` table for user-defined test report export configurations.
+
+**Key SQL Decisions:**
+- \`columns JSONB NOT NULL\` — defines the column structure for the export format
+- \`project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE\` — nullable for global schemas
+- \`is_default BOOLEAN DEFAULT false\` — marks the default schema for a user/project
+- \`template_file_url TEXT\` — optional URL to a template file (e.g., Excel template)
+- **RLS:** \`user_id = auth.uid()\` (direct ownership)
+
+---
+
+### TICKET-1B-14: Create app_contexts Table (with pgvector)
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000014_create_app_contexts.sql\`
+
+**Description:** Create the \`app_contexts\` table for storing application context documents with vector embeddings for AI-powered test generation.
+
+**Key SQL Decisions:**
+- \`embedding extensions.vector(1536)\` — 1536 dimensions matches OpenAI \`text-embedding-ada-002\` and \`text-embedding-3-small\`; nullable (embedding generated asynchronously after upload)
+- \`type TEXT CHECK (type IN ('source_code', 'screenshot', 'video', 'text', 'prd', 'changelog')) NOT NULL\`
+- **HNSW index:** \`USING hnsw (embedding extensions.vector_cosine_ops)\` — Hierarchical Navigable Small World index for fast approximate nearest-neighbour search; cosine distance is appropriate for normalized OpenAI embeddings
+- Standard B-tree index on \`project_id\` for non-vector queries
+- **RLS:** \`project_id IN (SELECT id FROM projects WHERE user_id = auth.uid())\`
+
+---
+
+### TICKET-1B-15: Create sprint_changes Table
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000015_create_sprint_changes.sql\`
+
+**Description:** Create the \`sprint_changes\` table for capturing sprint-level change descriptions to help AI regenerate test cases when the application evolves.
+
+**Key SQL Decisions:**
+- \`changes_description TEXT NOT NULL\` — free-text description of what changed in the sprint
+- \`affected_areas TEXT[] DEFAULT '{}'\` — array of affected feature areas for filtering
+- \`sprint_name TEXT\` — nullable; not all teams use sprint names
+- **No \`updated_at\` column** — sprint changes are append-only records
+- **RLS:** both \`project_id\` ownership AND \`user_id = auth.uid()\` required
+
+---
+
+### TICKET-1B-16: Create media_attachments Table
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000016_create_media_attachments.sql\`
+
+**Description:** Create the \`media_attachments\` polymorphic table for storing media files attached to any entity.
+
+**Key SQL Decisions:**
+- \`entity_type TEXT CHECK (entity_type IN ('test_run', 'test_step', 'bug', 'recorded_session')) NOT NULL\` — discriminator column
+- \`entity_id UUID NOT NULL\` — **no FK constraint** — PostgreSQL cannot enforce FK constraints on polymorphic references; the application layer enforces referential integrity
+- \`type TEXT CHECK (type IN ('screenshot', 'video', 'log', 'trace', 'har')) NOT NULL\`
+- **No \`updated_at\` column** — attachments are uploaded once and not modified
+- Index: \`idx_media_attachments_entity\` (composite on \`entity_type, entity_id\`)
+- **Polymorphic RLS:** SELECT/INSERT/UPDATE/DELETE policies branch on \`entity_type\` with separate subqueries for each entity type
+
+---
+
+### TICKET-1B-17: Create updated_at Triggers
+
+**Status:** Done
+
+**Migration File:** \`supabase/migrations/20240101000017_create_updated_at_triggers.sql\`
+
+**Description:** Create a single reusable trigger function and apply it to all tables that have an \`updated_at\` column.
+
+**Key SQL Decisions:**
+- \`update_updated_at()\` function: \`NEW.updated_at = now(); RETURN NEW;\` — simple, reusable
+- Applied to 9 tables: \`profiles\`, \`api_keys\`, \`projects\`, \`test_suites\`, \`test_cases\`, \`bugs\`, \`integrations\`, \`export_schemas\`, \`app_contexts\`
+- **Deliberately excluded** (no \`updated_at\` column): \`test_runs\`, \`test_steps\`, \`recorded_sessions\`, \`session_actions\`, \`sprint_changes\`, \`media_attachments\` — these are append-only records
+- \`CREATE OR REPLACE TRIGGER set_updated_at BEFORE UPDATE\` — fires before each UPDATE, sets \`updated_at\` to \`now()\`
+
+---
+
+### TICKET-1B-18: Write Seed Data
+
+**Status:** Done
+
+**File:** \`supabase/seed.sql\`
+
+**Description:** Write comprehensive seed data with fixed UUIDs for fully reproducible local development. Applied automatically by \`supabase db reset\`.
+
+**Key Decisions:**
+- Fixed UUID constants via \`\\set\` psql variables — ensures the same IDs on every reset, making debugging reproducible
+- \`INSERT INTO auth.users\` with \`crypt('Password123!', gen_salt('bf'))\` — bcrypt-hashed passwords; the \`handle_new_user()\` trigger auto-creates profile rows
+- Alice promoted to \`admin\` role via \`UPDATE public.profiles SET role = 'admin'\` after trigger fires
+- All inserts use \`ON CONFLICT (id) DO NOTHING\` — safe to run multiple times
+- Seed creates: 2 users, 2 projects, 2 suites (one nested), 3 test cases (2 manual + 1 AI-generated), 2 test runs (1 passed + 1 failed), 5 test steps for the passed run, 1 recorded session
+
+---
+
+### TICKET-1B-19: Write shared-types database.ts, enums.ts, api.ts, websocket.ts
+
+**Status:** Done
+
+**Files:**
+- \`packages/shared-types/src/database.ts\` — interfaces: \`Profile\`, \`ApiKey\`, \`Project\`, \`TestRun\`, \`TestStep\`, \`RecordedSession\`, \`SessionAction\`
+- \`packages/shared-types/src/enums.ts\` — enums: \`TestRunStatus\`, \`TestRunMode\`, \`TestStepStatus\`, \`ActionType\`, \`ApiKeyProvider\`, \`UserRole\`, \`SessionStatus\`, \`BugSeverity\`, \`BugStatus\`
+- \`packages/shared-types/src/api.ts\` — DTOs: \`LoginRequest\`, \`RegisterRequest\`, \`AuthResponse\`, \`CreateProjectRequest\`, \`UpdateProjectRequest\`, \`CreateApiKeyRequest\`, \`ApiKeyResponse\` (= \`Omit<ApiKey, 'encrypted_key'>\`), \`CreateTestRunRequest\`, \`PaginatedResponse<T>\`, \`ApiError\`
+- \`packages/shared-types/src/websocket.ts\` — Socket.io event types: \`TestStepStartEvent\`, \`TestStepCompleteEvent\`, \`TestScreenshotEvent\`, \`TestCompleteEvent\`, \`RecordingActionEvent\`, \`SessionFrameEvent\`
+
+**Key Decision:** \`ApiKeyResponse = Omit<ApiKey, 'encrypted_key'>\` — the type system enforces that \`encrypted_key\` is never included in API responses; any route that accidentally selects \`encrypted_key\` will fail TypeScript compilation.
+
+---
+
+### TICKET-1B-20: Write supabase/SETUP.md
+
+**Status:** Done
+
+**File:** \`supabase/SETUP.md\`
+
+**Description:** Write a comprehensive setup guide for the Supabase local development environment, covering prerequisites, startup commands, environment variable configuration, and troubleshooting.
+\`\`\`\`
+
+---
+
+### Step 7 — Create \`artifacts/Tickets-MVP-1C.md\`
+
+Write the following complete content:
+
+\`\`\`\`markdown
+# QAForge — Implementation Tickets: MVP-1C
+
+Backend API Base (Express + Auth + Routes)
+
+---
+
+### TICKET-1C-01: Zod Environment Validation (env.ts)
+
+**Status:** Done
+
+**File:** \`apps/api/src/config/env.ts\`
+
+**Description:** Implement fail-fast environment variable validation using Zod. The server must not start with invalid configuration.
+
+**Key Implementation Details:**
+- \`schema.safeParse(process.env)\` — non-throwing parse; logs formatted errors and calls \`process.exit(1)\` on failure
+- \`PORT: z.string().default('4000')\` — string in schema, converted to \`Number(data.PORT)\` in export
+- \`CORS_ORIGIN: z.string().default('http://localhost:3000')\` — split by comma in export: \`data.CORS_ORIGIN.split(',').map(s => s.trim())\` → \`CORS_ORIGINS: string[]\`
+- \`SUPABASE_URL: z.string().url()\` — validates URL format
+- \`ENCRYPTION_KEY: z.string().length(64)\` — enforces exactly 64 hex characters (32 bytes)
+- \`JWT_SECRET: z.string().min(32)\` — minimum 32 characters
+- \`REDIS_URL: z.string().optional()\` — optional; Redis is post-MVP
+- Exported as \`const env\` with \`as const\` — immutable, fully typed
+
+---
+
+### TICKET-1C-02: Supabase Admin Client (supabase.ts)
+
+**Status:** Done
+
+**File:** \`apps/api/src/config/supabase.ts\`
+
+**Description:** Create the Supabase service role client for backend use. This client bypasses Row-Level Security and must never be exposed to untrusted callers.
+
+**Key Implementation Details:**
+- \`createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } })\` — server-side client; no token refresh or session persistence needed
+- Re-exports \`SupabaseClient\` type for use in other modules
+- Used by: \`auth.middleware.ts\`, \`auth.routes.ts\`, \`projects.routes.ts\`, \`api-keys.routes.ts\`, \`socket-server.ts\`
+
+---
+
+### TICKET-1C-03: Winston Logger (logger.ts)
+
+**Status:** Done
+
+**File:** \`apps/api/src/utils/logger.ts\`
+
+**Description:** Create a structured logger with environment-appropriate formatting.
+
+**Key Implementation Details:**
+- Development: \`combine(colorize(), simple())\` — human-readable colored output
+- Production: \`combine(timestamp(), json())\` — structured JSON for log aggregation services
+- Log level: \`debug\` in development, \`warn\` in production
+- Single \`Console\` transport — no file transport in MVP
+- Default export: \`logger\` — imported as \`import logger from './utils/logger.js'\`
+
+---
+
+### TICKET-1C-04: AES-256-GCM Encryption Utility (encryption.ts + encryption.test.ts)
+
+**Status:** Done
+
+**Files:**
+- \`apps/api/src/utils/encryption.ts\`
+- \`apps/api/src/utils/encryption.test.ts\`
+
+**Description:** Implement AES-256-GCM encryption/decryption for storing AI provider API keys. The implementation must be secure against IV reuse and ciphertext tampering.
+
+**Key Implementation Details:**
+- \`encrypt(plaintext: string): string\` — generates random 96-bit IV via \`crypto.randomBytes(12)\`; creates cipher with \`aes-256-gcm\`; returns \`iv_hex:authTag_hex:ciphertext_hex\`
+- \`decrypt(encrypted: string): string\` — splits on \`:\`, validates 3 parts, sets auth tag via \`decipher.setAuthTag(authTag)\` **before** first \`update()\` call (required for GCM mode); throws \`EncryptionError\` on any failure
+- \`getKeyBuffer()\` — converts \`env.ENCRYPTION_KEY\` (64-char hex) to 32-byte \`Buffer\` via \`Buffer.from(key, 'hex')\`
+- \`EncryptionError\` class — custom error; raw crypto errors are never propagated to callers
+- **Test script verifies:** round-trip correctness, IV randomness (same plaintext → different ciphertext), tampered ciphertext rejection (auth tag verification fails)
+
+---
+
+### TICKET-1C-05: AppError Class + Global Error Handler (error-handler.ts)
+
+**Status:** Done
+
+**File:** \`apps/api/src/middleware/error-handler.ts\`
+
+**Description:** Implement a typed application error class and a global Express error handler that formats all errors consistently.
+
+**Key Implementation Details:**
+- \`AppError\` extends \`Error\` with \`code: string\`, \`statusCode: number\`, \`details?: unknown\`
+- \`Object.setPrototypeOf(this, new.target.prototype)\` — maintains proper prototype chain for \`instanceof\` checks in ES5 targets
+- Error codes: \`UNAUTHORIZED\` (401), \`FORBIDDEN\` (403), \`NOT_FOUND\` (404), \`CONFLICT\` (409), \`VALIDATION_ERROR\` (400), \`RATE_LIMITED\` (429), \`INTERNAL_ERROR\` (500)
+- \`errorHandler\` function: 4-argument Express error handler (must be last middleware); logs with Winston; returns \`{ error: { code, message, details } }\` JSON; in production, non-\`AppError\` messages are redacted to \`'An unexpected error occurred'\`
+
+---
+
+### TICKET-1C-06: JWT Auth Middleware (auth.middleware.ts)
+
+**Status:** Done
+
+**File:** \`apps/api/src/middleware/auth.middleware.ts\`
+
+**Description:** Implement the \`authenticate\` middleware that validates Supabase JWTs and attaches user context to every protected request.
+
+**Key Implementation Details:**
+- Extracts \`Authorization: Bearer <token>\` header; returns 401 if missing or malformed
+- Calls \`supabase.auth.getUser(token)\` — **live network call** to Supabase Auth; detects revoked/expired tokens that would pass local JWT verification
+- Fetches \`profiles\` row: \`SELECT id, email, role FROM profiles WHERE id = data.user.id\` — gets the user's role (not included in \`auth.getUser()\` response)
+- Attaches \`req.user = { id, email, role }\` — available in all downstream route handlers
+- Applied per-router in \`app.ts\` (not globally) — keeps \`/api/health\` unauthenticated
+
+---
+
+### TICKET-1C-07: Zod Request Validation Middleware (validation.ts)
+
+**Status:** Done
+
+**File:** \`apps/api/src/middleware/validation.ts\`
+
+**Description:** Implement a reusable Zod validation middleware factory for validating request body, query parameters, and route parameters.
+
+**Key Implementation Details:**
+- \`validate(schema: ZodSchema, target: 'body' | 'query' | 'params' = 'body')\` — factory returns Express middleware
+- On success: replaces \`req[target]\` with the parsed, coerced Zod output (e.g., string → number coercions applied)
+- On failure: calls \`next(new AppError('VALIDATION_ERROR', 400, 'Validation failed', result.error.format()))\` — structured Zod error format in \`details\`
+- Usage: \`router.post('/', validate(MySchema), handler)\` or \`router.get('/:id', validate(ParamsSchema, 'params'), handler)\`
+
+---
+
+### TICKET-1C-08: Rate Limiter Middleware (rate-limiter.ts)
+
+**Status:** Done
+
+**File:** \`apps/api/src/middleware/rate-limiter.ts\`
+
+**Description:** Implement rate limiting middleware using \`express-rate-limit\`.
+
+**Key Implementation Details:**
+- \`defaultLimiter\`: 100 requests per 60-second window; applied globally in \`app.ts\`
+- \`aiLimiter\`: 10 requests per 60-second window; reserved for AI-heavy routes in MVP-2+
+- Both use \`standardHeaders: true, legacyHeaders: false\` — sends \`RateLimit-*\` headers per RFC 6585
+- Custom \`handler\` calls \`next(new AppError('RATE_LIMITED', 429, ...))\` — routes through the global error handler for consistent JSON response format
+
+---
+
+### TICKET-1C-09: Express App Setup (app.ts)
+
+**Status:** Done
+
+**File:** \`apps/api/src/app.ts\`
+
+**Description:** Assemble the Express application with all middleware and routes in the correct order.
+
+**Key Implementation Details:**
+- \`express.json({ limit: '10mb' })\` — 10MB limit for future context upload routes
+- CORS: \`origin\` callback checks \`env.CORS_ORIGINS\` array; allows requests with no origin (server-to-server, curl); \`credentials: true\`
+- Middleware order: body parser → CORS → rate limiter → health check → auth routes → projects routes → api-keys routes → 404 catch-all → error handler
+- \`authenticate\` applied at router level in \`app.use('/api/projects', authenticate, projectsRouter)\` — not globally, to keep \`/api/health\` unauthenticated
+- 404 handler returns \`{ error: { code: 'NOT_FOUND', message: 'Route METHOD /path not found', details: null } }\`
+
+---
+
+### TICKET-1C-10: HTTP Server + Socket.io Entry Point (index.ts)
+
+**Status:** Done
+
+**File:** \`apps/api/src/index.ts\`
+
+**Description:** Create the application entry point that starts the HTTP server and attaches Socket.io.
+
+**Key Implementation Details:**
+- \`import 'dotenv/config'\` **must be the very first import** — before any local module is evaluated; if \`config/env.ts\` runs before dotenv, \`process.env\` is empty and Zod validation fails
+- \`http.createServer(app)\` — wraps Express app in a Node.js HTTP server (required for Socket.io attachment)
+- \`server.listen(env.PORT, callback)\` — starts listening before Socket.io is attached
+- \`createSocketServer(server)\` — attaches Socket.io to the HTTP server
+- Exports \`io\` for use in future route handlers that need to emit events
+
+---
+
+### TICKET-1C-11: Auth Routes GET/PUT /api/auth/me (auth.routes.ts)
+
+**Status:** Done
+
+**File:** \`apps/api/src/routes/auth.routes.ts\`
+
+**Description:** Implement the profile read and update endpoints.
+
+**Key Implementation Details:**
+- \`GET /me\`: \`authenticate\` middleware applied per-route; \`SELECT * FROM profiles WHERE id = req.user.id\`; returns \`{ profile }\`
+- \`PUT /me\`: \`authenticate\` + \`validate(updateProfileSchema)\`; schema: \`full_name: z.string().min(1).max(100).optional()\`, \`avatar_url: z.string().url().optional()\`; \`UPDATE profiles SET ...req.body, updated_at = now() WHERE id = req.user.id\`; returns \`{ profile }\`
+- Both routes handle the edge case where the profile trigger failed on signup (returns 404)
+
+---
+
+### TICKET-1C-12: Projects CRUD Routes (projects.routes.ts)
+
+**Status:** Done
+
+**File:** \`apps/api/src/routes/projects.routes.ts\`
+
+**Description:** Implement full CRUD for projects with ownership enforcement and run statistics aggregation.
+
+**Key Implementation Details:**
+- All routes pre-protected by \`authenticate\` applied in \`app.ts\`
+- \`uuidParamsSchema = z.object({ id: z.string().uuid() })\` — validates \`:id\` params
+- \`GET /\`: \`SELECT * FROM projects WHERE user_id = req.user.id ORDER BY created_at DESC\`; returns \`{ projects, count }\`
+- \`POST /\`: validates \`name\` (required, max 200), \`description\` (optional, max 1000), \`base_url\` (optional, URL format); inserts with \`user_id = req.user.id\`; returns 201 \`{ project }\`
+- \`GET /:id\`: ownership check via \`WHERE id = :id AND user_id = req.user.id\`; aggregates run stats from \`test_runs\` table (\`total_runs\`, \`passed_runs\`, \`failed_runs\`); returns \`{ project, stats }\`
+- \`PUT /:id\`: validates params + body; \`WHERE id = :id AND user_id = req.user.id\` — defense-in-depth beyond RLS
+- \`DELETE /:id\`: \`WHERE id = :id AND user_id = req.user.id\`; returns \`{ success: true }\`
+
+---
+
+### TICKET-1C-13: API Keys CRUD + Validate Routes (api-keys.routes.ts)
+
+**Status:** Done
+
+**File:** \`apps/api/src/routes/api-keys.routes.ts\`
+
+**Description:** Implement full CRUD for API keys with AES-256-GCM encryption and live provider health checks.
+
+**Key Implementation Details:**
+- **Hard rule:** \`SELECT *\` is never used on \`api_keys\` — \`encrypted_key\` is explicitly excluded from all queries except \`/validate\`
+- \`GET /\`: \`SELECT id, user_id, provider, key_hint, is_valid, created_at, updated_at FROM api_keys WHERE user_id = req.user.id\`
+- \`POST /\`: checks for existing key with same \`(user_id, provider)\` — returns 409 CONFLICT if found; encrypts raw key; stores \`key_hint = rawKey.slice(-4)\`; \`is_valid: false\` on insert
+- \`PUT /:id\`: verifies ownership; re-encrypts new key; sets \`is_valid: true\` (optimistic — confirmed on next \`/validate\`)
+- \`DELETE /:id\`: ownership check; returns \`{ success: true }\`
+- \`POST /:id/validate\`: fetches \`encrypted_key\` (only time it's selected); decrypts; calls \`callProviderHealthCheck(provider, rawKey)\`; persists \`is_valid\` result; returns \`{ is_valid, error? }\`
+- Provider health checks: OpenAI (\`GET /v1/models\` → 200), Anthropic (\`POST /v1/messages\` → 200 or 400), Gemini (\`GET /v1beta/models?key=\` → 200)
+
+---
+
+### TICKET-1C-14: Socket.io Scaffold with JWT Auth (socket-server.ts)
+
+**Status:** Done
+
+**File:** \`apps/api/src/websocket/socket-server.ts\`
+
+**Description:** Create the Socket.io server scaffold with JWT authentication middleware and stub event handlers for future phases.
+
+**Key Implementation Details:**
+- \`new Server(httpServer, { cors: { origin: env.CORS_ORIGINS, credentials: true }, transports: ['websocket', 'polling'] })\`
+- Auth middleware: \`io.use(async (socket, next) => ...)\` — extracts token from \`socket.handshake.auth.token\` or \`Authorization\` header; calls \`supabase.auth.getUser(token)\`; attaches \`socket.data.userId\` and \`socket.data.email\`
+- \`test:start\` event stub — logs payload; TODO: MVP-2 dispatch to test execution job queue
+- \`recording:start\` event stub — logs payload; TODO: MVP-3 dispatch to recording session handler
+- \`disconnect\` event — logs \`socketId\` and \`reason\`
+
+---
+
+### TICKET-1C-15: Redis No-Op Stub (redis.ts)
+
+**Status:** Done
+
+**File:** \`apps/api/src/config/redis.ts\`
+
+**Description:** Create a no-op Redis stub so the codebase compiles and runs without a Redis connection. BullMQ job queues are a post-MVP feature.
+
+**Key Implementation Details:**
+- \`export const redisClient = null as unknown as never\` — typed as \`never\` so any accidental usage causes a TypeScript error
+- \`export async function connectRedis(): Promise<void>\` — logs a skip message; no actual connection attempt
+- No \`ioredis\` or \`@upstash/redis\` dependency added to \`package.json\`
+
+---
+
+### TICKET-1C-16: Express Type Augmentation (express.d.ts)
+
+**Status:** Done
+
+**File:** \`apps/api/src/types/express.d.ts\`
+
+**Description:** Augment the global Express \`Request\` interface to add \`req.user\` to all route handlers without requiring explicit type casting.
+
+**Key Implementation Details:**
+- \`declare global { namespace Express { interface Request { user: { id: string; email: string; role: string } } } }\`
+- \`export {}\` — required to make this a module (not a script) so the \`declare global\` augmentation is applied correctly
+- Placed in \`src/types/\` — TypeScript picks it up automatically via \`tsconfig.json\` \`include\` paths
+- \`auth.middleware.ts\` sets \`req.user\` after successful authentication; all downstream route handlers access it without type assertions
+\`\`\`\`
+
+---
+
+### Step 8 — Create \`artifacts/Tickets-MVP-1D.md\`
+
+Write the following complete content:
+
+\`\`\`\`markdown
+# QAForge — Implementation Tickets: MVP-1D
+
+Frontend Baseline & Auth Pipeline (Next.js)
+
+---
+
+### TICKET-1D-01: Install Supabase SSR Packages
+
+**Status:** Done
+
+**Description:** Add the correct Supabase packages for Next.js App Router cookie-based session management. The deprecated \`@supabase/auth-helpers-nextjs\` must not be used.
+
+**Packages Added to \`apps/web/package.json\`:**
+
+| Package | Version | Purpose |
+|---|---|---|
+| \`@supabase/ssr\` | \`^0.5.0\` | App Router cookie-based session management (\`createBrowserClient\`, \`createServerClient\`) |
+| \`@supabase/supabase-js\` | \`^2.45.0\` | Core Supabase client |
+| \`@supabase/auth-ui-react\` | \`^0.4.7\` | Pre-built \`<Auth>\` component for the login page |
+| \`@supabase/auth-ui-shared\` | \`^0.1.8\` | \`ThemeSupa\` theme for the Auth UI component |
+
+**Key Decision:** \`@supabase/ssr\` is the current recommended package for Next.js App Router. It provides \`createBrowserClient\` (for Client Components) and \`createServerClient\` (for Server Components and middleware) with proper cookie handling.
+
+---
+
+### TICKET-1D-02: Supabase Browser Client (lib/supabase/client.ts)
+
+**Status:** Done
+
+**File:** \`apps/web/lib/supabase/client.ts\`
+
+**Description:** Create the browser-side Supabase client for use in Client Components.
+
+**Key Implementation Details:**
+- \`'use client'\` directive — this module is only safe to import in Client Components
+- \`createBrowserClient(NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY)\` — uses the anon key (safe for browser)
+- Exported as \`createClient()\` factory function — called fresh in each component to avoid stale state
+- Used by: \`lib/api/client.ts\` (for JWT), \`components/layout/sidebar.tsx\` (for sign-out), \`app/(auth)/login/page.tsx\` (for Auth UI)
+
+---
+
+### TICKET-1D-03: Supabase Server Client (lib/supabase/server.ts)
+
+**Status:** Done
+
+**File:** \`apps/web/lib/supabase/server.ts\`
+
+**Description:** Create the server-side Supabase client for use in Server Components and Route Handlers.
+
+**Key Implementation Details:**
+- \`createServerClient(URL, ANON_KEY, { cookies: { getAll(), setAll() } })\` from \`@supabase/ssr\`
+- \`getAll()\` — reads from \`cookies()\` (Next.js \`next/headers\`)
+- \`setAll()\` — writes to \`cookies()\` inside a try/catch; the catch is intentional — \`setAll\` may be called from a Server Component where cookie mutation is not allowed, but the middleware handles session refresh
+- Exported as \`createServerSupabaseClient()\` factory — called fresh in each Server Component
+- Used by: \`app/(dashboard)/layout.tsx\`, \`app/(dashboard)/dashboard/projects/page.tsx\`, \`app/(dashboard)/dashboard/settings/ai-keys/page.tsx\`, \`app/(dashboard)/dashboard/settings/profile/page.tsx\`
+
+---
+
+### TICKET-1D-04: Supabase Middleware Client (lib/supabase/middleware.ts)
+
+**Status:** Done
+
+**File:** \`apps/web/lib/supabase/middleware.ts\`
+
+**Description:** Create the Supabase client specifically for use in Next.js middleware, with proper cookie refresh handling.
+
+**Key Implementation Details:**
+- \`createMiddlewareClient(request: NextRequest)\` — creates a \`createServerClient\` that reads cookies from \`request.cookies\` and writes to a \`NextResponse\`
+- **Getter pattern:** \`return { supabase, get response() { return supabaseResponse; } }\` — the \`get response()\` getter ensures callers always read the **latest** \`supabaseResponse\`, even after \`setAll()\` reassigns it during a token refresh
+- \`setAll()\` implementation: updates \`request.cookies\`, creates a new \`NextResponse.next({ request })\`, then sets cookies on the new response — this is the pattern required by \`@supabase/ssr\` for middleware
+- Used exclusively by \`apps/web/middleware.ts\`
+
+---
+
+### TICKET-1D-05: Root Middleware Route Protection (middleware.ts)
+
+**Status:** Done
+
+**File:** \`apps/web/middleware.ts\`
+
+**Description:** Implement server-side route protection that enforces authentication before any page renders.
+
+**Key Implementation Details:**
+- \`createMiddlewareClient(request)\` — creates the middleware Supabase client
+- \`supabase.auth.getUser()\` — **must be called** to refresh the session cookie; do not use \`getSession()\` in middleware (it doesn't refresh)
+- Reads \`response\` via getter **after** \`getUser()\` — ensures the post-refresh response is used
+- **Unauthenticated + \`/dashboard/*\`** → \`NextResponse.redirect('/login')\` + copies refreshed cookies to redirect response
+- **Authenticated + \`/login\`** → \`NextResponse.redirect('/dashboard/projects')\` + copies refreshed cookies
+- **Otherwise** → returns \`response\` (the refreshed response with updated cookies)
+- \`matcher: ['/((?!_next/static|_next/image|favicon.ico).*)']\` — runs on all routes except static assets
+
+---
+
+### TICKET-1D-06: Typed API Fetch Client (lib/api/client.ts)
+
+**Status:** Done
+
+**File:** \`apps/web/lib/api/client.ts\`
+
+**Description:** Implement a thin typed fetch wrapper that attaches Supabase JWTs to all API requests and handles common error cases.
+
+**Key Implementation Details:**
+- \`BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'\`
+- \`getAuthHeaders()\` — calls \`createClient().auth.getSession()\`; attaches \`Authorization: Bearer <access_token>\` if session exists; always includes \`Content-Type: application/json\`
+- \`handleResponse<T>(response)\`:
+  - 401 → signs out via \`supabase.auth.signOut()\` + \`window.location.href = '/login'\`
+  - Non-OK → parses error body JSON, throws with \`errorBody.message\`
+  - 204 → returns \`undefined as unknown as T\`
+  - OK → returns \`response.json() as Promise<T>\`
+- \`apiClient.get<T>\`, \`apiClient.post<T>\`, \`apiClient.put<T>\`, \`apiClient.del<T>\` — all call \`getAuthHeaders()\` and \`handleResponse<T>\`
+- **No \`axios\`, no \`@tanstack/react-query\`** — native \`fetch\` only
+
+---
+
+### TICKET-1D-07: Auth Layout (app/(auth)/layout.tsx)
+
+**Status:** Done
+
+**File:** \`apps/web/app/(auth)/layout.tsx\`
+
+**Description:** Create the centered layout for authentication pages.
+
+**Key Implementation Details:**
+- Server Component (no \`'use client'\` directive)
+- \`flex min-h-screen items-center justify-center bg-background\` — full-screen centered layout
+- \`w-full max-w-md px-4\` — constrains content width for the login form
+- Wraps \`app/(auth)/login/page.tsx\`
+
+---
+
+### TICKET-1D-08: Login Page with Auth UI (app/(auth)/login/page.tsx)
+
+**Status:** Done
+
+**File:** \`apps/web/app/(auth)/login/page.tsx\`
+
+**Description:** Implement the login page using the Supabase Auth UI component.
+
+**Key Implementation Details:**
+- \`'use client'\` — required for \`useEffect\`, \`useRouter\`, and the Auth UI component
+- \`supabase.auth.onAuthStateChange((event) => { if (event === 'SIGNED_IN') router.push('/dashboard/projects') })\` — listens for successful auth and redirects; subscription cleaned up in \`useEffect\` return
+- \`<Auth supabaseClient={supabase} appearance={{ theme: ThemeSupa, variables: { default: { colors: { brand, brandAccent, brandButtonText } } } }} providers={[]} view=\"sign_in\" showLinks={true} redirectTo={...} />\`
+- \`providers={[]}\` — email + password only; no OAuth providers in MVP
+- \`showLinks={true}\` — shows \"Don't have an account? Sign up\" link
+- Brand colors match the shadcn/ui theme: \`hsl(222.2 47.4% 11.2%)\` (primary), \`hsl(210 40% 96.1%)\` (accent)
+
+---
+
+### TICKET-1D-09: Dashboard Layout + Sidebar (app/(dashboard)/layout.tsx + components/layout/sidebar.tsx)
+
+**Status:** Done
+
+**Files:**
+- \`apps/web/app/(dashboard)/layout.tsx\`
+- \`apps/web/components/layout/sidebar.tsx\`
+
+**Description:** Implement the fixed left-sidebar dashboard layout with navigation and sign-out.
+
+**Key Implementation Details — Layout:**
+- Server Component; calls \`createServerSupabaseClient().auth.getUser()\`; \`redirect('/login')\` if no user (defense-in-depth beyond middleware)
+- \`flex min-h-screen\` — sidebar + main content side by side
+- \`<Sidebar />\` + \`<main className=\"flex-1 overflow-auto bg-background\"><div className=\"container mx-auto p-6 lg:p-8\">{children}</div></main>\`
+
+**Key Implementation Details — Sidebar:**
+- \`'use client'\` — required for \`usePathname\`, \`useRouter\`, and sign-out handler
+- Fixed \`w-64\` width, \`h-screen\`, \`border-r bg-card\`
+- **Logo:** \`QF\` in a rounded primary-colored box + \"QAForge\" text
+- **Nav items:** Projects (\`/dashboard/projects\`), AI Keys (\`/dashboard/settings/ai-keys\`), Profile (\`/dashboard/settings/profile\`), Integrations (\`/dashboard/settings/integrations\`) — each with an inline SVG icon
+- **Active state:** \`pathname === item.href || pathname.startsWith(item.href + '/')\` — \`bg-primary text-primary-foreground\` when active
+- **Sign Out:** \`supabase.auth.signOut()\` + \`router.push('/login')\`
+
+---
+
+### TICKET-1D-10: Projects Page — Server Component (app/(dashboard)/dashboard/projects/page.tsx)
+
+**Status:** Done
+
+**File:** \`apps/web/app/(dashboard)/dashboard/projects/page.tsx\`
+
+**Description:** Implement the Projects page as a Server Component that fetches initial data server-side.
+
+**Key Implementation Details:**
+- Server Component; calls \`createServerSupabaseClient().auth.getSession()\` to get \`access_token\`
+- \`getProjects(accessToken)\` — \`fetch(\${baseUrl}/api/projects, { headers: { Authorization: Bearer \${token} }, cache: 'no-store' })\`; returns \`[]\` on non-OK response
+- Passes \`initialProjects\` to \`<ProjectsGrid>\` — no client-side loading state for initial render
+- **API endpoint consumed:** \`GET /api/projects\`
+
+---
+
+### TICKET-1D-11: Projects Grid + Empty State (components/projects/projects-grid.tsx)
+
+**Status:** Done
+
+**File:** \`apps/web/components/projects/projects-grid.tsx\`
+
+**Description:** Implement the projects card grid with empty state and refresh-on-create behavior.
+
+**Key Implementation Details:**
+- \`'use client'\`; \`useState<Project[]>(initialProjects)\` — hydrates from server-fetched data
+- **Empty state:** dashed border, folder icon, \"No projects yet\" heading, \"Create Project\" CTA button
+- **Card grid:** \`grid gap-4 sm:grid-cols-2 lg:grid-cols-3\`; each card shows \`name\`, \`description\` (line-clamp-2), \`base_url\` (monospace, truncated), \`created_at\` (formatted)
+- Card click → \`router.push('/dashboard/projects/\${project.id}')\`
+- \`refreshProjects()\` — \`apiClient.get<ProjectsResponse>('/api/projects')\` → updates state
+- \`handleProjectCreated()\` — closes modal + calls \`refreshProjects()\`
+- **API endpoints consumed:** \`GET /api/projects\`
+
+---
+
+### TICKET-1D-12: Create Project Modal (components/projects/create-project-modal.tsx)
+
+**Status:** Done
+
+**File:** \`apps/web/components/projects/create-project-modal.tsx\`
+
+**Description:** Implement the project creation modal with form validation and API integration.
+
+**Key Implementation Details:**
+- \`'use client'\`; returns \`null\` when \`!open\` — no DOM when closed
+- Fixed overlay: \`fixed inset-0 z-50 flex items-center justify-center\`; backdrop with \`bg-black/50 backdrop-blur-sm\`
+- Form fields: \`name\` (required, text), \`description\` (optional, textarea, 3 rows), \`base_url\` (optional, type=\"url\")
+- \`handleSubmit()\` — builds \`CreateProjectRequest\` body (omits empty optional fields); calls \`apiClient.post('/api/projects', body)\`; calls \`onCreated()\` on success
+- Error display: \`bg-destructive/10 text-destructive\` banner
+- Submit button disabled when \`loading || !name.trim()\`
+- **API endpoint consumed:** \`POST /api/projects\`
+
+---
+
+### TICKET-1D-13: Project Detail Stub (app/(dashboard)/dashboard/projects/[id]/page.tsx)
+
+**Status:** Done
+
+**File:** \`apps/web/app/(dashboard)/dashboard/projects/[id]/page.tsx\`
+
+**Description:** Create a placeholder page for the project detail view. Full implementation is deferred to MVP-2.
+
+**Key Implementation Details:**
+- Server Component (no \`'use client'\`)
+- Displays \`params.id\` for debugging
+- \"Coming in MVP-2\" message with a diamond/gem SVG icon
+- Describes what will be available: test runs, recorded sessions, AI-powered test generation
+
+---
+
+### TICKET-1D-14: AI Keys Page — Server Component (app/(dashboard)/dashboard/settings/ai-keys/page.tsx)
+
+**Status:** Done
+
+**File:** \`apps/web/app/(dashboard)/dashboard/settings/ai-keys/page.tsx\`
+
+**Description:** Implement the AI Keys settings page as a Server Component that fetches initial key data server-side.
+
+**Key Implementation Details:**
+- Server Component; calls \`createServerSupabaseClient().auth.getSession()\` to get \`access_token\`
+- \`getApiKeys(accessToken)\` — \`fetch(\${baseUrl}/api/api-keys, { headers: { Authorization: Bearer \${token} }, cache: 'no-store' })\`; returns \`[]\` on non-OK
+- Passes \`initialKeys: ApiKeyResponse[]\` to \`<AiKeysManager>\` — \`ApiKeyResponse\` type omits \`encrypted_key\`
+- **API endpoint consumed:** \`GET /api/api-keys\`
+
+---
+
+### TICKET-1D-15: AI Keys Manager Component (components/settings/ai-keys-manager.tsx)
+
+**Status:** Done
+
+**File:** \`apps/web/components/settings/ai-keys-manager.tsx\`
+
+**Description:** Implement the AI keys management table with validate and delete actions.
+
+**Key Implementation Details:**
+- \`'use client'\`; \`useState<ApiKeyResponse[]>(initialKeys)\`
+- **Empty state:** key icon, \"No API keys configured\" heading, \"Add API Key\" CTA
+- **Table columns:** Provider (human-readable label), Key Hint (\`••••{key_hint}\`), Status badge (green \"Valid\" / yellow \"Unverified\"), Actions
+- \`handleValidate(id)\` — \`apiClient.post('/api/api-keys/\${id}/validate')\`; \`validatingId\` state shows \"Validating...\" during request
+- \`handleDelete(id)\` — \`apiClient.del('/api/api-keys/\${id}')\`; \`deletingId\` state shows \"Deleting...\" during request
+- Both actions call \`refreshProjects()\` after completion
+- \`providerLabel()\` — maps \`'openai'\` → \`'OpenAI'\`, \`'anthropic'\` → \`'Anthropic'\`, \`'gemini'\` → \`'Gemini'\`
+- **API endpoints consumed:** \`GET /api/api-keys\`, \`POST /api/api-keys/:id/validate\`, \`DELETE /api/api-keys/:id\`
+
+---
+
+### TICKET-1D-16: Add API Key Modal (components/settings/add-api-key-modal.tsx)
+
+**Status:** Done
+
+**File:** \`apps/web/components/settings/add-api-key-modal.tsx\`
+
+**Description:** Implement the modal for adding a new AI provider API key.
+
+**Key Implementation Details:**
+- \`'use client'\`; returns \`null\` when \`!open\`
+- Imports \`ApiKeyProvider\` enum from \`@qaforge/shared-types\` — provider values are type-safe
+- Provider \`<select>\`: options from \`providers\` array using \`ApiKeyProvider.OPENAI/ANTHROPIC/GEMINI\` values
+- Key \`<input type=\"password\">\` — masked input; placeholder \`sk-...\`
+- \`handleSubmit()\` — builds \`CreateApiKeyRequest = { provider, key }\`; calls \`apiClient.post('/api/api-keys', body)\`; calls \`onAdded()\` on success
+- Submit button disabled when \`loading || !key.trim()\`
+- **API endpoint consumed:** \`POST /api/api-keys\`
+
+---
+
+### TICKET-1D-17: Profile Page — Server Component (app/(dashboard)/dashboard/settings/profile/page.tsx)
+
+**Status:** Done
+
+**File:** \`apps/web/app/(dashboard)/dashboard/settings/profile/page.tsx\`
+
+**Description:** Implement the Profile settings page as a Server Component that fetches the user's profile server-side.
+
+**Key Implementation Details:**
+- Server Component; calls \`createServerSupabaseClient().auth.getSession()\` to get \`access_token\`
+- \`getProfile(accessToken)\` — \`fetch(\${baseUrl}/api/auth/me, { headers: { Authorization: Bearer \${token} }, cache: 'no-store' })\`; returns \`null\` on non-OK
+- Renders \`<ProfileForm profile={profile} />\` if profile loaded; fallback error message if \`null\`
+- **API endpoint consumed:** \`GET /api/auth/me\`
+
+---
+
+### TICKET-1D-18: Profile Form Component (components/settings/profile-form.tsx)
+
+**Status:** Done
+
+**File:** \`apps/web/components/settings/profile-form.tsx\`
+
+**Description:** Implement the profile editing form with success/error feedback.
+
+**Key Implementation Details:**
+- \`'use client'\`; \`useState\` for \`fullName\`, \`avatarUrl\`, \`loading\`, \`feedback\`
+- **Email field:** \`disabled\` + \`bg-muted text-muted-foreground cursor-not-allowed\` — read-only; \"Email cannot be changed\" hint text
+- **Full Name field:** editable text input
+- **Avatar URL field:** editable URL input
+- **Role field:** read-only display div (not an input) — shows \`profile.role\`
+- \`handleSubmit()\` — \`apiClient.put('/api/auth/me', { full_name: fullName || undefined, avatar_url: avatarUrl || undefined })\`
+- Feedback: green success banner or red error banner
+- **API endpoint consumed:** \`PUT /api/auth/me\`
+
+---
+
+### TICKET-1D-19: Integrations Placeholder Page (app/(dashboard)/dashboard/settings/integrations/page.tsx)
+
+**Status:** Done
+
+**File:** \`apps/web/app/(dashboard)/dashboard/settings/integrations/page.tsx\`
+
+**Description:** Create a placeholder page for the Integrations settings. Full implementation is deferred to a future release.
+
+**Key Implementation Details:**
+- Server Component (no \`'use client'\`)
+- \"Coming Soon\" message with a plug/connector SVG icon
+- Lists planned integrations: Jira, GitHub, Slack
+- No API endpoints consumed
+
+---
+
+### TICKET-1D-20: Update .env.local Template
+
+**Status:** Done
+
+**File:** \`apps/web/.env.local\`
+
+**Description:** Ensure the \`.env.local\` template file exists with the correct variable names and placeholder values.
+
+**Key Implementation Details:**
+- \`NEXT_PUBLIC_SUPABASE_URL=\` — empty; user must paste API URL from \`supabase status\`
+- \`NEXT_PUBLIC_SUPABASE_ANON_KEY=\` — empty; user must paste anon key from \`supabase status\`
+- \`NEXT_PUBLIC_API_URL=http://localhost:4000\` — pre-filled with the local Express API URL
+- All three variables are \`NEXT_PUBLIC_*\` — exposed to the browser bundle; safe because the anon key is public and RLS enforces security
+- File is committed to the repository as a template (unlike \`apps/api/.env\` which must be created from scratch)
+\`\`\`\`
