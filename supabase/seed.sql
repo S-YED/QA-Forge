@@ -12,33 +12,29 @@
 --          auth.users with fixed UUIDs for fully reproducible dev data.
 -- =============================================================================
 
-BEGIN;
-
--- ─── Fixed UUIDs for reproducibility ─────────────────────────────────────────
-
--- Users
-\set USER_1_ID  '00000000-0000-0000-0000-000000000001'
-\set USER_2_ID  '00000000-0000-0000-0000-000000000002'
-
--- Projects
-\set PROJECT_1_ID '10000000-0000-0000-0000-000000000001'
-\set PROJECT_2_ID '10000000-0000-0000-0000-000000000002'
-
--- Test Suites
-\set SUITE_1_ID '20000000-0000-0000-0000-000000000001'
-\set SUITE_2_ID '20000000-0000-0000-0000-000000000002'
-
--- Test Cases
-\set CASE_1_ID '30000000-0000-0000-0000-000000000001'
-\set CASE_2_ID '30000000-0000-0000-0000-000000000002'
-\set CASE_3_ID '30000000-0000-0000-0000-000000000003'
-
--- Test Runs
-\set RUN_1_ID '40000000-0000-0000-0000-000000000001'
-\set RUN_2_ID '40000000-0000-0000-0000-000000000002'
-
--- Recorded Session
-\set SESSION_1_ID '50000000-0000-0000-0000-000000000001'
+DO $$
+DECLARE
+    -- ─── Fixed UUIDs for reproducibility ─────────────────────────────────────
+    -- Users
+    v_user_1    UUID := '00000000-0000-0000-0000-000000000001';
+    v_user_2    UUID := '00000000-0000-0000-0000-000000000002';
+    v_user_3    UUID := '00000000-0000-0000-0000-000000000003';
+    -- Projects
+    v_project_1 UUID := '10000000-0000-0000-0000-000000000001';
+    v_project_2 UUID := '10000000-0000-0000-0000-000000000002';
+    -- Test Suites
+    v_suite_1   UUID := '20000000-0000-0000-0000-000000000001';
+    v_suite_2   UUID := '20000000-0000-0000-0000-000000000002';
+    -- Test Cases
+    v_case_1    UUID := '30000000-0000-0000-0000-000000000001';
+    v_case_2    UUID := '30000000-0000-0000-0000-000000000002';
+    v_case_3    UUID := '30000000-0000-0000-0000-000000000003';
+    -- Test Runs
+    v_run_1     UUID := '40000000-0000-0000-0000-000000000001';
+    v_run_2     UUID := '40000000-0000-0000-0000-000000000002';
+    -- Recorded Session
+    v_session_1 UUID := '50000000-0000-0000-0000-000000000001';
+BEGIN
 
 -- ─── 1. Auth Users ────────────────────────────────────────────────────────────
 -- The on_auth_user_created trigger will fire for each INSERT and auto-populate profiles.
@@ -56,7 +52,7 @@ INSERT INTO auth.users (
     aud
 ) VALUES
 (
-    :'USER_1_ID',
+    v_user_1,
     '00000000-0000-0000-0000-000000000000',
     'alice@qaforge.dev',
     crypt('Password123!', gen_salt('bf')),
@@ -68,7 +64,7 @@ INSERT INTO auth.users (
     'authenticated'
 ),
 (
-    :'USER_2_ID',
+    v_user_2,
     '00000000-0000-0000-0000-000000000000',
     'bob@qaforge.dev',
     crypt('Password123!', gen_salt('bf')),
@@ -78,29 +74,41 @@ INSERT INTO auth.users (
     now(),
     'authenticated',
     'authenticated'
+),
+(
+    v_user_3,
+    '00000000-0000-0000-0000-000000000000',
+    'sy3dkm@gmail.com',
+    crypt('Password123!', gen_salt('bf')),
+    now(),
+    '{"full_name": "Syed K", "avatar_url": "https://api.dicebear.com/7.x/avataaars/svg?seed=syed"}'::jsonb,
+    now(),
+    now(),
+    'authenticated',
+    'authenticated'
 )
 ON CONFLICT (id) DO NOTHING;
 
--- ─── 2. Promote Alice to admin ────────────────────────────────────────────────
--- The trigger inserts with default role='tester'; upgrade Alice to admin here.
+-- ─── 2. Promote Alice and Syed to admin ───────────────────────────────────────
+-- The trigger inserts with default role='tester'; upgrade them to admin here.
 
 UPDATE public.profiles
 SET role = 'admin'
-WHERE id = :'USER_1_ID';
+WHERE id IN (v_user_1, v_user_3);
 
 -- ─── 3. Projects ─────────────────────────────────────────────────────────────
 
 INSERT INTO public.projects (id, user_id, name, description, base_url) VALUES
 (
-    :'PROJECT_1_ID',
-    :'USER_1_ID',
+    v_project_1,
+    v_user_1,
     'E-Commerce Platform',
     'End-to-end test suite for the main shopping platform including checkout, search, and auth flows.',
     'https://shop.example.com'
 ),
 (
-    :'PROJECT_2_ID',
-    :'USER_1_ID',
+    v_project_2,
+    v_user_1,
     'Admin Dashboard',
     'Tests for the internal admin panel covering user management and analytics.',
     'https://admin.example.com'
@@ -111,16 +119,16 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.test_suites (id, project_id, parent_suite_id, name, description) VALUES
 (
-    :'SUITE_1_ID',
-    :'PROJECT_1_ID',
+    v_suite_1,
+    v_project_1,
     NULL,
     'Authentication',
     'Login, registration, password reset, and session management tests.'
 ),
 (
-    :'SUITE_2_ID',
-    :'PROJECT_1_ID',
-    :'SUITE_1_ID',
+    v_suite_2,
+    v_project_1,
+    v_suite_1,
     'Login Flows',
     'Specific login scenarios: valid credentials, invalid password, locked accounts.'
 )
@@ -133,8 +141,8 @@ INSERT INTO public.test_cases (
     priority, type, tags, is_ai_generated, source
 ) VALUES
 (
-    :'CASE_1_ID',
-    :'SUITE_2_ID',
+    v_case_1,
+    v_suite_2,
     'Successful login with valid credentials',
     'Verifies that a registered user can log in with correct email and password.',
     '[
@@ -152,8 +160,8 @@ INSERT INTO public.test_cases (
     'manual'
 ),
 (
-    :'CASE_2_ID',
-    :'SUITE_2_ID',
+    v_case_2,
+    v_suite_2,
     'Login fails with incorrect password',
     'Verifies that an error message is shown when wrong password is entered.',
     '[
@@ -171,8 +179,8 @@ INSERT INTO public.test_cases (
     'manual'
 ),
 (
-    :'CASE_3_ID',
-    :'SUITE_1_ID',
+    v_case_3,
+    v_suite_1,
     'Password reset email is sent',
     'Verifies that clicking "Forgot Password" triggers a reset email.',
     '[
@@ -197,10 +205,10 @@ INSERT INTO public.test_runs (
     browser, environment, duration_ms, started_at, completed_at
 ) VALUES
 (
-    :'RUN_1_ID',
-    :'CASE_1_ID',
-    :'PROJECT_1_ID',
-    :'USER_1_ID',
+    v_run_1,
+    v_case_1,
+    v_project_1,
+    v_user_1,
     'passed',
     'ai_driven',
     'chromium',
@@ -210,10 +218,10 @@ INSERT INTO public.test_runs (
     now() - INTERVAL '2 hours' + INTERVAL '4230 milliseconds'
 ),
 (
-    :'RUN_2_ID',
-    :'CASE_2_ID',
-    :'PROJECT_1_ID',
-    :'USER_1_ID',
+    v_run_2,
+    v_case_2,
+    v_project_1,
+    v_user_1,
     'failed',
     'ai_driven',
     'firefox',
@@ -229,11 +237,11 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.test_steps (
     test_run_id, step_number, action, selector, value, status, duration_ms
 ) VALUES
-('40000000-0000-0000-0000-000000000001', 1, 'navigate',  NULL,              '/login',               'passed', 312),
-('40000000-0000-0000-0000-000000000001', 2, 'fill',      '#email',          'user@example.com',     'passed', 45),
-('40000000-0000-0000-0000-000000000001', 3, 'fill',      '#password',       'Password123!',         'passed', 38),
-('40000000-0000-0000-0000-000000000001', 4, 'click',     'button[type=submit]', NULL,               'passed', 2870),
-('40000000-0000-0000-0000-000000000001', 5, 'assert',    '.dashboard-header', 'visible',            'passed', 965);
+(v_run_1, 1, 'navigate',  NULL,                '/login',               'passed', 312),
+(v_run_1, 2, 'fill',      '#email',            'user@example.com',     'passed', 45),
+(v_run_1, 3, 'fill',      '#password',         'Password123!',         'passed', 38),
+(v_run_1, 4, 'click',     'button[type=submit]', NULL,                 'passed', 2870),
+(v_run_1, 5, 'assert',    '.dashboard-header', 'visible',              'passed', 965);
 
 -- ─── 8. Recorded Session ──────────────────────────────────────────────────────
 
@@ -242,9 +250,9 @@ INSERT INTO public.recorded_sessions (
     base_url, browser, status, duration_ms, completed_at
 ) VALUES
 (
-    :'SESSION_1_ID',
-    :'PROJECT_1_ID',
-    :'USER_1_ID',
+    v_session_1,
+    v_project_1,
+    v_user_1,
     'Checkout Flow Recording',
     'Manual recording of the add-to-cart → checkout → payment confirmation flow.',
     'https://shop.example.com',
@@ -255,4 +263,4 @@ INSERT INTO public.recorded_sessions (
 )
 ON CONFLICT (id) DO NOTHING;
 
-COMMIT;
+END $$;

@@ -16,7 +16,8 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "playwright": "^1.49.0"
+    "playwright": "^1.49.0",
+    "@qaforge/shared-types": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

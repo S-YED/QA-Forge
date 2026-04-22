@@ -116,7 +116,7 @@ router.put(
         .update({
           encrypted_key: encryptedKey,
           key_hint: keyHint,
-          is_valid: true, // Assume valid on manual update; will be confirmed on /validate
+          is_valid: false, // Reset to unverified on update; confirmed only after /validate
           updated_at: new Date().toISOString(),
         })
         .eq('id', req.params.id)

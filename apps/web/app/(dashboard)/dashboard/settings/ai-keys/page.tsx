@@ -27,11 +27,18 @@ async function getApiKeys(accessToken: string): Promise<ApiKeyResponse[]> {
 
 export default async function AiKeysPage() {
   const supabase = createServerSupabaseClient();
+
+  // getUser() makes a live network call to validate the token (safe on server).
+  // getSession() only reads the cookie — do NOT use it alone for auth decisions.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  const apiKeys = session?.access_token
+  const apiKeys = user && session?.access_token
     ? await getApiKeys(session.access_token)
     : [];
 

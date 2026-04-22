@@ -17,6 +17,7 @@ server.listen(env.PORT, () => {
 
 // Attach Socket.io after the HTTP server starts listening
 const io = createSocketServer(server);
+app.set('io', io);
 logger.info('🔌 Socket.io server attached');
 
 export { io };

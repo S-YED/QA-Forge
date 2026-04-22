@@ -7,6 +7,11 @@ import { authenticate } from './middleware/auth.middleware.js';
 import authRouter from './routes/auth.routes.js';
 import projectsRouter from './routes/projects.routes.js';
 import apiKeysRouter from './routes/api-keys.routes.js';
+import testSuitesRouter from './routes/test-suites.routes.js';
+import testCasesRouter from './routes/test-cases.routes.js';
+import testRunsRouter from './routes/test-runs.routes.js';
+import aiRouter from './routes/ai.routes.js';
+import bugsRouter from './routes/bugs.routes.js';
 
 const app: Express = express();
 
@@ -37,7 +42,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    version: '1.0.0-mvp',
+    version: '2.0.0-mvp',
   });
 });
 
@@ -51,7 +56,22 @@ app.use('/api/projects', authenticate, projectsRouter);
 // ── 7. API key routes (all protected) ─────────────────────────────────────────
 app.use('/api/api-keys', authenticate, apiKeysRouter);
 
-// ── 8. 404 catch-all ──────────────────────────────────────────────────────────
+// ── 8. Test suite routes (all protected, nested under projects) ───────────────
+app.use('/api/projects/:projectId/test-suites', authenticate, testSuitesRouter);
+
+// ── 9. Test case routes (all protected, nested under suites) ──────────────────
+app.use('/api/projects/:projectId/test-suites/:suiteId/test-cases', authenticate, testCasesRouter);
+
+// ── 10. Test run routes (all protected, nested under projects) ────────────────
+app.use('/api/projects/:projectId/test-runs', authenticate, testRunsRouter);
+
+// ── 11. AI generation routes (all protected, nested under projects) ───────────
+app.use('/api/projects/:projectId/ai', authenticate, aiRouter);
+
+// ── 12. Bug routes (all protected, nested under projects) ─────────────────────
+app.use('/api/projects/:projectId/bugs', authenticate, bugsRouter);
+
+// ── 13. 404 catch-all ─────────────────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({
     error: {
@@ -62,7 +82,7 @@ app.use((req, res) => {
   });
 });
 
-// ── 9. Global error handler (must be last) ────────────────────────────────────
+// ── 14. Global error handler (must be last) ───────────────────────────────────
 app.use(errorHandler);
 
 export default app;

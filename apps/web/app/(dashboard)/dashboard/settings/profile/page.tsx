@@ -27,11 +27,18 @@ async function getProfile(accessToken: string): Promise<Profile | null> {
 
 export default async function ProfilePage() {
   const supabase = createServerSupabaseClient();
+
+  // getUser() makes a live network call to validate the token (safe on server).
+  // getSession() only reads the cookie — do NOT use it alone for auth decisions.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  const profile = session?.access_token
+  const profile = user && session?.access_token
     ? await getProfile(session.access_token)
     : null;
 

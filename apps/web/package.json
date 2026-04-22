@@ -20,7 +20,8 @@
     "@supabase/auth-ui-react": "^0.4.7",
     "@supabase/auth-ui-shared": "^0.1.8",
     "clsx": "^2.1.0",
-    "tailwind-merge": "^2.6.0"
+    "tailwind-merge": "^2.6.0",
+    "socket.io-client": "^4.8.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

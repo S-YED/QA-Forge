@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm run:*)",
+      "Bash(find 'C:\\\\Users\\\\Syed Khaja Moinuddin\\\\Desktop\\\\QA Forge\\\\node_modules\\\\.pnpm' -name eslint-config-next* -maxdepth 1)"
+    ]
+  }
+}
