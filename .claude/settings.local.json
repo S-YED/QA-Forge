@@ -119,7 +119,9 @@
       "Bash(git checkout *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(echo \"=== commit exit: $? ===\")"
+      "Bash(echo \"=== commit exit: $? ===\")",
+      "Bash(timeout 280 npx gitnexus analyze)",
+      "Bash(echo \"=== exit: $? ===\")"
     ]
   }
 }
