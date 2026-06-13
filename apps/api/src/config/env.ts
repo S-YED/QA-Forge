@@ -10,6 +10,7 @@ const schema = z.object({
     .default('development'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
   SUPABASE_URL: z.string().url(),
+  SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   DATABASE_URL: z.string().min(1),
   /** 32 bytes represented as a 64-character lowercase hex string.
@@ -41,6 +42,7 @@ export const env = {
   NODE_ENV: data.NODE_ENV,
   CORS_ORIGINS: data.CORS_ORIGIN.split(',').map((s) => s.trim()),
   SUPABASE_URL: data.SUPABASE_URL,
+  SUPABASE_ANON_KEY: data.SUPABASE_ANON_KEY,
   SUPABASE_SERVICE_ROLE_KEY: data.SUPABASE_SERVICE_ROLE_KEY,
   DATABASE_URL: data.DATABASE_URL,
   ENCRYPTION_KEY: data.ENCRYPTION_KEY,

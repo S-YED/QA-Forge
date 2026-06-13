@@ -99,3 +99,52 @@ To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
+## gstack (REQUIRED — global install)
+
+**Before doing ANY work, verify gstack is installed:**
+
+```bash
+test -d ~/.claude/skills/gstack/bin && echo "GSTACK_OK" || echo "GSTACK_MISSING"
+```
+
+If GSTACK_MISSING: STOP. Do not proceed. Tell the user:
+
+> gstack is required for all AI-assisted work in this repo.
+> Install it:
+> ```bash
+> git clone --depth 1 https://github.com/garrytan/gstack.git ~/.claude/skills/gstack
+> cd ~/.claude/skills/gstack && ./setup --team
+> ```
+> Then restart your AI coding tool.
+
+Do not skip skills, ignore gstack errors, or work around missing gstack.
+
+Using gstack skills: After install, skills like /qa, /ship, /review, /investigate,
+and /browse are available. Use /browse for all web browsing.
+Use ~/.claude/skills/gstack/... for gstack file paths (the global path).
+
+## Design System
+Always read DESIGN.md before making any visual or UI decisions.
+All font choices, colors, spacing, and aesthetic direction are defined there.
+Do not deviate without explicit user approval.
+In QA mode, flag any code that doesn't match DESIGN.md.
+
+## Active Goal — MANDATORY Session Start Protocol
+
+**Every session MUST begin by reading `GOAL.md`.**
+
+1. Read `D:\QA Forge\GOAL.md`
+2. Find the first gate with status `☐ NOT PASSED`
+3. Tell the user which gate you're working on
+4. Work the gate — implement, fix, verify
+5. Run the gate's verification command and show the terminal output
+6. Check the gate off ONLY when the command passes
+7. Move to the next gate
+
+Claude CANNOT:
+- Declare the project "done" before Gate 3.3 is checked ✅
+- Self-certify a gate without running its verification command
+- Skip gates or work them out of order
+- Close a session with gates remaining if there is more work to do
+
+This goal persists across sessions until all 16 gates show ✅ PASSED.

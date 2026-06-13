@@ -9,6 +9,12 @@ const config: Config = {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        // Body/UI keeps the next/font Inter+Jakarta stack; `font-mono` now
+        // resolves to JetBrains Mono (the live terminal, step timings, code).
+        sans: ['var(--font-inter)', 'var(--font-jakarta)', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',

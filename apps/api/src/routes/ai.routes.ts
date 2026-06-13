@@ -3,10 +3,10 @@ import { z } from 'zod';
 import { validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
-import { decrypt } from '../utils/encryption.js';
-import { generateTestCases } from '@qaforge/ai-engine';
+import { generateTestCases, optimizeTestCase } from '@qaforge/ai-engine';
 import logger from '../utils/logger.js';
-import type { ApiKeyProvider } from '@qaforge/shared-types';
+import { resolveAIKey } from '../utils/resolve-ai-key.js';
+import { ApiKeyProvider } from '@qaforge/shared-types';
 
 // Pre-protected by `authenticate` applied in app.ts.
 
@@ -37,59 +37,11 @@ router.post('/generate', validate(generateSchema), async (req, res, next) => {
       return next(new AppError('NOT_FOUND', 404, 'Project not found'));
     }
 
-    // 2. Resolve AI provider — use specified or auto-select from valid keys
-    let selectedProvider: ApiKeyProvider;
-    let rawApiKey: string;
-
-    if (req.body.provider) {
-      // User specified a provider — find their key for it
-      const { data: keyRow } = await supabase
-        .from('api_keys')
-        .select('id, provider, encrypted_key, is_valid')
-        .eq('user_id', req.user.id)
-        .eq('provider', req.body.provider)
-        .eq('is_valid', true)
-        .single();
-
-      if (!keyRow) {
-        return next(
-          new AppError(
-            'VALIDATION_ERROR',
-            400,
-            `No valid ${req.body.provider} API key found. Add and validate one in Settings → API Keys.`,
-          ),
-        );
-      }
-
-      selectedProvider = keyRow.provider as ApiKeyProvider;
-      rawApiKey = decrypt(keyRow.encrypted_key as string);
-    } else {
-      // Auto-select: pick the first valid key from preferred order
-      const preferredOrder: ApiKeyProvider[] = ['anthropic', 'openai', 'gemini'];
-      const { data: validKeys } = await supabase
-        .from('api_keys')
-        .select('id, provider, encrypted_key')
-        .eq('user_id', req.user.id)
-        .eq('is_valid', true);
-
-      if (!validKeys || validKeys.length === 0) {
-        return next(
-          new AppError(
-            'VALIDATION_ERROR',
-            400,
-            'No valid AI provider keys found. Add and validate at least one API key in Settings → API Keys.',
-          ),
-        );
-      }
-
-      const sorted = validKeys.sort((a, b) => {
-        return preferredOrder.indexOf(a.provider as ApiKeyProvider) -
-          preferredOrder.indexOf(b.provider as ApiKeyProvider);
-      });
-
-      selectedProvider = sorted[0].provider as ApiKeyProvider;
-      rawApiKey = decrypt(sorted[0].encrypted_key as string);
-    }
+    // 2. Resolve AI provider key
+    const { provider: selectedProvider, apiKey: rawApiKey } = await resolveAIKey(
+      req.user.id,
+      req.body.provider,
+    );
 
     // 3. Resolve or create suite
     let suiteId: string;
@@ -190,6 +142,85 @@ router.post('/generate', validate(generateSchema), async (req, res, next) => {
   } catch (err) {
     logger.error({
       event: 'ai:generate:error',
+      error: err instanceof Error ? err.message : String(err),
+    });
+    next(err);
+  }
+});
+
+// ── POST /projects/:projectId/ai/optimize/:caseId ──────────────────────────────
+
+router.post('/optimize/:caseId', async (req, res, next) => {
+  try {
+    const { projectId, caseId } = req.params as any;
+
+    // 1. Verify project ownership
+    const { data: project } = await supabase
+      .from('projects')
+      .select('id, base_url')
+      .eq('id', projectId)
+      .eq('user_id', req.user.id)
+      .single();
+
+    if (!project) {
+      return next(new AppError('NOT_FOUND', 404, 'Project not found'));
+    }
+
+    // 2. Fetch the existing test case
+    const { data: testCase, error: caseError } = await supabase
+      .from('test_cases')
+      .select('*')
+      .eq('id', caseId)
+      .single();
+
+    if (caseError || !testCase) {
+      return next(new AppError('NOT_FOUND', 404, 'Test case not found'));
+    }
+
+    // 3. Resolve AI provider key
+    const { provider: selectedProvider, apiKey: rawApiKey } = await resolveAIKey(req.user.id);
+
+    // 4. Call AI engine to optimize the manual test case
+    const result = await optimizeTestCase({
+      title: testCase.title,
+      description: testCase.description || undefined,
+      steps: testCase.steps || [],
+      expected_result: testCase.expected_result || undefined,
+      provider: selectedProvider,
+      apiKey: rawApiKey,
+      baseUrl: project.base_url || undefined,
+    });
+
+    // 5. Update the test case inside the DB
+    const { data: updatedCase, error: updateError } = await supabase
+      .from('test_cases')
+      .update({
+        title: result.test_case.title,
+        description: result.test_case.description || null,
+        steps: result.test_case.steps,
+        expected_result: result.test_case.expected_result || null,
+        priority: result.test_case.priority,
+        type: result.test_case.type,
+        tags: result.test_case.tags,
+        is_ai_generated: true, // Marked as AI optimized!
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', caseId)
+      .select()
+      .single();
+
+    if (updateError || !updatedCase) {
+      return next(new AppError('INTERNAL_ERROR', 500, 'Failed to update optimized test case'));
+    }
+
+    res.status(200).json({
+      test_case: updatedCase,
+      provider_used: selectedProvider,
+      optimization_time_ms: result.optimization_time_ms,
+    });
+  } catch (err) {
+    logger.error({
+      event: 'ai:optimize:error',
       error: err instanceof Error ? err.message : String(err),
     });
     next(err);

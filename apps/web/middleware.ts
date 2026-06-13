@@ -1,7 +1,21 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createMiddlewareClient } from '@/lib/supabase/middleware';
 
+// Public routes that do NOT require authentication
+const PUBLIC_ROUTES = ['/', '/landing', '/login', '/demo'];
+
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Allow public routes to pass through without auth check
+  const isPublic = PUBLIC_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(route + '/')
+  );
+
+  if (isPublic && !pathname.startsWith('/dashboard')) {
+    return NextResponse.next();
+  }
+
   const middlewareClient = createMiddlewareClient(request);
   const { supabase } = middlewareClient;
 
@@ -13,14 +27,11 @@ export async function middleware(request: NextRequest) {
   // Read the response AFTER getUser() so the getter returns the post-refresh value
   const { response } = middlewareClient;
 
-  const { pathname } = request.nextUrl;
-
   // Unauthenticated users trying to access /dashboard → redirect to /login
   if (!user && pathname.startsWith('/dashboard')) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     const redirectResponse = NextResponse.redirect(url);
-    // Preserve refreshed auth cookies on the redirect response
     response.cookies.getAll().forEach((cookie) => {
       redirectResponse.cookies.set(cookie.name, cookie.value);
     });
@@ -32,7 +43,6 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard/projects';
     const redirectResponse = NextResponse.redirect(url);
-    // Preserve refreshed auth cookies on the redirect response
     response.cookies.getAll().forEach((cookie) => {
       redirectResponse.cookies.set(cookie.name, cookie.value);
     });
@@ -43,6 +53,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.svg|.*\\.png|.*\\.jpg|.*\\.ico).*)'],
 };
-

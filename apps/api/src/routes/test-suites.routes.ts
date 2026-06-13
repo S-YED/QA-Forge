@@ -15,7 +15,7 @@ const uuidParamsSchema = z.object({ id: z.string().uuid() });
 
 router.get('/', async (req, res, next) => {
   try {
-    const projectId = req.params.projectId;
+    const { projectId } = req.params as any;
 
     // Verify project ownership
     const { data: project, error: pError } = await supabase

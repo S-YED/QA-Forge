@@ -4,6 +4,7 @@ import { validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
 import { executeTestOrchestration } from '../websocket/handlers/test.handler.js';
+import { demoRunLimiter } from '../middleware/rate-limiter.js';
 import logger from '../utils/logger.js';
 // All routes nested under /projects/:projectId/test-runs
 // Pre-protected by `authenticate` applied in app.ts.
@@ -16,7 +17,7 @@ const uuidParamsSchema = z.object({ id: z.string().uuid() });
 
 router.get('/', async (req, res, next) => {
   try {
-    const projectId = req.params.projectId;
+    const { projectId } = req.params as any;
 
     // Verify project ownership
     const { data: project } = await supabase
@@ -66,7 +67,7 @@ router.get(
     try {
       const { data: run, error } = await supabase
         .from('test_runs')
-        .select('*, test_cases(title, steps)')
+        .select('*, test_cases(title, steps), projects(base_url)')
         .eq('id', req.params.id)
         .eq('project_id', req.params.projectId)
         .eq('user_id', req.user.id)
@@ -109,7 +110,11 @@ const createRunSchema = z.object({
   browser: z.enum(['chromium', 'firefox', 'webkit']).optional().default('chromium'),
 });
 
-router.post('/', validate(createRunSchema), async (req, res, next) => {
+// `demoRunLimiter` caps demo-user runs at 5/hour (defense-in-depth behind
+// demoGuard, which currently blocks demo writes outright). The per-user
+// concurrent-run cap is enforced inside executeTestOrchestration via
+// acquireSlot/releaseSlot, so it applies to every user, not just demo.
+router.post('/', demoRunLimiter, validate(createRunSchema), async (req, res, next) => {
   try {
     const projectId = req.params.projectId;
 
@@ -173,10 +178,10 @@ router.post('/', validate(createRunSchema), async (req, res, next) => {
 
     // Trigger execution orchestration immediately
     const io = req.app.get('io');
-    executeTestOrchestration(io, req.user.id, {
+    executeTestOrchestration(io, undefined, req.user.id, {
       test_run_id: run.id,
       test_case_id: run.test_case_id ?? undefined,
-      project_id: projectId,
+      project_id: projectId as string,
       nl_input: run.nl_input ?? undefined,
     }).catch(err => {
       logger.error('Failed to execute test run', err);

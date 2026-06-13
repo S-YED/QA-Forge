@@ -137,7 +137,7 @@ qaforge/
 │   ├── export-engine/          # Test report export (Coming Soon)
 │   └── integrations/           # Jira, GitHub, Slack (Coming Soon)
 ├── supabase/
-│   ├── migrations/             # 17 PostgreSQL migration files
+│   ├── migrations/             # 20 PostgreSQL migration files
 │   ├── seed.sql                # Development seed data
 │   └── config.toml             # Local Supabase configuration
 └── turbo.json                  # Turborepo pipeline configuration
@@ -204,7 +204,7 @@ JWT_SECRET=<your-supabase-jwt-secret>
 
 ```bash
 npx supabase start       # Spins up local Supabase (PostgreSQL + Auth + Storage)
-npx supabase db reset     # Applies all 17 migrations + seed data
+npx supabase db reset     # Applies all 20 migrations + seed data
 ```
 
 ### 4️⃣ Launch Development
@@ -400,7 +400,7 @@ socket.on('test:error',         (data) => { /* Execution error */ });
 *Completed*
 
 - [x] Monorepo setup (pnpm + Turborepo)
-- [x] 17 PostgreSQL migrations + RLS
+- [x] 20 PostgreSQL migrations + RLS
 - [x] Express API with JWT auth
 - [x] AES-256-GCM key encryption
 - [x] Next.js dashboard with SSR auth

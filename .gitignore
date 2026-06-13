@@ -33,3 +33,11 @@ supabase_status.txt
 extracted_keys.txt
 auth_error.json
 auth_error_utf8.json
+.gstack/
+
+# Third-party tool source + agent scratch + personal files (not app code)
+gstack-main/
+.gemini/
+.agents/
+Resume/
+skills-lock.json

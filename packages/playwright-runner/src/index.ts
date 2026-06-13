@@ -64,9 +64,13 @@ async function executeStep(page: Page, step: TestCaseStep): Promise<void> {
   const value = step.value;
 
   // ── Navigate ──
-  if (/^(navigate|go|open|visit|browse)\s+(to\s+)?/i.test(instruction)) {
+  if (/^(navigate|go|open|visit|browse)\s*(to\s+)?/i.test(instruction)) {
     const url = value || instruction.replace(/^(navigate|go|open|visit|browse)\s+(to\s+)?/i, '').trim();
-    await page.goto(url.startsWith('http') ? url : `${page.url().replace(/\/$/, '')}/${url.replace(/^\//, '')}`);
+    // Resolve relative paths against the current origin via the URL spec:
+    // "/login" → origin + /login (NOT appended to the current path, which
+    // breaks as soon as the app redirects away from baseUrl).
+    const target = url.startsWith('http') ? url : new URL(url, page.url()).toString();
+    await page.goto(target, { waitUntil: 'domcontentloaded' });
     return;
   }
 
@@ -96,7 +100,7 @@ async function executeStep(page: Page, step: TestCaseStep): Promise<void> {
   }
 
   // ── Select dropdown ──
-  if (/^select\s+/i.test(instruction)) {
+  if (/^select\b/i.test(instruction)) {
     if (selector && value) {
       await page.selectOption(selector, value);
     }
@@ -112,7 +116,7 @@ async function executeStep(page: Page, step: TestCaseStep): Promise<void> {
   }
 
   // ── Wait ──
-  if (/^wait\s+/i.test(instruction) || instruction.includes('wait for')) {
+  if (/^wait\b/i.test(instruction) || instruction.includes('wait for')) {
     if (selector) {
       await page.waitForSelector(selector);
     } else {
@@ -130,7 +134,7 @@ async function executeStep(page: Page, step: TestCaseStep): Promise<void> {
   }
 
   // ── Assert / Verify ──
-  if (/^(assert|verify|check|expect|confirm|ensure)\s+/i.test(instruction)) {
+  if (/^(assert|verify|check|expect|confirm|ensure)\b/i.test(instruction)) {
     if (selector) {
       const expectedText = step.expected || value || '';
       if (expectedText) {

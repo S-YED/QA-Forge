@@ -16,10 +16,11 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "playwright": "^1.49.0",
-    "@qaforge/shared-types": "workspace:*"
+    "@qaforge/shared-types": "workspace:*",
+    "playwright": "^1.49.0"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "typescript": "^5.7.0"
   }
 }

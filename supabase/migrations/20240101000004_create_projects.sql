@@ -30,27 +30,36 @@ CREATE POLICY "projects_select_policy"
     FOR SELECT
     USING (
         user_id = auth.uid()
-        OR EXISTS (
-            SELECT 1 FROM public.profiles p
-            WHERE p.id = auth.uid() AND p.role = 'admin'
-        )
+        OR public.is_admin()
     );
 
--- INSERT: Users can only create projects for themselves
+-- INSERT: Users can create projects for themselves; admins can create projects for anyone
 CREATE POLICY "projects_insert_policy"
     ON public.projects
     FOR INSERT
-    WITH CHECK (user_id = auth.uid());
+    WITH CHECK (
+        user_id = auth.uid()
+        OR public.is_admin()
+    );
 
--- UPDATE: Users can only update their own projects
+-- UPDATE: Users can update their own projects; admins can update any project
 CREATE POLICY "projects_update_policy"
     ON public.projects
     FOR UPDATE
-    USING (user_id = auth.uid())
-    WITH CHECK (user_id = auth.uid());
+    USING (
+        user_id = auth.uid()
+        OR public.is_admin()
+    )
+    WITH CHECK (
+        user_id = auth.uid()
+        OR public.is_admin()
+    );
 
--- DELETE: Users can only delete their own projects
+-- DELETE: Users can delete their own projects; admins can delete any project
 CREATE POLICY "projects_delete_policy"
     ON public.projects
     FOR DELETE
-    USING (user_id = auth.uid());
+    USING (
+        user_id = auth.uid()
+        OR public.is_admin()
+    );

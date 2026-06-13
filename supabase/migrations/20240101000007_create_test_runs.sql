@@ -29,6 +29,9 @@ CREATE INDEX IF NOT EXISTS idx_test_runs_project_created
 CREATE INDEX IF NOT EXISTS idx_test_runs_user_id
     ON public.test_runs(user_id);
 
+CREATE INDEX IF NOT EXISTS idx_test_runs_test_case_id
+    ON public.test_runs(test_case_id);
+
 CREATE INDEX IF NOT EXISTS idx_test_runs_status
     ON public.test_runs(status);
 
@@ -39,39 +42,39 @@ CREATE INDEX IF NOT EXISTS idx_test_runs_mode
 
 ALTER TABLE public.test_runs ENABLE ROW LEVEL SECURITY;
 
--- Project ownership verified via projects table; user_id is an additional constraint
+-- Project ownership verified via projects table; user_id is an additional constraint (or admin check)
 CREATE POLICY "test_runs_select_policy"
     ON public.test_runs
     FOR SELECT
     USING (
-        project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid())
-        AND user_id = auth.uid()
+        (project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid()) AND user_id = auth.uid())
+        OR public.is_admin()
     );
 
 CREATE POLICY "test_runs_insert_policy"
     ON public.test_runs
     FOR INSERT
     WITH CHECK (
-        project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid())
-        AND user_id = auth.uid()
+        (project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid()) AND user_id = auth.uid())
+        OR public.is_admin()
     );
 
 CREATE POLICY "test_runs_update_policy"
     ON public.test_runs
     FOR UPDATE
     USING (
-        project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid())
-        AND user_id = auth.uid()
+        (project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid()) AND user_id = auth.uid())
+        OR public.is_admin()
     )
     WITH CHECK (
-        project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid())
-        AND user_id = auth.uid()
+        (project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid()) AND user_id = auth.uid())
+        OR public.is_admin()
     );
 
 CREATE POLICY "test_runs_delete_policy"
     ON public.test_runs
     FOR DELETE
     USING (
-        project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid())
-        AND user_id = auth.uid()
+        (project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid()) AND user_id = auth.uid())
+        OR public.is_admin()
     );

@@ -227,4 +227,113 @@ export async function generateTestCases(
   };
 }
 
+// ── Optimize Test Case ────────────────────────────────────────────────────────
+
+export interface OptimizeTestCaseRequest {
+  title: string;
+  description?: string;
+  steps: TestCaseStep[];
+  expected_result?: string;
+  provider: ApiKeyProvider;
+  apiKey: string;
+  baseUrl?: string;
+}
+
+export interface OptimizedTestCaseResponse {
+  test_case: GeneratedTestCase;
+  provider_used: ApiKeyProvider;
+  optimization_time_ms: number;
+}
+
+function buildOptimizeSystemPrompt(): string {
+  return `You are an expert QA engineer and test automation specialist. Your job is to optimize a basic manually-written test case, turning it into a highly descriptive, well-structured test case with precise Playwright-style steps.
+  
+RULES:
+1. Retain the core intent of the original test case, but make the title and description more professional.
+2. Review the steps and optimize them. Expand vague instructions (e.g. "log in") into specific, detailed actions (e.g. "Fill #email-input with test user and click submit").
+3. Suggest appropriate CSS selectors for interactive elements in the selector field (e.g. input[type="email"], button[type="submit"]).
+4. Ensure the expected_result is clear and concrete.
+5. Provide tags and assign a realistic priority.
+6. Return only the optimized test case object.
+
+OUTPUT FORMAT:
+Return a JSON object containing:
+- title: string — professional title
+- description: string — improved, clear description
+- steps: array of { step_number, instruction, selector?, value?, expected? } — precise steps
+- expected_result: string — concrete expected outcome
+- priority: "critical" | "high" | "medium" | "low"
+- type: "functional" | "regression" | "smoke" | "edge_case" | "accessibility" | "negative"
+- tags: string[]
+
+Return ONLY valid JSON. No markdown fences. No explanatory text.`;
+}
+
+function buildOptimizeUserPrompt(request: OptimizeTestCaseRequest): string {
+  return `Optimize the following manual test case:
+  
+Title: ${request.title}
+Description: ${request.description || 'None'}
+Expected Result: ${request.expected_result || 'None'}
+Application Base URL: ${request.baseUrl || 'None'}
+
+Current Steps:
+${JSON.stringify(request.steps, null, 2)}`;
+}
+
+export async function optimizeTestCase(
+  request: OptimizeTestCaseRequest,
+): Promise<OptimizedTestCaseResponse> {
+  const startTime = Date.now();
+  const systemPrompt = buildOptimizeSystemPrompt();
+  const userPrompt = buildOptimizeUserPrompt(request);
+
+  let rawResponse: string;
+
+  switch (request.provider) {
+    case 'openai':
+      rawResponse = await callOpenAI(request.apiKey, systemPrompt, userPrompt);
+      break;
+    case 'anthropic':
+      rawResponse = await callAnthropic(request.apiKey, systemPrompt, userPrompt);
+      break;
+    case 'gemini':
+      rawResponse = await callGemini(request.apiKey, systemPrompt, userPrompt);
+      break;
+    default:
+      throw new Error(`Unsupported provider: ${request.provider}`);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawResponse);
+  } catch {
+    const jsonMatch = rawResponse.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (jsonMatch) {
+      parsed = JSON.parse(jsonMatch[1]);
+    } else {
+      throw new Error('Failed to parse AI optimization response as JSON');
+    }
+  }
+
+  const tc = parsed as GeneratedTestCase;
+  if (!Array.isArray(tc.steps)) tc.steps = [];
+  tc.steps = tc.steps.map((step, idx) => ({
+    step_number: idx + 1,
+    instruction: step.instruction || '',
+    selector: step.selector,
+    value: step.value,
+    expected: step.expected,
+  }));
+  tc.priority = tc.priority || 'medium';
+  tc.type = tc.type || 'functional';
+  tc.tags = tc.tags || [];
+
+  return {
+    test_case: tc,
+    provider_used: request.provider,
+    optimization_time_ms: Date.now() - startTime,
+  };
+}
+
 export { type ApiKeyProvider } from '@qaforge/shared-types';
