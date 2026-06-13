@@ -117,7 +117,9 @@
       "Bash('C:\\\\Users\\\\Syed Khaja Moinuddin/.claude/skills/gstack/browse/dist/browse' js '\\({terminalMono: getComputedStyle\\(document.querySelector\\('\\\\''.font-mono'\\\\''\\)\\).fontFamily.includes\\('\\\\''JetBrains'\\\\''\\), filmstrip: document.querySelectorAll\\('\\\\''img'\\\\''\\).length, status: document.body.innerText.match\\(/Passed|Failed/\\)?.[0], execLog: document.body.innerText.includes\\('\\\\''All steps passed'\\\\''\\)}\\)')",
       "Bash(git check-ignore *)",
       "Bash(git checkout *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(echo \"=== commit exit: $? ===\")"
     ]
   }
 }
