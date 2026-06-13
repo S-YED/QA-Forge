@@ -11,7 +11,7 @@
 [![License](https://img.shields.io/badge/License-Proprietary-8B5CF6?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMiI+PHBhdGggZD0iTTEyIDJ2MjAiLz48cGF0aCBkPSJNMiAxMmgyMCIvPjwvc3ZnPg==)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-14-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
-[![Playwright](https://img.shields.io/badge/Playwright-1.49-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev/)
+[![Playwright](https://img.shields.io/badge/Playwright-1.58-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3FCF8E?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com/)
 [![Turborepo](https://img.shields.io/badge/Turborepo-Monorepo-EF4444?style=flat-square&logo=turborepo&logoColor=white)](https://turbo.build/)
 
@@ -19,13 +19,34 @@
 
 **Describe your tests in plain English. Let AI generate them. Watch Playwright execute them — live.**
 
-[🚀 Quick Start](#-quick-start) · [✨ Features](#-features) · [🏗️ Architecture](#️-architecture) · [📦 Packages](#-monorepo-packages) · [🗺️ Roadmap](#️-roadmap)
+[🎬 Live Demo](#-live-demo) · [🚀 Quick Start](#-quick-start) · [✨ Features](#-features) · [🏗️ Architecture](#️-architecture) · [📦 Packages](#-monorepo-packages) · [🗺️ Roadmap](#️-roadmap)
 
 <br />
 
 ---
 
 </div>
+
+<br />
+
+## 🎬 Live Demo
+
+> **No signup. No setup. Click and explore.**
+
+QA Forge ships with a public **read-only demo** that auto-signs you into a fully seeded account — three projects, real test suites and cases, and completed test runs you can replay step-by-step in the live streaming terminal.
+
+| | |
+|---|---|
+| **Demo link** | `/demo` (auto-signs in as the read-only demo account) |
+| **What you'll see** | Seeded projects → test suites → cases → **replay a run live** in the violet-glow terminal with a per-step screenshot filmstrip + auto-filed bugs |
+| **Locally** | `pnpm dev`, then open [`http://localhost:3000/demo`](http://localhost:3000/demo) |
+| **Hosted** | _Add your Vercel URL here once deployed — see [`artifacts/01-Production-Deployment-Guide.md`](artifacts/01-Production-Deployment-Guide.md)_ |
+
+Demo mode is **read-only at two layers** — an API guard blocks every mutating verb, and restrictive RLS policies block direct database writes — so the sandbox stays pristine no matter who's clicking. Want to create your own projects and run real AI generation? [Sign up](#-quick-start) and add a provider key in **Settings → API Keys**.
+
+<br />
+
+---
 
 <br />
 
