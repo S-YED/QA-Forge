@@ -1,0 +1,530 @@
+# Instincts generated from https://github.com/S-YED/QA-Forge
+# Generated: 2026-06-13T04:03:24.896Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: QA-Forge-commit-conventional
+trigger: "when writing a commit message"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: https://github.com/S-YED/QA-Forge
+---
+
+# QA Forge Commit Conventional
+
+## Action
+
+Use conventional commit format with prefixes: chore, feat, docs
+
+## Evidence
+
+- 4 commits analyzed
+- Detected conventional commit pattern
+- Examples: feat: make QA Forge demo-ready and production-ready (16-gate goal), chore: update local permission allowlist
+
+---
+id: QA-Forge-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/S-YED/QA-Forge
+---
+
+# QA Forge Commit Length
+
+## Action
+
+Write moderate-length commit messages (~57 characters)
+
+## Evidence
+
+- Average commit message length: 57 chars
+- Based on 4 commits
+
+---
+id: QA-Forge-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/S-YED/QA-Forge
+---
+
+# QA Forge Naming Files
+
+## Action
+
+Use camelCase naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: camelCase
+
+---
+id: QA-Forge-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/S-YED/QA-Forge
+---
+
+# QA Forge Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: QA-Forge-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/S-YED/QA-Forge
+---
+
+# QA Forge Export Style
+
+## Action
+
+Prefer mixed exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: mixed
+
+---
+id: QA-Forge-arch-type-based
+trigger: "when adding new code"
+confidence: 0.8
+domain: architecture
+source: repo-analysis
+source_repo: https://github.com/S-YED/QA-Forge
+---
+
+# QA Forge Arch Type Based
+
+## Action
+
+Place code in the appropriate type folder (components/, services/, utils/, etc.)
+
+## Evidence
+
+- Type-based module organization detected
+- Folders: 
+
+---
+id: QA-Forge-test-framework
+trigger: "when writing tests"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/S-YED/QA-Forge
+---
+
+# QA Forge Test Framework
+
+## Action
+
+Use vitest as the test framework
+
+## Evidence
+
+- Test framework detected: vitest
+- File pattern: *.test.ts
+
+---
+id: QA-Forge-test-naming
+trigger: "when creating a test file"
+confidence: 0.85
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/S-YED/QA-Forge
+---
+
+# QA Forge Test Naming
+
+## Action
+
+Name test files using the pattern: *.test.ts
+
+## Evidence
+
+- File pattern: *.test.ts
+- Consistent across test files
+
+---
+id: QA-Forge-test-mocking
+trigger: "when mocking dependencies in tests"
+confidence: 0.75
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/S-YED/QA-Forge
+---
+
+# QA Forge Test Mocking
+
+## Action
+
+Use vi.mock for mocking
+
+## Evidence
+
+- Mocking pattern detected: vi.mock
+- Consistent across test files
+
+---
+id: QA-Forge-test-types
+trigger: "when planning tests for a feature"
+confidence: 0.7
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/S-YED/QA-Forge
+---
+
+# QA Forge Test Types
+
+## Action
+
+Write unit, integration tests to match project standards
+
+## Evidence
+
+- Test types detected: unit, integration
+- Coverage config: no
+
+---
+id: QA-Forge-workflow-update-documentation-and-readme
+trigger: "when doing update documentation and readme"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/S-YED/QA-Forge
+---
+
+# QA Forge Workflow Update Documentation And Readme
+
+## Action
+
+Follow the update-documentation-and-readme workflow:
+1. Edit README.md to reflect new features or entry points.
+2. Update related documentation files (e.g., DESIGN.md, GOAL.md, deployment guides).
+3. Optionally update .claude/settings.local.json if permissions or local settings change.
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: README.md, DESIGN.md, GOAL.md
+
+---
+id: QA-Forge-workflow-regenerate-gitnexus-and-claude-metadata
+trigger: "when doing regenerate gitnexus and claude metadata"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/S-YED/QA-Forge
+---
+
+# QA Forge Workflow Regenerate Gitnexus And Claude Metadata
+
+## Action
+
+Follow the regenerate-gitnexus-and-claude-metadata workflow:
+1. Run GitNexus to re-analyze the repo structure.
+2. Regenerate AGENTS.md and CLAUDE.md with updated blocks.
+3. Update .claude/skills/gitnexus/*/SKILL.md files.
+4. Optionally update .claude/settings.local.json.
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: AGENTS.md, CLAUDE.md, .claude/skills/gitnexus/gitnexus-cli/SKILL.md
+
+---
+id: qa-forge-instinct-file-naming-camelcase
+trigger: "When creating a new file in the repository"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: S-YED/QA-Forge
+---
+
+# Qa Forge Instinct File Naming Camelcase
+
+## Action
+
+Name the file using camelCase (e.g., myFile.ts)
+
+## Evidence
+
+- Pattern in codeStyle.namingConventions.files
+- TypeScript files follow camelCase naming
+
+---
+id: qa-forge-instinct-function-naming-camelcase
+trigger: "When defining a new function"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: S-YED/QA-Forge
+---
+
+# Qa Forge Instinct Function Naming Camelcase
+
+## Action
+
+Name the function using camelCase (e.g., getUserData)
+
+## Evidence
+
+- Pattern in codeStyle.namingConventions.functions
+
+---
+id: qa-forge-instinct-class-naming-pascalcase
+trigger: "When defining a new class"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: S-YED/QA-Forge
+---
+
+# Qa Forge Instinct Class Naming Pascalcase
+
+## Action
+
+Name the class using PascalCase (e.g., UserService)
+
+## Evidence
+
+- Pattern in codeStyle.namingConventions.classes
+
+---
+id: qa-forge-instinct-constant-naming-screaming-snake
+trigger: "When declaring a constant"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: S-YED/QA-Forge
+---
+
+# Qa Forge Instinct Constant Naming Screaming Snake
+
+## Action
+
+Name the constant using SCREAMING_SNAKE_CASE (e.g., MAX_RETRIES)
+
+## Evidence
+
+- Pattern in codeStyle.namingConventions.constants
+
+---
+id: qa-forge-instinct-imports-relative
+trigger: "When importing modules within the project"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: S-YED/QA-Forge
+---
+
+# Qa Forge Instinct Imports Relative
+
+## Action
+
+Use relative import paths (e.g., import x from '../utils/x')
+
+## Evidence
+
+- Pattern in codeStyle.importStyle
+
+---
+id: qa-forge-instinct-exports-mixed
+trigger: "When exporting modules or functions"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: S-YED/QA-Forge
+---
+
+# Qa Forge Instinct Exports Mixed
+
+## Action
+
+Use either named or default exports as appropriate (mixed export style)
+
+## Evidence
+
+- Pattern in codeStyle.exportStyle
+
+---
+id: qa-forge-instinct-test-file-pattern
+trigger: "When creating a test file"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: S-YED/QA-Forge
+---
+
+# Qa Forge Instinct Test File Pattern
+
+## Action
+
+Name the file with a .test.ts suffix (e.g., userService.test.ts)
+
+## Evidence
+
+- Pattern in testing.filePattern
+- Seen in test files
+
+---
+id: qa-forge-instinct-test-framework-vitest
+trigger: "When writing tests"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: S-YED/QA-Forge
+---
+
+# Qa Forge Instinct Test Framework Vitest
+
+## Action
+
+Use the Vitest testing framework
+
+## Evidence
+
+- Pattern in testing.framework
+- Presence of vitest.config.ts
+
+---
+id: qa-forge-instinct-test-types-unit-integration
+trigger: "When designing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: S-YED/QA-Forge
+---
+
+# Qa Forge Instinct Test Types Unit Integration
+
+## Action
+
+Write both unit and integration tests as needed
+
+## Evidence
+
+- Pattern in testing.testTypes
+
+---
+id: qa-forge-instinct-mocking-vi-mock
+trigger: "When mocking dependencies in tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: S-YED/QA-Forge
+---
+
+# Qa Forge Instinct Mocking Vi Mock
+
+## Action
+
+Use vi.mock for mocking
+
+## Evidence
+
+- Pattern in testing.mockingStyle
+
+---
+id: qa-forge-instinct-commit-conventional
+trigger: "When writing a commit message"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: S-YED/QA-Forge
+---
+
+# Qa Forge Instinct Commit Conventional
+
+## Action
+
+Use the conventional commit format with prefixes (chore, feat, docs)
+
+## Evidence
+
+- Seen in commit: 'feat: make QA Forge demo-ready and production-ready (16-gate goal)'
+- Seen in commit: 'chore: update local permission allowlist'
+- Pattern in commits.prefixes
+
+---
+id: qa-forge-instinct-commit-length
+trigger: "When composing a commit message"
+confidence: 0.7
+domain: git
+source: repo-analysis
+source_repo: S-YED/QA-Forge
+---
+
+# Qa Forge Instinct Commit Length
+
+## Action
+
+Keep the commit message concise, around 57 characters on average
+
+## Evidence
+
+- Pattern in commits.averageLength
+- Examples in commits.examples
+
+---
+id: qa-forge-instinct-update-documentation-workflow
+trigger: "When new features, demo flows, or public-facing information need documentation"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: S-YED/QA-Forge
+---
+
+# Qa Forge Instinct Update Documentation Workflow
+
+## Action
+
+Update README.md and related documentation files; optionally update .claude/settings.local.json if permissions or settings change
+
+## Evidence
+
+- Workflow: update-documentation-and-readme
+- Commit sequence and files in workflow example
+
+---
+id: qa-forge-instinct-refresh-gitnexus-workflow
+trigger: "When a major commit (e.g., demo→prod) is made, requiring updated code graphs and agent skill docs"
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: S-YED/QA-Forge
+---
+
+# Qa Forge Instinct Refresh Gitnexus Workflow
+
+## Action
+
+Run GitNexus, regenerate AGENTS.md and CLAUDE.md, update .claude/skills/gitnexus/*/SKILL.md, and optionally update .claude/settings.local.json
+
+## Evidence
+
+- Workflow: regenerate-gitnexus-and-claude-metadata
+- Commit sequence and files in workflow example
+
