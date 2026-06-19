@@ -418,13 +418,13 @@ This session brought the full stack up (Supabase Docker stack + API on :4000 + w
 
 ### Hardening shipped
 - **Security headers:** added `helmet` (was absent) — `X-Content-Type-Options`, `X-Frame-Options`, HSTS, `Referrer-Policy`, `Cross-Origin-Resource-Policy: cross-origin`; CORS still intact.
-- **Dependencies:** removed dead/vulnerable `@ai-sdk/*` + `ai` packages from `ai-engine` (unused — engine uses `fetch`); added pnpm overrides for `ws`/`tmp`/`qs`/`postcss`. **Vulnerabilities 32 → 18 (high 10 → 6).**
+- **Dependencies:** removed dead/vulnerable `@ai-sdk/*` + `ai` packages from `ai-engine` (unused — engine uses `fetch`); pnpm overrides for `ws`/`tmp`/`qs`/`postcss`/`path-to-regexp`; **upgraded Next.js 14 → 15.5** (async `params`/`cookies()` migrated; React stays 18.3). **Vulnerabilities 32 → 3, high 10 → 0.**
 - **Secret hygiene:** removed committed `temp_system_prompt.txt` / `temp_user_prompt.txt` from the tree + `.gitignore`.
 - **Tests:** converted the fake `encryption.test.ts` (console.log script, previously excluded) into a real 5-test vitest suite; wired `test` scripts + a turbo `test` task + root `pnpm test` (**27 tests**).
 - **CI:** added `.github/workflows/ci.yml` (install → type-check → build → test → audit) with CI-safe env.
 
 ### Recommended follow-ups (documented, not done)
-- **Next.js 14 → 15** major upgrade (remaining 6 high advisories are all transitive Next 14 + express `path-to-regexp`).
+- **3 remaining moderate advisories** are transitive (`brace-expansion` ×2, `uuid`) — `uuid` needs a risky v8→v11 major bump on a transitive consumer; left documented, not exploitable in current usage.
 - **Resilience:** AI-call timeout/retry + OpenRouter model-fallback; graceful shutdown; `/api/ready` readiness probe.
 - **Git history scrub** of the removed temp files (requires a force-push — left for an explicit decision) and rotation of any key exposed in chat.
 - **Actual cloud deploy** (Supabase Cloud + Railway + Vercel) — the app is production-*ready*, not yet deployed.

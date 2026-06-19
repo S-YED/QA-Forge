@@ -1,17 +1,18 @@
 import { RecordingPortal } from '@/components/recordings/recording-portal';
 
 interface RecordingDetailPageProps {
-  params: {
+  params: Promise<{
     id: string;
     sessionId: string;
-  };
+  }>;
 }
 
-export default function RecordingDetailPage({ params }: RecordingDetailPageProps) {
+export default async function RecordingDetailPage({ params }: RecordingDetailPageProps) {
+  const { id, sessionId } = await params;
   return (
     <RecordingPortal
-      projectId={params.id}
-      sessionId={params.sessionId}
+      projectId={id}
+      sessionId={sessionId}
     />
   );
 }

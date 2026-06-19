@@ -10,7 +10,7 @@
 
 [![License](https://img.shields.io/badge/License-Proprietary-8B5CF6?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMiI+PHBhdGggZD0iTTEyIDJ2MjAiLz48cGF0aCBkPSJNMiAxMmgyMCIvPjwvc3ZnPg==)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Next.js](https://img.shields.io/badge/Next.js-14-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![Playwright](https://img.shields.io/badge/Playwright-1.58-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3FCF8E?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com/)
 [![Turborepo](https://img.shields.io/badge/Turborepo-Monorepo-EF4444?style=flat-square&logo=turborepo&logoColor=white)](https://turbo.build/)
@@ -149,7 +149,7 @@ QA Forge is built as a **pnpm + Turborepo monorepo** — every component is a fi
 ```
 qaforge/
 ├── apps/
-│   ├── web/                    # Next.js 14 App Router — Dashboard & Auth
+│   ├── web/                    # Next.js 15 App Router — Dashboard & Auth
 │   └── api/                    # Express.js — REST API & WebSocket Server
 ├── packages/
 │   ├── ai-engine/              # Multi-provider AI test case generation
@@ -170,7 +170,7 @@ qaforge/
 
 | Package | Description | Key Tech |
 |:--------|:------------|:---------|
-| **`@qaforge/web`** | Next.js 14 dashboard with SSR auth, project management, live test monitoring, and settings | Next.js, React 18, Tailwind CSS, Supabase SSR, Socket.io Client |
+| **`@qaforge/web`** | Next.js 15 dashboard with SSR auth, project management, live test monitoring, and settings | Next.js, React 18, Tailwind CSS, Supabase SSR, Socket.io Client |
 | **`@qaforge/api`** | Express REST API with JWT auth, Zod validation, AES encryption, WebSocket orchestration | Express, Zod, Winston, Socket.io, AES-256-GCM |
 | **`@qaforge/ai-engine`** | Multi-provider AI client for test case generation from natural language prompts | OpenAI GPT-4o, Claude Haiku, Gemini 2.0 Flash |
 | **`@qaforge/playwright-runner`** | Headless browser automation engine with keyword-to-Playwright instruction mapping | Playwright (Chromium, Firefox, WebKit) |
@@ -480,7 +480,7 @@ socket.on('test:error',         (data) => { /* Execution error */ });
 
 | Layer | Technology | Why |
 |:------|:-----------|:----|
-| **Frontend** | Next.js 14 + React 18 + Tailwind CSS | SSR auth, App Router, rapid UI |
+| **Frontend** | Next.js 15 + React 18 + Tailwind CSS | SSR auth, App Router, rapid UI |
 | **Backend** | Express.js + TypeScript | Battle-tested, WebSocket-native |
 | **AI** | OpenAI / Anthropic / Google AI | Multi-provider flexibility |
 | **Browser Engine** | Playwright | Cross-browser automation |
