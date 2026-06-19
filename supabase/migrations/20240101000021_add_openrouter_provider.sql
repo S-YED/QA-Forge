@@ -7,19 +7,21 @@
 
 DO $$
 DECLARE
-  c text;
+  c record;
 BEGIN
-  -- Find whatever the provider CHECK constraint is currently named
-  -- (inline column checks get an auto-generated name).
-  SELECT conname INTO c
-    FROM pg_constraint
-   WHERE conrelid = 'public.api_keys'::regclass
-     AND contype = 'c'
-     AND pg_get_constraintdef(oid) ILIKE '%provider%';
-
-  IF c IS NOT NULL THEN
-    EXECUTE format('ALTER TABLE public.api_keys DROP CONSTRAINT %I', c);
-  END IF;
+  -- Drop every CHECK constraint on api_keys that references the provider column
+  -- (the inline column check from migration 3 gets an auto-generated name).
+  -- A loop handles the zero-or-many cases safely and keeps the migration
+  -- idempotent across re-runs and `supabase db reset`.
+  FOR c IN
+    SELECT conname
+      FROM pg_constraint
+     WHERE conrelid = 'public.api_keys'::regclass
+       AND contype = 'c'
+       AND pg_get_constraintdef(oid) ILIKE '%provider%'
+  LOOP
+    EXECUTE format('ALTER TABLE public.api_keys DROP CONSTRAINT %I', c.conname);
+  END LOOP;
 END $$;
 
 ALTER TABLE public.api_keys

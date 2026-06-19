@@ -185,7 +185,45 @@ async function callOpenRouter(apiKey: string, systemPrompt: string, userPrompt: 
   }
 
   const data = await response.json();
-  return data.choices[0].message.content;
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== 'string' || content.length === 0) {
+    throw new Error(`OpenRouter returned no usable content (model ${OPENROUTER_MODEL})`);
+  }
+  return content;
+}
+
+// Parse a model's raw text into JSON, tolerating the common ways models wrap it:
+// raw JSON, a ```json fenced block, or JSON embedded in surrounding prose. Each
+// strategy is attempted in turn; a single clear error is thrown only if all fail.
+export function parseModelJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // not raw JSON — try the next strategy
+  }
+
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) {
+    try {
+      return JSON.parse(fenced[1]);
+    } catch {
+      // fenced block was not valid JSON — try the next strategy
+    }
+  }
+
+  // Last resort: slice from the first JSON bracket to the last closing bracket,
+  // which recovers JSON emitted alongside explanatory prose.
+  const start = raw.search(/[[{]/);
+  const end = Math.max(raw.lastIndexOf(']'), raw.lastIndexOf('}'));
+  if (start !== -1 && end > start) {
+    try {
+      return JSON.parse(raw.slice(start, end + 1));
+    } catch {
+      // give up below
+    }
+  }
+
+  throw new Error('Failed to parse AI response as JSON');
 }
 
 // ── Main Generation Function ─────────────────────────────────────────────────
@@ -221,19 +259,9 @@ export async function generateTestCases(
       throw new Error(`Unsupported provider: ${request.provider}`);
   }
 
-  // Parse the AI response — handle both raw array and { test_cases: [...] } wrapper
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(rawResponse);
-  } catch {
-    // Try to extract JSON from markdown fences if the model wrapped it
-    const jsonMatch = rawResponse.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[1]);
-    } else {
-      throw new Error('Failed to parse AI response as JSON');
-    }
-  }
+  // Parse the AI response — handle raw array, { test_cases: [...] } wrapper,
+  // fenced blocks, and JSON embedded in prose.
+  const parsed: unknown = parseModelJson(rawResponse);
 
   let testCases: GeneratedTestCase[];
   if (Array.isArray(parsed)) {
@@ -347,17 +375,7 @@ export async function optimizeTestCase(
       throw new Error(`Unsupported provider: ${request.provider}`);
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(rawResponse);
-  } catch {
-    const jsonMatch = rawResponse.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[1]);
-    } else {
-      throw new Error('Failed to parse AI optimization response as JSON');
-    }
-  }
+  const parsed: unknown = parseModelJson(rawResponse);
 
   const tc = parsed as GeneratedTestCase;
   if (!Array.isArray(tc.steps)) tc.steps = [];
