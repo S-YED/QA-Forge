@@ -18,6 +18,7 @@ const PREFERRED_ORDER: ApiKeyProvider[] = [
   'anthropic' as ApiKeyProvider,
   'openai' as ApiKeyProvider,
   'gemini' as ApiKeyProvider,
+  'openrouter' as ApiKeyProvider,
 ];
 
 /**

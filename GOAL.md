@@ -398,3 +398,33 @@ Every session MUST follow this order:
 - Gate 3.1: `/qa` (gstack)
 - All code changes: `gitnexus_impact` before edit, `gitnexus_detect_changes` before commit
 - All builds: actual `pnpm` commands, not assumed success
+
+---
+
+## Addendum — 2026-06-19 Live Re-Verification & Production Hardening
+
+This session brought the full stack up (Supabase Docker stack + API on :4000 + web on :3005) and **independently re-verified the runtime gates with fresh live evidence** (the original gates were certified inline on 2026-06-13). It then hardened the app beyond the original 16 gates.
+
+### Live re-verification (real, this session)
+- **API:** `/api/health` → `{status:ok, version:2.0.0-mvp}`; no-token → 401; bad-token → 401; unknown route → 404 JSON; CORS rejects foreign origin / echoes app origin :3005.
+- **Demo flow:** `POST /api/auth/demo` → 200 + JWT; demo token reads the 3 seeded projects; demo-guard blocks writes → 403 read-only.
+- **DB:** 20 base migrations applied + new migration 21; demo user, 3 projects, 8 cases, 10 runs present.
+- **Static:** `pnpm type-check` 7/7, `pnpm build` 7/7, `pnpm test` 27/27 — all exit 0.
+
+### Flagship feature proven LIVE (Gate 1.4, for real)
+- Added **OpenRouter** as a first-class AI provider (the original limitation was "no provider key"). Touch-points: `ApiKeyProvider` enum, migration 21 (`api_keys.provider` CHECK), `ai-engine` (`callOpenRouter` + dispatch), key validation (`/api/v1/key`), key resolver, generate-route schema, and the Settings UI dropdown.
+- Signed in as a real user, added + **validated** the OpenRouter key (encrypted at rest), and ran a **real generation**: model `google/gemma-4-31b-it:free` produced **5 test cases** (positive / negative / edge / accessibility) that **persisted to the DB** with the canonical step schema. Model is configurable via `OPENROUTER_MODEL`.
+- Note: OpenRouter's free tier is upstream-rate-limited per provider (some free models returned a transient 429); a model-fallback list is a recommended resilience follow-up.
+
+### Hardening shipped
+- **Security headers:** added `helmet` (was absent) — `X-Content-Type-Options`, `X-Frame-Options`, HSTS, `Referrer-Policy`, `Cross-Origin-Resource-Policy: cross-origin`; CORS still intact.
+- **Dependencies:** removed dead/vulnerable `@ai-sdk/*` + `ai` packages from `ai-engine` (unused — engine uses `fetch`); added pnpm overrides for `ws`/`tmp`/`qs`/`postcss`. **Vulnerabilities 32 → 18 (high 10 → 6).**
+- **Secret hygiene:** removed committed `temp_system_prompt.txt` / `temp_user_prompt.txt` from the tree + `.gitignore`.
+- **Tests:** converted the fake `encryption.test.ts` (console.log script, previously excluded) into a real 5-test vitest suite; wired `test` scripts + a turbo `test` task + root `pnpm test` (**27 tests**).
+- **CI:** added `.github/workflows/ci.yml` (install → type-check → build → test → audit) with CI-safe env.
+
+### Recommended follow-ups (documented, not done)
+- **Next.js 14 → 15** major upgrade (remaining 6 high advisories are all transitive Next 14 + express `path-to-regexp`).
+- **Resilience:** AI-call timeout/retry + OpenRouter model-fallback; graceful shutdown; `/api/ready` readiness probe.
+- **Git history scrub** of the removed temp files (requires a force-push — left for an explicit decision) and rotation of any key exposed in chat.
+- **Actual cloud deploy** (Supabase Cloud + Railway + Vercel) — the app is production-*ready*, not yet deployed.

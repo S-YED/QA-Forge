@@ -18,7 +18,7 @@ const generateSchema = z.object({
   prompt: z.string().min(10).max(5000),
   suite_id: z.string().uuid().optional(),
   suite_name: z.string().min(1).max(200).optional(),
-  provider: z.enum(['openai', 'anthropic', 'gemini']).optional(),
+  provider: z.enum(['openai', 'anthropic', 'gemini', 'openrouter']).optional(),
 });
 
 router.post('/generate', validate(generateSchema), async (req, res, next) => {

@@ -1,5 +1,6 @@
 import express, { type Express } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import { env } from './config/env.js';
 import { defaultLimiter, aiLimiter } from './middleware/rate-limiter.js';
 import { errorHandler } from './middleware/error-handler.js';
@@ -16,6 +17,19 @@ import bugsRouter from './routes/bugs.routes.js';
 import recordedSessionsRouter from './routes/recorded-sessions.routes.js';
 
 const app: Express = express();
+
+// ── 0. Security headers (helmet) ───────────────────────────────────────────────
+// The API serves JSON only and is consumed cross-origin by the web app, so the
+// HTML-oriented CSP is disabled and Cross-Origin-Resource-Policy is relaxed to
+// 'cross-origin'. All other protective headers (X-Content-Type-Options,
+// X-Frame-Options, Strict-Transport-Security, Referrer-Policy, etc.) keep their
+// secure defaults.
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }),
+);
 
 // ── 1. Body parser ─────────────────────────────────────────────────────────────
 // 10MB limit for context uploads in post-MVP AI routes

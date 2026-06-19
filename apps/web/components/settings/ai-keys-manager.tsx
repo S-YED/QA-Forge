@@ -63,6 +63,7 @@ export function AiKeysManager({ initialKeys }: AiKeysManagerProps) {
       openai: 'OpenAI',
       anthropic: 'Anthropic',
       gemini: 'Gemini',
+      openrouter: 'OpenRouter',
     };
     return labels[provider] ?? provider;
   };

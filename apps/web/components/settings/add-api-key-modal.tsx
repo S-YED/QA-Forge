@@ -14,6 +14,7 @@ const providers = [
   { value: ApiKeyProvider.OPENAI, label: 'OpenAI' },
   { value: ApiKeyProvider.ANTHROPIC, label: 'Anthropic' },
   { value: ApiKeyProvider.GEMINI, label: 'Gemini' },
+  { value: ApiKeyProvider.OPENROUTER, label: 'OpenRouter' },
 ];
 
 export function AddApiKeyModal({ open, onClose, onAdded }: AddApiKeyModalProps) {

@@ -151,6 +151,43 @@ async function callGemini(apiKey: string, systemPrompt: string, userPrompt: stri
   return data.candidates[0].content.parts[0].text;
 }
 
+// OpenRouter is OpenAI-wire-compatible. The model is overridable via OPENROUTER_MODEL
+// and defaults to a reliable free instruct model. `response_format` is intentionally
+// omitted for broad free-model compatibility — the JSON contract is enforced by the
+// system prompt plus the markdown-fence fallback parser used by the callers.
+const OPENROUTER_MODEL =
+  (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
+    ?.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
+
+async function callOpenRouter(apiKey: string, systemPrompt: string, userPrompt: string): Promise<string> {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://qaforge.dev',
+      'X-Title': 'QA Forge',
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.4,
+      max_tokens: 4096,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`OpenRouter API error (${response.status}): ${err}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
 // ── Main Generation Function ─────────────────────────────────────────────────
 
 /**
@@ -176,6 +213,9 @@ export async function generateTestCases(
       break;
     case 'gemini':
       rawResponse = await callGemini(request.apiKey, systemPrompt, userPrompt);
+      break;
+    case 'openrouter':
+      rawResponse = await callOpenRouter(request.apiKey, systemPrompt, userPrompt);
       break;
     default:
       throw new Error(`Unsupported provider: ${request.provider}`);
@@ -299,6 +339,9 @@ export async function optimizeTestCase(
       break;
     case 'gemini':
       rawResponse = await callGemini(request.apiKey, systemPrompt, userPrompt);
+      break;
+    case 'openrouter':
+      rawResponse = await callOpenRouter(request.apiKey, systemPrompt, userPrompt);
       break;
     default:
       throw new Error(`Unsupported provider: ${request.provider}`);
