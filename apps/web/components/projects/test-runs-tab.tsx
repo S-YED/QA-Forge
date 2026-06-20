@@ -1,8 +1,11 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { cn } from '@/lib/utils';
+import { RefreshCw, ChevronRight, Play } from 'lucide-react';
 import type { TestRun } from '@qaforge/shared-types';
+import { EmptyState } from '@/components/shared/empty-state';
+import { StatusBadge } from '@/components/shared/status-badge';
+import { Button } from '@/components/ui/button';
 
 interface TestRunsTabProps {
   projectId: string;
@@ -11,17 +14,8 @@ interface TestRunsTabProps {
   onRefresh: (page?: number) => void;
 }
 
-const statusConfig: Record<string, { label: string; className: string; icon: string }> = {
-  pending: { label: 'Pending', className: 'bg-slate-500/10 text-slate-500', icon: '⏳' },
-  running: { label: 'Running', className: 'bg-blue-500/10 text-blue-500 animate-pulse', icon: '🔄' },
-  passed: { label: 'Passed', className: 'bg-emerald-500/10 text-emerald-600', icon: '✓' },
-  failed: { label: 'Failed', className: 'bg-red-500/10 text-red-500', icon: '✗' },
-  error: { label: 'Error', className: 'bg-amber-500/10 text-amber-600', icon: '⚠' },
-  skipped: { label: 'Skipped', className: 'bg-gray-500/10 text-gray-500', icon: '–' },
-};
-
 function formatDuration(ms?: number): string {
-  if (!ms) return '—';
+  if (!ms) return '-';
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
@@ -47,76 +41,59 @@ export function TestRunsTab({ projectId, runs, totalCount, onRefresh }: TestRuns
 
   if (runs.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed p-8 text-center">
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        </div>
-        <h3 className="font-semibold">No test runs yet</h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          Run a test case from the Test Suites tab to see results here.
-        </p>
-      </div>
+      <EmptyState
+        icon={Play}
+        title="No test runs yet"
+        description="Run a test case from the Suites tab to watch results stream in here."
+      />
     );
   }
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-          Recent Runs
-        </h2>
-        <button
-          onClick={() => onRefresh(1)}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
+        <h3 className="text-sm font-semibold text-foreground">Recent runs</h3>
+        <Button variant="ghost" size="sm" onClick={() => onRefresh(1)}>
+          <RefreshCw />
           Refresh
-        </button>
+        </Button>
       </div>
 
-      <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
-        <div className="divide-y">
-          {runs.map((run) => {
-            const status = statusConfig[run.status] || statusConfig.pending;
-
-            return (
-              <div
-                key={run.id}
+      <div className="overflow-hidden rounded-lg border bg-card">
+        <ul className="divide-y divide-border">
+          {runs.map((run) => (
+            <li key={run.id}>
+              <button
                 onClick={() => router.push(`/dashboard/projects/${projectId}/runs/${run.id}`)}
-                className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/30 transition-colors"
+                className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-accent/40"
               >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  {/* Status badge */}
-                  <span className={cn('shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium', status.className)}>
-                    <span className="text-[10px]">{status.icon}</span>
-                    {status.label}
-                  </span>
-
-                  {/* Title / Test case name */}
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <StatusBadge status={run.status} />
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {run.test_cases?.title || run.nl_input?.substring(0, 60) || `Run ${run.id.slice(0, 8)}`}
+                    <p className="truncate text-sm font-medium">
+                      {run.test_cases?.title ||
+                        run.nl_input?.substring(0, 60) ||
+                        `Run ${run.id.slice(0, 8)}`}
                     </p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-muted-foreground capitalize">{run.mode.replace('_', ' ')}</span>
-                      <span className="text-[10px] text-muted-foreground">•</span>
-                      <span className="text-[10px] text-muted-foreground capitalize">{run.browser || 'chromium'}</span>
-                    </div>
+                    <p className="mt-0.5 text-xs capitalize text-muted-foreground">
+                      {run.mode.replace('_', ' ')} · {run.browser || 'chromium'}
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 shrink-0">
-                  <span className="text-xs text-muted-foreground font-mono">
+                <div className="flex shrink-0 items-center gap-4">
+                  <span className="font-mono text-xs text-muted-foreground">
                     {formatDuration(run.duration_ms ?? undefined)}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="hidden text-xs text-muted-foreground sm:inline">
                     {formatDate(run.created_at)}
                   </span>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground/50"><path d="m9 18 6-6-6-6"/></svg>
+                  <ChevronRight className="size-4 text-muted-foreground/60" />
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              </button>
+            </li>
+          ))}
+        </ul>
       </div>
 
       {totalCount > runs.length && (

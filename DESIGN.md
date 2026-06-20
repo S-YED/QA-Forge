@@ -1,77 +1,73 @@
-# Design System — QA Forge
+# Design System — QA Forge ("Blueprint")
 
 > Source of truth for QA Forge's visual language. Read this before any UI work.
-> The system already lives in `apps/web/app/globals.css` (tokens) and
-> `apps/web/tailwind.config.ts` (mappings); this file is the *why* and the rules.
-> Created by `/design-consultation` (2026-06-12) by codifying the existing system
-> and sharpening four things — see the Decisions Log.
+> The system lives in `apps/web/app/globals.css` (OKLCH tokens),
+> `apps/web/tailwind.config.ts` (token → utility mapping), `apps/web/components/ui/*`
+> (shadcn/Radix primitives) and `apps/web/components/shared/*` (app patterns).
+> This file is the *why* and the rules.
 
 ## Product Context
-- **What this is:** AI-powered QA platform — describe tests in plain English, AI generates them, Playwright executes them live with a streaming terminal, screenshot filmstrip, and auto-filed bugs.
-- **Who it's for:** Developers and QA engineers; right now, hiring managers evaluating a public read-only demo.
-- **Space/industry:** Developer tools / test automation (peers: Playwright, Cypress, BrowserStack, QA Wolf, Reflect).
-- **Project type:** Web app (dashboard) + marketing/landing + an auto-sign-in demo.
-- **The memorable thing:** "AI that runs the tests, live." Every decision serves the violet-glow streaming terminal as the hero moment.
+- **What this is:** AI-powered QA platform — describe tests in plain English, AI generates Playwright cases, they execute live with a streaming console, screenshot filmstrip, and auto-filed bugs.
+- **Who it's for:** Developers and QA engineers; today, hiring managers evaluating a public read-only demo.
+- **Space:** Developer tools / test automation (peers: Playwright, Cypress, BrowserStack, QA Wolf).
+- **The memorable thing:** "AI that runs the tests, live." The dark execution **console** is the one hero surface; everything else is the calm, precise instrument around it.
 
-## Aesthetic Direction
-- **Direction:** Premium dark developer tool. Near-black canvas, violet/indigo treated as *light* (glow), glass surfaces, restraint everywhere else.
-- **Decoration level:** Intentional — glassmorphism, soft violet glows, gradient text on brand moments only. Not bare, not expressive.
-- **Mood:** Serious software with a modern hand. Calm, dark, focused; the color shows up where the product comes alive (a running test).
-- **Reference points:** Linear (dark restraint), Vercel (developer polish), a terminal UI (the hero).
+## Aesthetic Direction — "Blueprint"
+- **Direction:** A measurement instrument. Light, precise, high-legibility surfaces (white/cool canvas, near-black ink) with a single confident **mineral-teal** accent. The live test console is the one *lit* dark panel — so it reads as the hero, not as decoration.
+- **Why this direction:** The prior system (near-black canvas + violet glow + glassmorphism + gradient text) was the most saturated "AI dev-tool" template of 2026 — it read as AI-slop. Blueprint deliberately escapes both that reflex *and* the second-order "light editorial serif" reflex. Adopted **2026-06-19** with explicit owner approval (supersedes the prior dark/violet system; see Decisions Log).
+- **Decoration level:** Restraint by default. Color is rare and meaningful. No glow, no glass, no gradient fills, no decorative motion.
+- **Reference points:** Linear/Vercel (light, precise dev tooling), an oscilloscope or lab readout (the console), an engineering datasheet (feature/spec layouts).
 
 ## Typography
-Loaded via `next/font` in `app/layout.tsx` (variables set on `<html>`). Do **not** re-import via CSS `@import`.
-- **Display / headings (`h1–h6`):** Plus Jakarta Sans — weight 700, letter-spacing `-0.02em`. Var `--font-jakarta`. Geometric, confident, not overused.
-- **Body / UI:** Inter — var `--font-inter`. Workhorse; acceptable for body (only avoid as a *display* face).
-- **Code / terminal / data / step timings:** **JetBrains Mono** — var `--font-mono`, Tailwind `font-mono`. This is brand: the live terminal is the hero surface, so its monospace is pinned, never a system fallback.
-- **Loading:** `next/font/google` (self-hosted at build, no FOUT, no extra network hop).
-- **Scale (rem):** xs `0.75` · sm `0.875` · base `1` · lg `1.125` · xl `1.25` · 2xl `1.5` · 3xl `1.875` · 4xl `2.25`. Headings tighten tracking to `-0.02em`.
+Loaded via `next/font` in `app/layout.tsx` (variables on `<html>`). Do **not** re-import via CSS `@import`.
+- **UI + display (all headings, labels, body):** **Hanken Grotesk** — var `--font-sans`, Tailwind `font-sans`. One well-tuned grotesk; weight/size contrast does the work a display/body pair would. (Deliberately not Inter/Plus Jakarta/Geist — those are reflex defaults.)
+- **Code / console / step timings / selectors / IDs / durations:** **JetBrains Mono** — var `--font-mono`, Tailwind `font-mono`. This is brand: the live console is the hero, so its monospace is pinned, never a system fallback.
+- **Headings:** weight 700, `letter-spacing: -0.018em`; `text-wrap: balance`. Body `text-wrap: pretty`.
+- **Scale:** product-register — a fixed rem scale (`text-sm`/`text-base` body, `text-2xl`/`3xl` page titles). Display sizes (`text-5xl`+) tighten tracking; reserved for the landing/brand surfaces only.
 
 ## Color
-HSL custom properties in `globals.css`; dark is the default theme, `.light` class for light mode.
-- **Approach:** Restrained — one accent family (violet/indigo) + neutrals; semantic colors carry test state.
-- **Brand violet (primary):** `#7C3AED` (`262 83% 58%`) — primary actions, focus ring, brand.
-- **Brand indigo (secondary):** `#6366F1` (`239 84% 67%`) — gradient partner, secondary glow.
-- **Violet light:** `#C084FC` (`262 100% 70%`) — gradient-text highlight.
-- **Neutrals (dark):** canvas `#07070D` (`240 10% 4%`) · surface/card `#0F0F17` (`240 9% 7%`) · border/muted `#1C1C24` (`240 5% 12%`). Foreground `210 40% 98%`; muted text `215 16% 55%` (AA-compliant on canvas and card).
-- **Semantic:** pass/success `#10B981` · fail/error `#EF4444` (`--destructive` `0 84% 60%`) · warning `#F59E0B` · info/running `#3B82F6`. These map to test/step statuses (passed/failed/running/skipped).
-- **Dark mode:** is the default. Light mode redesigns surfaces (not just inverted) and keeps the same `#7C3AED` primary.
+OKLCH custom properties in `globals.css` as `L C H` triplets, wrapped by Tailwind as `oklch(var(--token) / <alpha-value>)` so opacity utilities (`bg-primary/10`) work. **Light is the default theme; `.dark` is the "Instrument" variant.** Author in tokens — never hardcode hex, never use raw `violet-*`/`indigo-*`/`slate-*` palette classes.
+- **Primary (mineral teal):** light `oklch(0.50 0.105 197)`, dark `oklch(0.74 0.11 192)`. Primary actions, focus ring, brand, selection. White text on the light primary (≥4.5:1).
+- **Neutrals (light):** canvas `oklch(0.985 0.004 230)`, card pure white, border `oklch(0.912 0.005 230)`, muted text `oklch(0.46 0.02 245)` (AA on canvas + card).
+- **Neutrals (dark / "Instrument"):** canvas `oklch(0.165 0.006 240)` (true-ish near-black, faint cool), card `oklch(0.205 …)`, 1px hairline borders. No blur, no glow.
+- **Semantic (owns test/bug state):** `--success` (green=passed), `--destructive` (red=failed), `--warning` (amber=error/warn), `--info` (blue=running). Each has a `-foreground`. Use tints (`bg-success/15 text-success`) for badges. **Never use the brand teal to signal status.**
+- **Console (the lit readout, dark in BOTH themes):** `--console`, `--console-foreground`, `--console-muted`, `--console-border`, and bright `--console-success/-error/-info/-accent` for log lines. Used only for terminal-like surfaces.
+- **Sidebar:** its own slightly-cool neutral layer (`--sidebar*`).
 
-## Spacing
-- **Base unit:** 4px (Tailwind default scale).
-- **Density:** Comfortable.
-- **Scale (px):** 2 · 4 · 8 · 12 · 16 · 24 · 32 · 48 · 64.
+## Components
+- **Primitive layer:** shadcn/ui on Radix in `components/ui/` (button, card, badge, input, textarea, label, select, dialog, dropdown-menu, sheet, tabs, tooltip, separator, skeleton, avatar, switch, scroll-area, sonner). Build on these — don't hand-roll buttons/inputs/modals.
+- **Shared patterns:** `components/shared/` — `PageHeader`, `EmptyState`, `Spinner`/`CenteredSpinner`, `Stat`/`StatGroup`, and `StatusBadge`/`StatusDot`/`SeverityBadge` (single source of truth mapping every run/step/bug status to a semantic badge + lucide icon). Brand mark: `components/brand/logo.tsx`.
+- **Icons:** **lucide-react** only. No emoji, no hand-rolled SVG icon paths.
+- Every interactive component ships its full state set (default/hover/focus/active/disabled/loading). Loading uses Spinner/Skeleton, not bare spinner divs.
 
-## Layout
-- **Approach:** Hybrid — grid-disciplined in the app (sidebar + content; run-detail is a `55% / 1fr` two-column of steps + terminal), creative/asymmetric for landing + demo hero.
-- **Max content width:** container-bounded; app content fills the panel.
-- **Border radius:** `--radius: 0.75rem` (12px). Tailwind `lg` = radius, `md` = radius−2px, `sm` = radius−4px; `full` = 9999px for pills/badges/avatars.
-- **Surfaces:** `.glass-card` (blur 16px) for cards, `.glass-sidebar` (blur 20px) for nav.
+## Spacing & Layout
+- 4px base; comfortable density. Cards `p-5`/`p-6`; page sections `space-y-6`/`space-y-8`.
+- **Radius:** `--radius: 0.625rem`. Tailwind `lg` = radius, `md` = −2px, `sm` = −4px; `full` for pills/avatars.
+- App content is grid-disciplined (sticky sidebar + content; run-detail is a `55% / 1fr` two-column of steps + console). Landing is brand-register and may be more expressive.
 
 ## Motion
-- **Approach:** Intentional — entrance + meaningful state transitions, not decoration.
-- **Signature easing:** `cubic-bezier(0.16, 1, 0.3, 1)` (`.transition-premium`, `.animate-fade-in-up`); `cubic-bezier(0.23, 1, 0.32, 1)` for `.ease-out-quint`.
-- **Duration:** micro 50–100ms · short 150–250ms · medium 250–400ms · long 400–700ms.
-- **Named effects:** `float`, `pulse-glow`, `shimmer`, `spin-slow`, `fade-in-up`, plus glows (`.glow-violet`, `.glow-indigo`).
-- **Accessibility:** all animation/transition is collapsed to near-instant under `prefers-reduced-motion: reduce` (guard in `globals.css`). Keep it that way.
+- Product motion is 150–250ms, conveys state only (hover, transitions, Radix open/close via `tailwindcss-animate`). No orchestrated page-load sequences, no decorative loops.
+- The live indicators (running dot, console caret) are the meaningful exceptions.
+- **Reduced motion:** all animation/transition collapses to ~0 under `prefers-reduced-motion: reduce` (guard in `globals.css`). Keep it that way.
 
-## Rules (the discipline that keeps violet from reading as "AI slop")
-1. **Gradient is a special-occasion material, not a default.** Use the violet→indigo gradient ONLY for: the single landing hero CTA, `.gradient-text` brand wordmarks, and glow/border accents. **Primary buttons elsewhere are solid `violet-600`** (`hover:violet-500`). Utility CTAs (Export, error-recovery, form submits) are solid.
-2. **Violet is light, on near-black.** The accent earns its place by being rare. Don't tint large surfaces violet; use it for state, focus, glow, and one CTA per view.
-3. **Monospace everywhere code/output/timing appears.** `font-mono` (JetBrains Mono) for the terminal, step durations, selectors, exported code, IDs.
-4. **Semantic colors own test state.** Green = passed, red = failed, blue = running, gray = skipped/pending. Don't use brand violet to signal status.
-5. **Respect reduced motion.** Never ship an animation that ignores the `prefers-reduced-motion` guard.
-6. **One accent.** No second decorative color family. Neutrals + violet/indigo + semantics only.
+## Rules (the discipline that keeps this from sliding back into AI-slop)
+1. **No glassmorphism as a surface.** Solid `bg-card`/`bg-background` with 1px borders. Backdrop-blur only on a sticky nav scrim — never as default card/panel chrome.
+2. **No gradient text and no gradient-fill buttons/cards.** Wordmarks and CTAs are solid color. The only gradients allowed are the faint `.bg-grid` blueprint graticule and modal scrims.
+3. **No glow.** No colored `box-shadow`, no `glow-*`, no pulsing-glow loops. Elevation is a hairline border + at most a small neutral `shadow-sm`.
+4. **Teal is rare and earns its place.** One primary action per view, focus ring, brand, selection. Don't tint large surfaces teal.
+5. **Semantic colors own state.** Green=passed, red=failed, blue=running, amber=error/warn, gray=skipped/pending. Status always renders through `StatusBadge`/`StatusDot`.
+6. **Monospace for anything that's code/output/measurement.** Console, step timings, selectors, IDs, exported code, durations.
+7. **No eyebrow scaffolding.** No repeated tiny UPPERCASE letter-spaced labels above sections. Use a real sentence-case heading.
+8. **One accent family.** Neutrals + teal + the semantic set. No second decorative color.
+9. **The console is the only dark hero.** Keep it lit and instrument-like; don't darken the rest of the app to compete with it.
+10. **Respect reduced motion.** Never ship animation that ignores the guard.
 
 ## Decisions Log
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| 2026-06-12 | Initial DESIGN.md created by codifying the existing `globals.css`/`tailwind.config.ts` system | Existing system was coherent but undocumented; made it the source of truth before public launch |
-| 2026-06-12 | Added JetBrains Mono as `--font-mono` / Tailwind `font-mono` | Terminal is the hero; it was falling back to inconsistent system mono |
-| 2026-06-12 | Removed duplicate Google-Fonts `@import` from globals.css | Fonts already loaded via `next/font`; the `@import` double-fetched and risked FOUT |
-| 2026-06-12 | Disciplined the gradient: solid `violet-600` primary buttons, gradient reserved for hero/brand | Gradient-fill-everywhere is the one AI-slop pattern the UI was in; applied to run-detail Export + demo error CTA |
-| 2026-06-12 | Added `prefers-reduced-motion` guard | Animations were unguarded; accessibility gap |
+| 2026-06-12 | Initial DESIGN.md codifying the dark/violet/glass system | Existing system was coherent but undocumented |
+| 2026-06-19 | **Full redesign → "Blueprint" (light + mineral-teal, dark console as hero).** Replaced the dark-violet-glow/glassmorphism/gradient-text system; rebuilt on shadcn/ui + Radix with OKLCH tokens, Hanken Grotesk + JetBrains Mono, light default + de-slopped "Instrument" dark variant. | Owner judged the prior UI "AI-slop"; the prior aesthetic *was* the saturated AI dev-tool template. Blueprint escapes both that reflex and the editorial-serif reflex. Explicit owner approval to deviate from the prior locked system. |
 
-### Follow-ups (documented, not yet applied)
-- Audit remaining gradient-fill CTAs (login, register, landing secondary buttons) against Rule 1 — keep gradient only on the landing hero CTA.
-- Verify `muted-foreground` (`215 16% 47%`) and the demo-banner violet text meet WCAG AA for small text on the dark canvas; nudge lightness if not.
+### Notes
+- The prior `globals.css` utilities (`.glass-card`, `.glass-sidebar`, `.glow-*`, `.gradient-text*`, `.hero-gradient`, `animate-pulse-glow`/`shimmer`/`float`) were removed. Do not reintroduce them.
+- `GOAL.md` gates 1.6 / 3.2 were certified against the *old* DESIGN.md and remain as historical record; this file is the current source of truth.

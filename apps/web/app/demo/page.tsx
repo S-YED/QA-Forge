@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { TriangleAlert } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { LogoMark } from '@/components/brand/logo';
+import { CenteredSpinner } from '@/components/shared/spinner';
+import { Button } from '@/components/ui/button';
 
 export default function DemoPage() {
   const router = useRouter();
@@ -54,49 +59,27 @@ export default function DemoPage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-6">
-      <div className="text-center max-w-sm">
-        {/* Animated logo */}
-        <div className="flex justify-center mb-6">
-          <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-500 shadow-2xl shadow-violet-500/30 animate-pulse-glow">
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
-            </svg>
-          </div>
-        </div>
+    <div className="relative flex min-h-screen items-center justify-center bg-background px-6">
+      <div className="bg-grid pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_55%_50%_at_50%_45%,black,transparent)]" />
+
+      <div className="relative z-10 flex max-w-sm flex-col items-center text-center">
+        <LogoMark className="size-14" />
 
         {status === 'loading' || status === 'signing-in' ? (
           <>
-            <h1 className="text-2xl font-extrabold tracking-tight mb-2">
-              Launching Demo
-            </h1>
-            <p className="text-muted-foreground text-sm mb-6">
-              Signing you into the live demo account...
-            </p>
-
-            {/* Progress bar */}
-            <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-violet-600 to-indigo-500 rounded-full animate-[shimmer_1.5s_ease-in-out_infinite]" style={{ width: '60%' }} />
-            </div>
-
-            <p className="mt-4 text-xs text-muted-foreground">
-              Read-only demo · Explore the full app
-            </p>
+            <CenteredSpinner label="Signing you into the live demo…" />
+            <p className="text-xs text-muted-foreground">Read-only demo · explore the full app</p>
           </>
         ) : (
           <>
-            <h1 className="text-2xl font-extrabold tracking-tight mb-2 text-destructive">
-              Demo Unavailable
-            </h1>
-            <p className="text-muted-foreground text-sm mb-6">{error}</p>
-            <a
-              href="/login"
-              className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20 hover:bg-violet-500 transition-all duration-200"
-            >
-              Sign In Instead →
-            </a>
+            <div className="mt-6 flex size-11 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+              <TriangleAlert className="size-5" aria-hidden="true" />
+            </div>
+            <h1 className="mt-4 text-xl font-bold tracking-tight">Demo unavailable</h1>
+            <p className="mt-2 text-sm leading-relaxed text-destructive">{error}</p>
+            <Button asChild className="mt-6">
+              <Link href="/login">Sign in instead</Link>
+            </Button>
           </>
         )}
       </div>

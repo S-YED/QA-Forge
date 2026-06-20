@@ -24,7 +24,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
     const supabase = createClient();
     await supabase.auth.signOut();
     window.location.href = '/login';
-    throw new Error('Unauthorized — session expired');
+    throw new Error('Unauthorized - session expired');
   }
 
   if (!response.ok) {

@@ -1,22 +1,21 @@
+import Link from 'next/link';
+import { Logo } from '@/components/brand/logo';
+
 export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-[#07070d] text-slate-50 overflow-hidden select-none">
-      {/* Background Neon Glow Blobs */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-violet-600/10 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-600/10 blur-[120px] pointer-events-none" />
-      
-      {/* Premium Tech Grid overlay */}
-      <div 
-        className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:4rem_4rem] pointer-events-none"
-        style={{ maskImage: 'radial-gradient(ellipse 60% 50% at 50% 50%, #000 70%, transparent 100%)', WebkitMaskImage: 'radial-gradient(ellipse 60% 50% at 50% 50%, #000 70%, transparent 100%)' }}
-      />
+    <div className="relative flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
+      {/* Faint engineering graticule, masked to a soft vignette behind the shell */}
+      <div className="bg-grid pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_60%_55%_at_50%_45%,black,transparent)]" />
 
-      <div className="relative z-10 w-full max-w-md px-6 py-12 sm:px-4">
-        {children}
+      <div className="relative z-10 flex w-full max-w-sm flex-col items-center">
+        <Link href="/" className="mb-8 rounded-md" aria-label="QA Forge home">
+          <Logo />
+        </Link>
+        <div className="w-full">{children}</div>
       </div>
     </div>
   );

@@ -1,282 +1,309 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import {
+  Sparkles,
+  MonitorPlay,
+  Bug,
+  ShieldCheck,
+  ArrowRight,
+  TerminalSquare,
+  type LucideIcon,
+} from 'lucide-react';
+import { Logo, LogoMark } from '@/components/brand/logo';
+import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
-  title: 'QA Forge — AI-Powered Test Automation Platform',
+  title: 'QA Forge - AI test automation you can watch run',
   description:
-    'Describe tests in plain English. AI generates Playwright scripts. Watch them execute live. The QA platform that thinks like an engineer.',
+    'Describe a test in plain English. AI writes the Playwright script. Watch it execute live, step by step, with screenshots and auto-filed bugs.',
 };
 
-const features = [
+const features: { icon: LucideIcon; title: string; description: string }[] = [
   {
-    icon: '🧠',
-    title: 'AI Test Generation',
+    icon: Sparkles,
+    title: 'AI test generation',
     description:
-      'Describe what to test in plain English. Our multi-model AI engine (GPT-4o, Claude, Gemini) generates complete Playwright test cases with selectors, assertions, and edge cases in seconds.',
-    color: 'from-violet-500/10 to-indigo-500/5',
-    border: 'border-violet-500/20',
+      'Describe what to test in plain English. A multi-model engine (GPT-4o, Claude, Gemini) writes complete Playwright cases - selectors, assertions, and edge cases - in seconds.',
   },
   {
-    icon: '🎭',
-    title: 'Live Browser Execution',
+    icon: MonitorPlay,
+    title: 'Live browser execution',
     description:
-      'Watch tests run in real-time via WebSocket streaming. Every click, assertion, and screenshot — streamed to your dashboard as it happens across Chromium, Firefox, and WebKit.',
-    color: 'from-indigo-500/10 to-blue-500/5',
-    border: 'border-indigo-500/20',
+      'Watch every test run in real time over WebSocket. Each click, assertion, and screenshot streams to your dashboard across Chromium, Firefox, and WebKit.',
   },
   {
-    icon: '🐛',
-    title: 'Auto Bug Detection',
+    icon: Bug,
+    title: 'Automatic bug reports',
     description:
-      'When tests fail, QA Forge automatically creates structured bug reports with the exact failure step, screenshot, error message, and environment context. Zero manual triage.',
-    color: 'from-rose-500/10 to-pink-500/5',
-    border: 'border-rose-500/20',
+      'When a test fails, QA Forge files a structured bug with the failing step, screenshot, error message, and environment context. Zero manual triage.',
   },
   {
-    icon: '🔐',
-    title: 'Enterprise Security',
+    icon: ShieldCheck,
+    title: 'Secure by construction',
     description:
-      'AES-256-GCM encryption for all API keys. Row-Level Security on every database table. JWT auth with live token validation on every request. Rate limiting built in.',
-    color: 'from-emerald-500/10 to-teal-500/5',
-    border: 'border-emerald-500/20',
+      'AES-256-GCM encryption for every API key. Row-Level Security on every table. Live JWT validation and built-in rate limiting on each request.',
   },
 ];
 
 const steps = [
   {
     number: '01',
-    title: 'Describe Your Test',
-    description: 'Write what you want to test in plain English — no code, no selectors, no setup.',
-    example: '"Test login with valid credentials, wrong password, and empty fields"',
+    title: 'Describe your test',
+    description: 'Write what you want to verify in plain English - no code, no selectors, no setup.',
+    example: 'Test login with valid, wrong, and empty credentials',
   },
   {
     number: '02',
-    title: 'AI Generates Test Cases',
-    description: 'QA Forge\'s multi-model AI engine creates comprehensive Playwright scripts in seconds.',
-    example: '→ 6 test cases generated with selectors, assertions & edge cases',
+    title: 'AI generates the cases',
+    description: 'The multi-model engine writes comprehensive Playwright scripts in seconds.',
+    example: '→ 6 cases · selectors · assertions · edge cases',
   },
   {
     number: '03',
-    title: 'Watch Them Run Live',
-    description: 'Execute against any URL. Watch every step via real-time WebSocket streaming.',
-    example: '→ Live screenshots, per-step timing, pass/fail verdict',
+    title: 'Watch them run live',
+    description: 'Execute against any URL and watch every step stream in over WebSocket.',
+    example: '→ live screenshots · per-step timing · verdict',
   },
 ];
 
 const techStack = [
-  { name: 'Playwright', icon: '🎭', desc: 'Cross-browser automation' },
-  { name: 'OpenAI GPT-4o', icon: '🤖', desc: 'AI test generation' },
-  { name: 'Claude Haiku', icon: '🔮', desc: 'Multi-model AI' },
-  { name: 'Gemini 2.0', icon: '✨', desc: 'Google AI engine' },
-  { name: 'Next.js 14', icon: '▲', desc: 'App router + SSR' },
-  { name: 'Supabase', icon: '⚡', desc: 'Auth + PostgreSQL' },
-  { name: 'Socket.io', icon: '📡', desc: 'Real-time streaming' },
-  { name: 'TypeScript', icon: '🔷', desc: 'Full type safety' },
+  'Playwright',
+  'OpenAI GPT-4o',
+  'Claude',
+  'Gemini',
+  'OpenRouter',
+  'Next.js 15',
+  'Supabase',
+  'Socket.io',
+  'TypeScript',
 ];
+
+function ConsolePreview() {
+  const rows = [
+    { glyph: '⚙', text: 'Connected to execution server', cls: 'text-console-accent' },
+    { glyph: '▶', text: 'Launching browser…', cls: 'text-console-info' },
+    { glyph: '✓', text: 'navigate → /login (212ms)', cls: 'text-console-success' },
+    { glyph: '✓', text: 'fill [name=email] (88ms)', cls: 'text-console-success' },
+    { glyph: '✓', text: 'click [type=submit] (142ms)', cls: 'text-console-success' },
+    { glyph: '✓', text: 'assert dashboard visible (96ms)', cls: 'text-console-success' },
+  ];
+  return (
+    <div className="overflow-hidden rounded-xl border border-console-border bg-console shadow-2xl shadow-foreground/5">
+      <div className="flex items-center gap-2 border-b border-console-border px-4 py-2.5">
+        <TerminalSquare className="size-4 text-console-muted" aria-hidden="true" />
+        <span className="font-mono text-xs text-console-muted">test-execution.log</span>
+        <span className="ml-auto inline-flex items-center gap-1.5 text-xs font-medium text-console-info">
+          <span className="relative flex size-2">
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-console-info opacity-70" />
+            <span className="relative inline-flex size-2 rounded-full bg-console-info" />
+          </span>
+          Live
+        </span>
+      </div>
+      <div className="space-y-1 p-4 font-mono text-xs leading-relaxed">
+        {rows.map((r, i) => (
+          <div key={i} className="flex gap-2.5">
+            <span className="select-none text-console-muted/70">10:24:0{i}</span>
+            <span className={r.cls}>
+              <span className="mr-1.5 opacity-90">{r.glyph}</span>
+              {r.text}
+            </span>
+          </div>
+        ))}
+        <div className="flex gap-2.5 pt-1 text-console-success">
+          <span className="select-none text-console-muted/70">10:24:07</span>
+          <span className="font-semibold">All steps passed ✓ (1.5s)</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
-
+    <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
       {/* ── Navigation ── */}
-      <nav className="fixed top-0 inset-x-0 z-50 h-16 flex items-center justify-between px-6 md:px-12 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-500 shadow-lg shadow-violet-500/30">
-            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-            </svg>
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur-md">
+        <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 md:px-8">
+          <Logo />
+          <div className="flex items-center gap-1 sm:gap-2">
+            <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
+              <Link href="/demo">Live demo</Link>
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/login">Sign in</Link>
+            </Button>
+            <Button size="sm" asChild>
+              <Link href="/login">
+                Get started
+                <ArrowRight />
+              </Link>
+            </Button>
           </div>
-          <span className="font-extrabold text-base tracking-tight gradient-text">QA Forge</span>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Link
-            href="/demo"
-            className="hidden sm:flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors duration-200"
-          >
-            Try Demo
-          </Link>
-          <Link
-            href="/login"
-            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-2 text-sm font-bold text-white shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-[1.02] transition-all duration-200"
-          >
-            Get Started →
-          </Link>
-        </div>
-      </nav>
+        </nav>
+      </header>
 
       {/* ── Hero ── */}
-      <section className="relative pt-32 pb-24 px-6 md:px-12 hero-gradient overflow-hidden">
-        {/* Background orbs */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-violet-600/5 blur-3xl pointer-events-none" />
-        <div className="absolute top-1/3 right-0 w-[400px] h-[400px] rounded-full bg-indigo-600/5 blur-3xl pointer-events-none" />
-
-        <div className="relative max-w-4xl mx-auto text-center">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/5 px-4 py-1.5 text-xs font-semibold text-violet-400 mb-8 animate-fade-in-up">
-            <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />
-            AI-Powered · Real-Time · Open Architecture
+      <section className="relative border-b border-border">
+        <div className="bg-grid pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_70%_60%_at_50%_0%,black,transparent)]" />
+        <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 py-20 md:px-8 lg:grid-cols-[1.05fr_1fr] lg:py-28">
+          <div>
+            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
+              <span className="size-1.5 rounded-full bg-primary" />
+              Live read-only demo · no signup
+            </span>
+            <h1 className="mt-6 text-balance text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
+              QA that thinks like an engineer.
+            </h1>
+            <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
+              Describe a test in plain English. AI writes the Playwright script. Watch every step
+              execute live - with screenshots, timings, and bugs filed automatically.
+            </p>
+            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+              <Button size="lg" asChild>
+                <Link href="/demo">
+                  Try the live demo
+                  <ArrowRight />
+                </Link>
+              </Button>
+              <Button size="lg" variant="outline" asChild>
+                <Link href="/login">Create free account</Link>
+              </Button>
+            </div>
+            <p className="mt-6 text-xs text-muted-foreground">
+              No credit card required · Built with TypeScript end to end
+            </p>
           </div>
 
-          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 leading-[1.05] animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-            QA that{' '}
-            <span className="gradient-text">thinks like</span>
-            <br />
-            an engineer
-          </h1>
-
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-            Describe your tests in <strong className="text-foreground">plain English</strong>. Let AI generate complete Playwright scripts.
-            Watch them execute <strong className="text-foreground">live in your browser</strong> — with real-time screenshots and auto bug reports.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-            <Link
-              href="/demo"
-              className="group flex items-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-8 py-4 text-base font-bold text-white shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-[1.03] transition-all duration-300"
-            >
-              <span>🚀</span> Try the Live Demo
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-300 group-hover:translate-x-1">
-                <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-              </svg>
-            </Link>
-            <Link
-              href="/login"
-              className="flex items-center gap-2 rounded-2xl border border-border bg-card px-8 py-4 text-base font-bold text-foreground hover:bg-muted hover:border-violet-500/30 transition-all duration-300"
-            >
-              Sign Up Free
-            </Link>
+          <div className="lg:pl-4">
+            <ConsolePreview />
           </div>
-
-          {/* Social proof */}
-          <p className="mt-8 text-xs text-muted-foreground animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
-            No credit card required · Read-only live demo · Built with TypeScript
-          </p>
         </div>
       </section>
 
       {/* ── Features ── */}
-      <section className="py-24 px-6 md:px-12">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <p className="text-xs font-bold tracking-widest uppercase text-violet-400 mb-3">Features</p>
-            <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight">
-              Everything a QA team needs,{' '}
-              <span className="gradient-text">minus the busywork</span>
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {features.map((f, i) => (
-              <div
-                key={f.title}
-                className={`group relative rounded-2xl border ${f.border} bg-gradient-to-br ${f.color} p-7 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl glow-border`}
-                style={{ animationDelay: `${i * 0.1}s` }}
-              >
-                <div className="text-4xl mb-4">{f.icon}</div>
-                <h3 className="text-lg font-bold mb-2">{f.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{f.description}</p>
-              </div>
-            ))}
-          </div>
+      <section className="mx-auto max-w-6xl px-5 py-20 md:px-8 lg:py-24">
+        <div className="max-w-2xl">
+          <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
+            Everything a QA team needs, minus the busywork.
+          </h2>
+          <p className="mt-4 text-lg leading-relaxed text-muted-foreground">
+            From a plain-English prompt to a passing test with evidence attached - in one flow.
+          </p>
         </div>
-      </section>
 
-      {/* ── How It Works ── */}
-      <section className="py-24 px-6 md:px-12 border-t border-border">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16">
-            <p className="text-xs font-bold tracking-widest uppercase text-violet-400 mb-3">How It Works</p>
-            <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight">
-              From idea to passing test in{' '}
-              <span className="gradient-text">3 steps</span>
-            </h2>
-          </div>
-
-          <div className="space-y-6">
-            {steps.map((step) => (
-              <div key={step.number} className="flex gap-6 md:gap-10 items-start p-7 rounded-2xl border border-border bg-card hover:border-violet-500/20 transition-all duration-300 hover:shadow-lg">
-                <div className="flex-shrink-0 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white font-black text-sm shadow-lg shadow-violet-500/20">
-                  {step.number}
+        <div className="mt-12 grid grid-cols-1 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-2">
+          {features.map((f) => {
+            const Icon = f.icon;
+            return (
+              <div key={f.title} className="flex gap-4 bg-card p-7">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Icon className="size-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold mb-1">{step.title}</h3>
-                  <p className="text-sm text-muted-foreground mb-3 leading-relaxed">{step.description}</p>
-                  <code className="text-xs font-mono text-violet-400 bg-violet-500/5 border border-violet-500/10 rounded-lg px-3 py-1.5 block">
-                    {step.example}
-                  </code>
+                  <h3 className="text-base font-semibold">{f.title}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                    {f.description}
+                  </p>
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
       </section>
 
-      {/* ── Tech Stack ── */}
-      <section className="py-24 px-6 md:px-12 border-t border-border">
-        <div className="max-w-5xl mx-auto text-center">
-          <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-4">Built With</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {techStack.map((tech) => (
-              <div
-                key={tech.name}
-                className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-card p-5 hover:border-violet-500/20 hover:bg-violet-500/3 transition-all duration-300"
-              >
-                <span className="text-2xl">{tech.icon}</span>
-                <span className="text-sm font-bold">{tech.name}</span>
-                <span className="text-xs text-muted-foreground">{tech.desc}</span>
-              </div>
+      {/* ── How it works (a genuine ordered sequence) ── */}
+      <section className="border-y border-border bg-secondary/40">
+        <div className="mx-auto max-w-6xl px-5 py-20 md:px-8 lg:py-24">
+          <h2 className="max-w-2xl text-balance text-3xl font-bold tracking-tight sm:text-4xl">
+            From idea to passing test in three steps.
+          </h2>
+
+          <ol className="mt-12 grid grid-cols-1 gap-8 md:grid-cols-3">
+            {steps.map((step) => (
+              <li key={step.number} className="relative">
+                <div className="font-mono text-sm font-semibold text-primary">{step.number}</div>
+                <h3 className="mt-3 text-lg font-semibold">{step.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  {step.description}
+                </p>
+                <code className="mt-4 block rounded-md border border-border bg-card px-3 py-2 font-mono text-xs leading-relaxed text-muted-foreground">
+                  {step.example}
+                </code>
+              </li>
             ))}
-          </div>
+          </ol>
         </div>
       </section>
 
-      {/* ── CTA ── */}
-      <section className="py-24 px-6 md:px-12 border-t border-border">
-        <div className="max-w-3xl mx-auto text-center">
-          <div className="rounded-3xl border border-violet-500/20 bg-gradient-to-br from-violet-600/10 to-indigo-600/5 p-12 relative overflow-hidden">
-            <div className="absolute inset-0 animate-shimmer" />
-            <h2 className="relative text-4xl md:text-5xl font-extrabold tracking-tight mb-4">
-              Ready to forge{' '}
-              <span className="gradient-text">quality?</span>
+      {/* ── Tech stack ── */}
+      <section className="mx-auto max-w-6xl px-5 py-16 md:px-8">
+        <p className="text-sm font-medium text-muted-foreground">Built with a production stack</p>
+        <div className="mt-5 flex flex-wrap gap-2.5">
+          {techStack.map((tech) => (
+            <span
+              key={tech}
+              className="rounded-full border border-border bg-card px-3.5 py-1.5 text-sm text-foreground"
+            >
+              {tech}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Closing CTA - the one dark instrument band ── */}
+      <section className="mx-auto max-w-6xl px-5 pb-20 md:px-8">
+        <div className="bg-grid relative overflow-hidden rounded-2xl border border-console-border bg-console px-8 py-14 text-center md:py-16">
+          <div className="relative mx-auto max-w-2xl">
+            <h2 className="text-balance text-3xl font-bold tracking-tight text-console-foreground sm:text-4xl">
+              See a test write itself and run.
             </h2>
-            <p className="relative text-muted-foreground mb-8 text-lg">
-              No credit card. No setup. Just describe your first test and watch it run.
+            <p className="mt-4 text-lg leading-relaxed text-console-muted">
+              No credit card. No setup. Open the demo and watch Playwright execute, step by step.
             </p>
-            <div className="relative flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link
-                href="/demo"
-                className="group flex items-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-8 py-4 text-base font-bold text-white shadow-xl shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-[1.03] transition-all duration-300"
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Button size="lg" asChild>
+                <Link href="/demo">
+                  Try the live demo
+                  <ArrowRight />
+                </Link>
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                asChild
+                className="border-console-border bg-transparent text-console-foreground hover:bg-white/5 hover:text-console-foreground"
               >
-                🚀 Try the Live Demo
-              </Link>
-              <Link
-                href="/login"
-                className="flex items-center gap-2 rounded-2xl border border-border bg-background px-8 py-4 text-base font-bold hover:bg-muted transition-all duration-300"
-              >
-                Create Free Account →
-              </Link>
+                <Link href="/login">Create free account</Link>
+              </Button>
             </div>
           </div>
         </div>
       </section>
 
       {/* ── Footer ── */}
-      <footer className="py-10 px-6 md:px-12 border-t border-border">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
+      <footer className="border-t border-border">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 py-8 text-sm text-muted-foreground sm:flex-row md:px-8">
           <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-tr from-violet-600 to-indigo-500">
-              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-              </svg>
-            </div>
-            <span className="font-bold text-foreground">QA Forge</span>
+            <LogoMark className="size-6" />
+            <span className="font-semibold text-foreground">QA Forge</span>
             <span>· Built by SYED · {new Date().getFullYear()}</span>
           </div>
           <div className="flex items-center gap-6">
-            <Link href="/demo" className="hover:text-foreground transition-colors">Demo</Link>
-            <Link href="/login" className="hover:text-foreground transition-colors">Sign In</Link>
-            <a href="https://github.com/S-YED" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">GitHub</a>
+            <Link href="/demo" className="transition-colors hover:text-foreground">
+              Demo
+            </Link>
+            <Link href="/login" className="transition-colors hover:text-foreground">
+              Sign in
+            </Link>
+            <a
+              href="https://github.com/S-YED"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition-colors hover:text-foreground"
+            >
+              GitHub
+            </a>
           </div>
         </div>
       </footer>

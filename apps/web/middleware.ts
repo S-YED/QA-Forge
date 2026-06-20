@@ -19,7 +19,7 @@ export async function middleware(request: NextRequest) {
   const middlewareClient = createMiddlewareClient(request);
   const { supabase } = middlewareClient;
 
-  // Refresh the session — IMPORTANT: always call getUser() so cookies stay fresh
+  // Refresh the session - IMPORTANT: always call getUser() so cookies stay fresh
   const {
     data: { user },
   } = await supabase.auth.getUser();

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 
-type Theme = 'dark' | 'light';
+type Theme = 'light' | 'dark';
 
 interface ThemeContextValue {
   theme: Theme;
@@ -10,7 +10,7 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: 'dark',
+  theme: 'light',
   toggleTheme: () => {},
 });
 
@@ -19,42 +19,25 @@ export function useTheme() {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('dark');
-  const [mounted, setMounted] = useState(false);
+  // The pre-paint script in layout.tsx has already set the `.dark` class; read
+  // back from the DOM so provider state matches what's on screen (no flash).
+  const [theme, setTheme] = useState<Theme>('light');
 
   useEffect(() => {
-    const stored = localStorage.getItem('qaforge-theme') as Theme | null;
-    const initial = stored ?? 'dark';
-    setTheme(initial);
-    applyTheme(initial);
-    setMounted(true);
+    setTheme(document.documentElement.classList.contains('dark') ? 'dark' : 'light');
   }, []);
 
-  function applyTheme(t: Theme) {
-    const root = document.documentElement;
-    if (t === 'dark') {
-      root.classList.add('dark');
-      root.classList.remove('light');
-    } else {
-      root.classList.add('light');
-      root.classList.remove('dark');
-    }
-  }
-
   function toggleTheme() {
-    const next: Theme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-    applyTheme(next);
-    localStorage.setItem('qaforge-theme', next);
-  }
-
-  // Prevent flash of wrong theme — render invisible until mounted
-  if (!mounted) {
-    return (
-      <div style={{ visibility: 'hidden' }}>
-        {children}
-      </div>
-    );
+    setTheme((prev) => {
+      const next: Theme = prev === 'dark' ? 'light' : 'dark';
+      document.documentElement.classList.toggle('dark', next === 'dark');
+      try {
+        localStorage.setItem('qaforge-theme', next);
+      } catch {
+        /* storage unavailable - theme still applies for the session */
+      }
+      return next;
+    });
   }
 
   return (

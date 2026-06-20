@@ -122,7 +122,25 @@
       "Bash(echo \"=== commit exit: $? ===\")",
       "Bash(timeout 280 npx gitnexus analyze)",
       "Bash(echo \"=== exit: $? ===\")",
-      "Bash(gh auth *)"
+      "Bash(gh auth *)",
+      "Bash(git push *)",
+      "Bash(gh pr create --base main --head demo-prod-ready-2026-06-13 --title 'Make QA Forge demo-ready & production-ready \\(16-gate goal\\)' --body ' *)"
     ]
-  }
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:\\\\Users\\\\Syed Khaja Moinuddin\\\\.claude\\\\skills\\\\impeccable\\\\scripts\\\\hook.mjs\"",
+            "timeout": 5,
+            "statusMessage": "Checking UI changes"
+          }
+        ]
+      }
+    ]
+  },
+  "description": "Impeccable design detector: runs after Edit/Write/MultiEdit on UI files and surfaces findings as system reminders."
 }
