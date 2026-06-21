@@ -91,11 +91,10 @@ Database connection string: Dashboard → **Project Settings** → **Database** 
 
 > **Build config lives in `nixpacks.toml` + `railway.json` at the repo root, so leave the Railway build/start fields blank.** Railway sets `NODE_ENV=production`, which makes pnpm skip `devDependencies` - and `typescript` (`tsc`) is a devDependency the build needs. `nixpacks.toml` overrides the install phase to run a single `NODE_ENV=development pnpm install --frozen-lockfile`, so dev deps are present for the `tsc` build steps. Doing it as one install (instead of a second install in the build phase) avoids pnpm's prod-to-dev "remove and reinstall node_modules from scratch" purge, which is interactive and wipes `node_modules` mid-build. Runtime is unaffected: the start command runs precompiled JS under production `NODE_ENV`.
 
-**Build command breakdown:**
+**What `nixpacks.toml` does:**
 
-1. `pnpm install --frozen-lockfile` — installs all dependencies from the repo root, resolving every `workspace:*` reference.
-2. `pnpm --filter @qaforge/shared-types build` — compiles the shared-types package first (required because `@qaforge/api` imports from it).
-3. `pnpm --filter @qaforge/api build` — runs `tsc` in `apps/api`, compiling `src/` to `dist/`.
+1. **install** (dev mode, one pass): `corepack enable` then `CI=1 NODE_ENV=development pnpm install --frozen-lockfile` - installs all deps incl. devDependencies (`typescript`), resolving every `workspace:*` reference.
+2. **build**: `pnpm --filter '@qaforge/api...' build` - the trailing `...` selects `@qaforge/api` **plus every workspace package it depends on** (`shared-types`, `ai-engine`, `playwright-runner`) and builds them in topological order, so each package's `dist/*.d.ts` exists before the API's `tsc` resolves its imports. Building only `shared-types` + `api` fails with `Cannot find module '@qaforge/ai-engine'`.
 
 **Start command:** Because there is no Root Directory set, the working directory is the repo root, so the start command must include the relative path `apps/api/dist/index.js`.
 

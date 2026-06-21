@@ -15,8 +15,11 @@ cmds = [
   "CI=1 NODE_ENV=development pnpm install --frozen-lockfile",
 ]
 
+# Build the API AND its workspace deps in dependency order. The trailing "..."
+# selects @qaforge/api plus every workspace package it depends on
+# (shared-types, ai-engine, playwright-runner); pnpm runs them topologically, so
+# each package's dist/*.d.ts exists before the API's tsc resolves its imports.
 [phases.build]
 cmds = [
-  "pnpm --filter @qaforge/shared-types build",
-  "pnpm --filter @qaforge/api build",
+  "pnpm --filter '@qaforge/api...' build",
 ]
