@@ -86,10 +86,10 @@ Database connection string: Dashboard → **Project Settings** → **Database** 
 
 | Setting | Value |
 |---|---|
-| Build Command | `NODE_ENV=development pnpm install --frozen-lockfile && pnpm --filter @qaforge/shared-types build && pnpm --filter @qaforge/api build` |
-| Start Command | `node apps/api/dist/index.js` |
+| Build Command | *leave blank - configured by `nixpacks.toml`* |
+| Start Command | *leave blank - configured by `railway.json`* (`node apps/api/dist/index.js`) |
 
-> **Why `NODE_ENV=development` on the install?** Nixpacks/Railway sets `NODE_ENV=production`, which makes pnpm skip `devDependencies`. `typescript` (the `tsc` used by both build steps) is a devDependency, so the build fails with `tsc: not found`. pnpm 9.x honors the `NODE_ENV` env var over the `--prod=false` flag, so the flag alone is not enough — you must override the env var for the install step. The runtime start command only needs compiled JS, so production `NODE_ENV` at runtime is unaffected. (A committed `railway.json` at the repo root already sets this, so manual entry is optional.)
+> **Build config lives in `nixpacks.toml` + `railway.json` at the repo root, so leave the Railway build/start fields blank.** Railway sets `NODE_ENV=production`, which makes pnpm skip `devDependencies` - and `typescript` (`tsc`) is a devDependency the build needs. `nixpacks.toml` overrides the install phase to run a single `NODE_ENV=development pnpm install --frozen-lockfile`, so dev deps are present for the `tsc` build steps. Doing it as one install (instead of a second install in the build phase) avoids pnpm's prod-to-dev "remove and reinstall node_modules from scratch" purge, which is interactive and wipes `node_modules` mid-build. Runtime is unaffected: the start command runs precompiled JS under production `NODE_ENV`.
 
 **Build command breakdown:**
 
