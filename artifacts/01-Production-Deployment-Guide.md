@@ -86,10 +86,10 @@ Database connection string: Dashboard → **Project Settings** → **Database** 
 
 | Setting | Value |
 |---|---|
-| Build Command | `pnpm install --prod=false --frozen-lockfile && pnpm --filter @qaforge/shared-types build && pnpm --filter @qaforge/api build` |
+| Build Command | `NODE_ENV=development pnpm install --frozen-lockfile && pnpm --filter @qaforge/shared-types build && pnpm --filter @qaforge/api build` |
 | Start Command | `node apps/api/dist/index.js` |
 
-> **Why `--prod=false`?** Railway sets `NODE_ENV=production`, which makes pnpm skip `devDependencies`. `typescript` (the `tsc` used by both build steps) is a devDependency, so without `--prod=false` the build fails with `tsc: not found`. `--prod=false` forces dev deps to install for the build; the runtime start command only needs compiled JS. (A committed `railway.json` at the repo root already sets this, so manual entry is optional.)
+> **Why `NODE_ENV=development` on the install?** Nixpacks/Railway sets `NODE_ENV=production`, which makes pnpm skip `devDependencies`. `typescript` (the `tsc` used by both build steps) is a devDependency, so the build fails with `tsc: not found`. pnpm 9.x honors the `NODE_ENV` env var over the `--prod=false` flag, so the flag alone is not enough — you must override the env var for the install step. The runtime start command only needs compiled JS, so production `NODE_ENV` at runtime is unaffected. (A committed `railway.json` at the repo root already sets this, so manual entry is optional.)
 
 **Build command breakdown:**
 
