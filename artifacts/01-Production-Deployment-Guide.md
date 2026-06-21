@@ -86,8 +86,10 @@ Database connection string: Dashboard → **Project Settings** → **Database** 
 
 | Setting | Value |
 |---|---|
-| Build Command | `pnpm install --frozen-lockfile && pnpm --filter @qaforge/shared-types build && pnpm --filter @qaforge/api build` |
+| Build Command | `pnpm install --prod=false --frozen-lockfile && pnpm --filter @qaforge/shared-types build && pnpm --filter @qaforge/api build` |
 | Start Command | `node apps/api/dist/index.js` |
+
+> **Why `--prod=false`?** Railway sets `NODE_ENV=production`, which makes pnpm skip `devDependencies`. `typescript` (the `tsc` used by both build steps) is a devDependency, so without `--prod=false` the build fails with `tsc: not found`. `--prod=false` forces dev deps to install for the build; the runtime start command only needs compiled JS. (A committed `railway.json` at the repo root already sets this, so manual entry is optional.)
 
 **Build command breakdown:**
 
