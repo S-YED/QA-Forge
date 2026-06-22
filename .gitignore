@@ -43,3 +43,4 @@ gstack-main/
 .agents/
 Resume/
 skills-lock.json
+.vercel
