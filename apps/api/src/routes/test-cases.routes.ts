@@ -45,7 +45,7 @@ async function verifyOwnership(projectId: string, suiteId: string, userId: strin
 
 router.get('/', async (req, res, next) => {
   try {
-    const { projectId, suiteId } = req.params;
+    const { projectId, suiteId } = req.params as any;
 
     if (!(await verifyOwnership(projectId, suiteId, req.user.id))) {
       return next(new AppError('NOT_FOUND', 404, 'Suite not found'));
@@ -72,7 +72,7 @@ router.get(
   validate(uuidParamsSchema, 'params'),
   async (req, res, next) => {
     try {
-      const { projectId, suiteId } = req.params;
+      const { projectId, suiteId } = req.params as any;
 
       if (!(await verifyOwnership(projectId, suiteId, req.user.id))) {
         return next(new AppError('NOT_FOUND', 404, 'Suite not found'));
@@ -110,7 +110,7 @@ const createTestCaseSchema = z.object({
 
 router.post('/', validate(createTestCaseSchema), async (req, res, next) => {
   try {
-    const { projectId, suiteId } = req.params;
+    const { projectId, suiteId } = req.params as any;
 
     if (!(await verifyOwnership(projectId, suiteId, req.user.id))) {
       return next(new AppError('NOT_FOUND', 404, 'Suite not found'));
@@ -165,7 +165,7 @@ router.put(
   validate(updateTestCaseSchema),
   async (req, res, next) => {
     try {
-      const { projectId, suiteId } = req.params;
+      const { projectId, suiteId } = req.params as any;
 
       if (!(await verifyOwnership(projectId, suiteId, req.user.id))) {
         return next(new AppError('NOT_FOUND', 404, 'Suite not found'));
@@ -200,7 +200,7 @@ router.delete(
   validate(uuidParamsSchema, 'params'),
   async (req, res, next) => {
     try {
-      const { projectId, suiteId } = req.params;
+      const { projectId, suiteId } = req.params as any;
 
       if (!(await verifyOwnership(projectId, suiteId, req.user.id))) {
         return next(new AppError('NOT_FOUND', 404, 'Suite not found'));

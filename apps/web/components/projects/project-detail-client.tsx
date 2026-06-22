@@ -2,11 +2,16 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { ArrowLeft, Globe, Sparkles } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
-import { cn } from '@/lib/utils';
 import { TestSuitesTab } from '@/components/projects/test-suites-tab';
 import { TestRunsTab } from '@/components/projects/test-runs-tab';
+import { TestRecordingsTab } from '@/components/projects/test-recordings-tab';
 import { AIGeneratePanel } from '@/components/projects/ai-generate-panel';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Stat, StatGroup } from '@/components/shared/stat';
+import { CenteredSpinner } from '@/components/shared/spinner';
 import type { Project, TestSuite, TestRun } from '@qaforge/shared-types';
 
 interface ProjectDetailResponse {
@@ -25,7 +30,7 @@ interface RunsResponse {
   per_page: number;
 }
 
-type TabId = 'suites' | 'runs';
+type TabId = 'suites' | 'runs' | 'recordings';
 
 export function ProjectDetailClient({ projectId }: { projectId: string }) {
   const router = useRouter();
@@ -34,6 +39,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
   const [suites, setSuites] = useState<SuitesResponse['suites']>([]);
   const [runs, setRuns] = useState<TestRun[]>([]);
   const [runsCount, setRunsCount] = useState(0);
+  const [recordingsCount, setRecordingsCount] = useState(0);
   const [activeTab, setActiveTab] = useState<TabId>('suites');
   const [loading, setLoading] = useState(true);
   const [showAIPanel, setShowAIPanel] = useState(false);
@@ -50,149 +56,152 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
 
   const fetchSuites = useCallback(async () => {
     try {
-      const data = await apiClient.get<SuitesResponse>(
-        `/api/projects/${projectId}/test-suites`,
-      );
+      const data = await apiClient.get<SuitesResponse>(`/api/projects/${projectId}/test-suites`);
       setSuites(data.suites ?? []);
-    } catch { /* handled by apiClient */ }
+    } catch {
+      /* handled by apiClient */
+    }
   }, [projectId]);
 
-  const fetchRuns = useCallback(async (page = 1) => {
+  const fetchRuns = useCallback(
+    async (page = 1) => {
+      try {
+        const data = await apiClient.get<RunsResponse>(
+          `/api/projects/${projectId}/test-runs?page=${page}&per_page=20`,
+        );
+        setRuns(data.test_runs ?? []);
+        setRunsCount(data.count ?? 0);
+      } catch {
+        /* handled by apiClient */
+      }
+    },
+    [projectId],
+  );
+
+  const fetchRecordings = useCallback(async () => {
     try {
-      const data = await apiClient.get<RunsResponse>(
-        `/api/projects/${projectId}/test-runs?page=${page}&per_page=20`,
+      const data = await apiClient.get<{ recorded_sessions: unknown[] }>(
+        `/api/projects/${projectId}/recorded-sessions`,
       );
-      setRuns(data.test_runs ?? []);
-      setRunsCount(data.count ?? 0);
-    } catch { /* handled by apiClient */ }
+      setRecordingsCount(data.recorded_sessions?.length ?? 0);
+    } catch {
+      /* handled by apiClient */
+    }
   }, [projectId]);
 
   useEffect(() => {
-    Promise.all([fetchProject(), fetchSuites(), fetchRuns()]).finally(() =>
+    Promise.all([fetchProject(), fetchSuites(), fetchRuns(), fetchRecordings()]).finally(() =>
       setLoading(false),
     );
-  }, [fetchProject, fetchSuites, fetchRuns]);
+  }, [fetchProject, fetchSuites, fetchRuns, fetchRecordings]);
 
   const tabs: { id: TabId; label: string; count: number }[] = [
-    { id: 'suites', label: 'Test Suites', count: suites.length },
-    { id: 'runs', label: 'Test Runs', count: runsCount },
+    { id: 'suites', label: 'Suites', count: suites.length },
+    { id: 'runs', label: 'Runs', count: runsCount },
+    { id: 'recordings', label: 'Recordings', count: recordingsCount },
   ];
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
-      </div>
-    );
+    return <CenteredSpinner label="Loading project…" />;
   }
 
   if (!project) return null;
 
-  const passRate = stats.total_runs > 0
-    ? Math.round((stats.passed_runs / stats.total_runs) * 100)
-    : 0;
+  const passRate =
+    stats.total_runs > 0 ? Math.round((stats.passed_runs / stats.total_runs) * 100) : 0;
 
   return (
-    <div className="space-y-6">
-      {/* ── Overview Header ────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <button
-            onClick={() => router.push('/dashboard/projects')}
-            className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-            Projects
-          </button>
-          <h1 className="text-3xl font-bold tracking-tight truncate">{project.name}</h1>
-          {project.description && (
-            <p className="text-muted-foreground mt-1 line-clamp-2">{project.description}</p>
-          )}
-          {project.base_url && (
-            <p className="mt-1 text-xs font-mono text-muted-foreground/70 truncate">
-              {project.base_url}
-            </p>
-          )}
-        </div>
-
-        {/* Stats Cards */}
-        <div className="flex gap-3 shrink-0">
-          <div className="rounded-lg border bg-card p-3 min-w-[100px] text-center shadow-sm">
-            <p className="text-2xl font-bold">{stats.total_runs}</p>
-            <p className="text-xs text-muted-foreground">Total Runs</p>
-          </div>
-          <div className="rounded-lg border bg-card p-3 min-w-[100px] text-center shadow-sm">
-            <p className="text-2xl font-bold text-emerald-500">{stats.passed_runs}</p>
-            <p className="text-xs text-muted-foreground">Passed</p>
-          </div>
-          <div className="rounded-lg border bg-card p-3 min-w-[100px] text-center shadow-sm">
-            <p className="text-2xl font-bold text-red-400">{stats.failed_runs}</p>
-            <p className="text-xs text-muted-foreground">Failed</p>
-          </div>
-          {stats.total_runs > 0 && (
-            <div className="rounded-lg border bg-card p-3 min-w-[100px] text-center shadow-sm">
-              <p className={cn("text-2xl font-bold", passRate >= 80 ? 'text-emerald-500' : passRate >= 50 ? 'text-amber-400' : 'text-red-400')}>
-                {passRate}%
-              </p>
-              <p className="text-xs text-muted-foreground">Pass Rate</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Tab Navigation ─────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-b">
-        <div className="flex">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                'relative px-4 py-3 text-sm font-medium transition-colors',
-                activeTab === tab.id
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground/80',
-              )}
-            >
-              {tab.label}
-              <span className="ml-1.5 text-xs text-muted-foreground/60">({tab.count})</span>
-              {activeTab === tab.id && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t" />
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* AI Generate FAB */}
+    <div className="space-y-8">
+      {/* ── Overview header ────────────────────────────────────────────────── */}
+      <div>
         <button
-          onClick={() => setShowAIPanel(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-md transition-all hover:shadow-lg hover:from-violet-500 hover:to-indigo-500 active:scale-[0.98]"
+          onClick={() => router.push('/dashboard/projects')}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 3v3m6.36-.64-2.12 2.12M21 12h-3M18.36 18.36l-2.12-2.12M12 21v-3M5.64 18.36l2.12-2.12M3 12h3M5.64 5.64l2.12 2.12"/>
-          </svg>
-          AI Generate
+          <ArrowLeft className="size-4" />
+          Back to projects
         </button>
+
+        <div className="mt-3 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-2.5">
+            <h1 className="truncate text-2xl font-bold tracking-tight lg:text-3xl">
+              {project.name}
+            </h1>
+            {project.description && (
+              <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                {project.description}
+              </p>
+            )}
+            {project.base_url && (
+              <a
+                href={project.base_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex max-w-full items-center gap-1.5 rounded-md border bg-secondary px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Globe className="size-3.5 shrink-0 text-primary" />
+                <span className="truncate font-mono">{project.base_url}</span>
+              </a>
+            )}
+          </div>
+
+          <div className="shrink-0 rounded-lg border bg-card px-5 py-4">
+            <StatGroup>
+              <Stat label="Total runs" value={stats.total_runs} />
+              <Stat label="Passed" value={stats.passed_runs} valueClassName="text-success" />
+              <Stat
+                label="Failed"
+                value={stats.failed_runs}
+                valueClassName={stats.failed_runs > 0 ? 'text-destructive' : undefined}
+              />
+              {stats.total_runs > 0 && (
+                <Stat
+                  label="Pass rate"
+                  value={`${passRate}%`}
+                  valueClassName={
+                    passRate >= 80
+                      ? 'text-success'
+                      : passRate >= 50
+                        ? 'text-warning'
+                        : 'text-destructive'
+                  }
+                />
+              )}
+            </StatGroup>
+          </div>
+        </div>
       </div>
 
-      {/* ── Tab Content ────────────────────────────────────────────────────── */}
-      {activeTab === 'suites' && (
-        <TestSuitesTab
-          projectId={projectId}
-          suites={suites}
-          onRefresh={fetchSuites}
-        />
-      )}
-      {activeTab === 'runs' && (
-        <TestRunsTab
-          projectId={projectId}
-          runs={runs}
-          totalCount={runsCount}
-          onRefresh={fetchRuns}
-        />
-      )}
+      {/* ── Tabs ───────────────────────────────────────────────────────────── */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)} className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <TabsList>
+            {tabs.map((tab) => (
+              <TabsTrigger key={tab.id} value={tab.id}>
+                {tab.label}
+                <span className="font-mono text-xs text-muted-foreground">{tab.count}</span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-      {/* ── AI Generate Slide-over Panel ───────────────────────────────────── */}
+          <Button onClick={() => setShowAIPanel(true)}>
+            <Sparkles />
+            AI generate
+          </Button>
+        </div>
+
+        <TabsContent value="suites">
+          <TestSuitesTab projectId={projectId} suites={suites} onRefresh={fetchSuites} />
+        </TabsContent>
+        <TabsContent value="runs">
+          <TestRunsTab projectId={projectId} runs={runs} totalCount={runsCount} onRefresh={fetchRuns} />
+        </TabsContent>
+        <TabsContent value="recordings">
+          <TestRecordingsTab projectId={projectId} />
+        </TabsContent>
+      </Tabs>
+
+      {/* ── AI Generate slide-over ─────────────────────────────────────────── */}
       <AIGeneratePanel
         projectId={projectId}
         suites={suites}

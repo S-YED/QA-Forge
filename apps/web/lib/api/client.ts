@@ -24,14 +24,20 @@ async function handleResponse<T>(response: Response): Promise<T> {
     const supabase = createClient();
     await supabase.auth.signOut();
     window.location.href = '/login';
-    throw new Error('Unauthorized — session expired');
+    throw new Error('Unauthorized - session expired');
   }
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({
-      message: response.statusText,
-    }));
-    throw new Error(errorBody.message ?? `Request failed: ${response.status}`);
+    const errorBody = await response.json().catch(() => null);
+    // The API wraps errors as { error: { code, message, details } } (see
+    // apps/api error-handler + 404 handler). Prefer that nested message, then
+    // a top-level message, then a generic fallback.
+    const message =
+      errorBody?.error?.message ??
+      errorBody?.message ??
+      response.statusText ??
+      `Request failed: ${response.status}`;
+    throw new Error(message);
   }
 
   // Handle 204 No Content

@@ -1,0 +1,26 @@
+# Vercel rebuilds deps + Next output remotely; only source is needed for the build.
+node_modules
+**/node_modules
+.git
+.next
+**/.next
+.turbo
+**/.turbo
+**/dist
+**/coverage
+.gitnexus
+.codex
+supabase/.temp
+supabase/.branches
+*.log
+playwright-report
+**/test-results
+# Not part of the web build. ANCHORED with leading "/" so these only match the
+# repo root - a bare "supabase" would also match apps/web/lib/supabase/ (the web
+# Supabase client) and break the build.
+/gstack-main
+/Resume
+/docs
+/artifacts
+/supabase
+/supabase_status.txt

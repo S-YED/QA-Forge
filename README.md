@@ -10,8 +10,8 @@
 
 [![License](https://img.shields.io/badge/License-Proprietary-8B5CF6?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMiI+PHBhdGggZD0iTTEyIDJ2MjAiLz48cGF0aCBkPSJNMiAxMmgyMCIvPjwvc3ZnPg==)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Next.js](https://img.shields.io/badge/Next.js-14-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
-[![Playwright](https://img.shields.io/badge/Playwright-1.49-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![Playwright](https://img.shields.io/badge/Playwright-1.58-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3FCF8E?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com/)
 [![Turborepo](https://img.shields.io/badge/Turborepo-Monorepo-EF4444?style=flat-square&logo=turborepo&logoColor=white)](https://turbo.build/)
 
@@ -19,13 +19,34 @@
 
 **Describe your tests in plain English. Let AI generate them. Watch Playwright execute them — live.**
 
-[🚀 Quick Start](#-quick-start) · [✨ Features](#-features) · [🏗️ Architecture](#️-architecture) · [📦 Packages](#-monorepo-packages) · [🗺️ Roadmap](#️-roadmap)
+[🎬 Live Demo](#-live-demo) · [🚀 Quick Start](#-quick-start) · [✨ Features](#-features) · [🏗️ Architecture](#️-architecture) · [📦 Packages](#-monorepo-packages) · [🗺️ Roadmap](#️-roadmap)
 
 <br />
 
 ---
 
 </div>
+
+<br />
+
+## 🎬 Live Demo
+
+> **No signup. No setup. Click and explore.**
+
+QA Forge ships with a public **read-only demo** that auto-signs you into a fully seeded account — three projects, real test suites and cases, and completed test runs you can replay step-by-step in the live streaming terminal.
+
+| | |
+|---|---|
+| **Demo link** | `/demo` (auto-signs in as the read-only demo account) |
+| **What you'll see** | Seeded projects → test suites → cases → **replay a run live** in the violet-glow terminal with a per-step screenshot filmstrip + auto-filed bugs |
+| **Locally** | `pnpm dev`, then open [`http://localhost:3000/demo`](http://localhost:3000/demo) |
+| **Hosted** | _Add your Vercel URL here once deployed — see [`artifacts/01-Production-Deployment-Guide.md`](artifacts/01-Production-Deployment-Guide.md)_ |
+
+Demo mode is **read-only at two layers** — an API guard blocks every mutating verb, and restrictive RLS policies block direct database writes — so the sandbox stays pristine no matter who's clicking. Want to create your own projects and run real AI generation? [Sign up](#-quick-start) and add a provider key in **Settings → API Keys**.
+
+<br />
+
+---
 
 <br />
 
@@ -128,7 +149,7 @@ QA Forge is built as a **pnpm + Turborepo monorepo** — every component is a fi
 ```
 qaforge/
 ├── apps/
-│   ├── web/                    # Next.js 14 App Router — Dashboard & Auth
+│   ├── web/                    # Next.js 15 App Router — Dashboard & Auth
 │   └── api/                    # Express.js — REST API & WebSocket Server
 ├── packages/
 │   ├── ai-engine/              # Multi-provider AI test case generation
@@ -137,7 +158,7 @@ qaforge/
 │   ├── export-engine/          # Test report export (Coming Soon)
 │   └── integrations/           # Jira, GitHub, Slack (Coming Soon)
 ├── supabase/
-│   ├── migrations/             # 17 PostgreSQL migration files
+│   ├── migrations/             # 20 PostgreSQL migration files
 │   ├── seed.sql                # Development seed data
 │   └── config.toml             # Local Supabase configuration
 └── turbo.json                  # Turborepo pipeline configuration
@@ -149,7 +170,7 @@ qaforge/
 
 | Package | Description | Key Tech |
 |:--------|:------------|:---------|
-| **`@qaforge/web`** | Next.js 14 dashboard with SSR auth, project management, live test monitoring, and settings | Next.js, React 18, Tailwind CSS, Supabase SSR, Socket.io Client |
+| **`@qaforge/web`** | Next.js 15 dashboard with SSR auth, project management, live test monitoring, and settings | Next.js, React 18, Tailwind CSS, Supabase SSR, Socket.io Client |
 | **`@qaforge/api`** | Express REST API with JWT auth, Zod validation, AES encryption, WebSocket orchestration | Express, Zod, Winston, Socket.io, AES-256-GCM |
 | **`@qaforge/ai-engine`** | Multi-provider AI client for test case generation from natural language prompts | OpenAI GPT-4o, Claude Haiku, Gemini 2.0 Flash |
 | **`@qaforge/playwright-runner`** | Headless browser automation engine with keyword-to-Playwright instruction mapping | Playwright (Chromium, Firefox, WebKit) |
@@ -204,7 +225,7 @@ JWT_SECRET=<your-supabase-jwt-secret>
 
 ```bash
 npx supabase start       # Spins up local Supabase (PostgreSQL + Auth + Storage)
-npx supabase db reset     # Applies all 17 migrations + seed data
+npx supabase db reset     # Applies all 20 migrations + seed data
 ```
 
 ### 4️⃣ Launch Development
@@ -400,7 +421,7 @@ socket.on('test:error',         (data) => { /* Execution error */ });
 *Completed*
 
 - [x] Monorepo setup (pnpm + Turborepo)
-- [x] 17 PostgreSQL migrations + RLS
+- [x] 20 PostgreSQL migrations + RLS
 - [x] Express API with JWT auth
 - [x] AES-256-GCM key encryption
 - [x] Next.js dashboard with SSR auth
@@ -459,7 +480,7 @@ socket.on('test:error',         (data) => { /* Execution error */ });
 
 | Layer | Technology | Why |
 |:------|:-----------|:----|
-| **Frontend** | Next.js 14 + React 18 + Tailwind CSS | SSR auth, App Router, rapid UI |
+| **Frontend** | Next.js 15 + React 18 + Tailwind CSS | SSR auth, App Router, rapid UI |
 | **Backend** | Express.js + TypeScript | Battle-tested, WebSocket-native |
 | **AI** | OpenAI / Anthropic / Google AI | Multi-provider flexibility |
 | **Browser Engine** | Playwright | Cross-browser automation |

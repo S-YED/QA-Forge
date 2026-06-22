@@ -1,8 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { apiClient } from '@/lib/api/client';
 import type { Profile } from '@qaforge/shared-types';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/shared/spinner';
 
 interface ProfileFormProps {
   profile: Profile;
@@ -12,117 +18,81 @@ export function ProfileForm({ profile }: ProfileFormProps) {
   const [fullName, setFullName] = useState(profile.full_name ?? '');
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? '');
   const [loading, setLoading] = useState(false);
-  const [feedback, setFeedback] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setFeedback(null);
 
     try {
       await apiClient.put('/api/auth/me', {
         full_name: fullName || undefined,
         avatar_url: avatarUrl || undefined,
       });
-      setFeedback({ type: 'success', message: 'Profile updated successfully' });
+      toast.success('Profile updated successfully');
     } catch (err) {
-      setFeedback({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Failed to update profile',
-      });
+      toast.error(err instanceof Error ? err.message : 'Failed to update profile');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="rounded-lg border bg-card p-6 shadow-sm max-w-lg">
-      {feedback && (
-        <div
-          className={`mb-4 rounded-md p-3 text-sm ${
-            feedback.type === 'success'
-              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-              : 'bg-destructive/10 text-destructive'
-          }`}
-        >
-          {feedback.message}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <label
-            htmlFor="profile-email"
-            className="text-sm font-medium leading-none"
-          >
-            Email
-          </label>
-          <input
-            id="profile-email"
-            type="email"
-            value={profile.email}
-            disabled
-            className="flex h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground cursor-not-allowed"
-          />
-          <p className="text-xs text-muted-foreground">
-            Email cannot be changed.
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <label
-            htmlFor="profile-name"
-            className="text-sm font-medium leading-none"
-          >
-            Full Name
-          </label>
-          <input
-            id="profile-name"
-            type="text"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            placeholder="Your full name"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label
-            htmlFor="profile-avatar"
-            className="text-sm font-medium leading-none"
-          >
-            Avatar URL
-          </label>
-          <input
-            id="profile-avatar"
-            type="url"
-            value={avatarUrl}
-            onChange={(e) => setAvatarUrl(e.target.value)}
-            placeholder="https://example.com/avatar.jpg"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium leading-none">Role</label>
-          <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground">
-            {profile.role}
+    <Card className="max-w-lg">
+      <CardContent className="pt-5">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="profile-email">Email</Label>
+            <Input
+              id="profile-email"
+              type="email"
+              value={profile.email}
+              disabled
+              className="bg-muted text-muted-foreground"
+            />
+            <p className="text-xs text-muted-foreground">Email cannot be changed.</p>
           </div>
-        </div>
 
-        <div className="pt-2">
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none"
-          >
-            {loading ? 'Saving...' : 'Save Changes'}
-          </button>
-        </div>
-      </form>
-    </div>
+          <div className="space-y-2">
+            <Label htmlFor="profile-name">Full name</Label>
+            <Input
+              id="profile-name"
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Your full name"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="profile-avatar">Avatar URL</Label>
+            <Input
+              id="profile-avatar"
+              type="url"
+              value={avatarUrl}
+              onChange={(e) => setAvatarUrl(e.target.value)}
+              placeholder="https://example.com/avatar.jpg"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="profile-role">Role</Label>
+            <Input
+              id="profile-role"
+              type="text"
+              value={profile.role}
+              disabled
+              className="bg-muted capitalize text-muted-foreground"
+            />
+          </div>
+
+          <div className="pt-1">
+            <Button type="submit" disabled={loading}>
+              {loading && <Spinner className="text-current" />}
+              {loading ? 'Saving…' : 'Save changes'}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

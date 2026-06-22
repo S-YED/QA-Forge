@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { AiKeysManager } from '@/components/settings/ai-keys-manager';
+import { PageHeader } from '@/components/shared/page-header';
 import type { ApiKeyResponse } from '@qaforge/shared-types';
 
 /** Matches GET /api/api-keys response shape from the backend */
@@ -26,10 +27,10 @@ async function getApiKeys(accessToken: string): Promise<ApiKeyResponse[]> {
 }
 
 export default async function AiKeysPage() {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
 
   // getUser() makes a live network call to validate the token (safe on server).
-  // getSession() only reads the cookie — do NOT use it alone for auth decisions.
+  // getSession() only reads the cookie - do NOT use it alone for auth decisions.
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -44,12 +45,10 @@ export default async function AiKeysPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">AI Keys</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage your AI provider API keys for test generation
-        </p>
-      </div>
+      <PageHeader
+        title="AI keys"
+        description="Manage your AI provider API keys for test generation."
+      />
       <AiKeysManager initialKeys={apiKeys} />
     </div>
   );

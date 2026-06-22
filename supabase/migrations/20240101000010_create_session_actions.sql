@@ -31,13 +31,13 @@ CREATE INDEX IF NOT EXISTS idx_session_actions_session_number
 
 ALTER TABLE public.session_actions ENABLE ROW LEVEL SECURITY;
 
--- Session-child pattern: session_actions → recorded_sessions → user_id
+-- Session-child pattern: session_actions → recorded_sessions → user_id (or admin check)
 CREATE POLICY "session_actions_select_policy"
     ON public.session_actions
     FOR SELECT
     USING (
         session_id IN (
-            SELECT id FROM public.recorded_sessions WHERE user_id = auth.uid()
+            SELECT id FROM public.recorded_sessions WHERE user_id = auth.uid() OR public.is_admin()
         )
     );
 
@@ -46,7 +46,7 @@ CREATE POLICY "session_actions_insert_policy"
     FOR INSERT
     WITH CHECK (
         session_id IN (
-            SELECT id FROM public.recorded_sessions WHERE user_id = auth.uid()
+            SELECT id FROM public.recorded_sessions WHERE user_id = auth.uid() OR public.is_admin()
         )
     );
 
@@ -55,12 +55,12 @@ CREATE POLICY "session_actions_update_policy"
     FOR UPDATE
     USING (
         session_id IN (
-            SELECT id FROM public.recorded_sessions WHERE user_id = auth.uid()
+            SELECT id FROM public.recorded_sessions WHERE user_id = auth.uid() OR public.is_admin()
         )
     )
     WITH CHECK (
         session_id IN (
-            SELECT id FROM public.recorded_sessions WHERE user_id = auth.uid()
+            SELECT id FROM public.recorded_sessions WHERE user_id = auth.uid() OR public.is_admin()
         )
     );
 
@@ -69,6 +69,6 @@ CREATE POLICY "session_actions_delete_policy"
     FOR DELETE
     USING (
         session_id IN (
-            SELECT id FROM public.recorded_sessions WHERE user_id = auth.uid()
+            SELECT id FROM public.recorded_sessions WHERE user_id = auth.uid() OR public.is_admin()
         )
     );

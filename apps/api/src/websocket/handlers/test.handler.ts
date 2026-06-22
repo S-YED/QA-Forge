@@ -1,9 +1,10 @@
 import type { Server, Socket } from 'socket.io';
 import { supabase } from '../../config/supabase.js';
-import { decrypt } from '../../utils/encryption.js';
 import { runTest, type BrowserName } from '@qaforge/playwright-runner';
 import { generateTestCases } from '@qaforge/ai-engine';
 import logger from '../../utils/logger.js';
+import { resolveAIKey } from '../../utils/resolve-ai-key.js';
+import { acquireSlot, releaseSlot } from '../../middleware/concurrency-limiter.js';
 import type { ApiKeyProvider, TestCaseStep } from '@qaforge/shared-types';
 
 /**
@@ -29,14 +30,43 @@ interface TestStartPayload {
  */
 export async function executeTestOrchestration(
   io: Server | undefined,
-  socket: Socket,
+  socket: Socket | undefined,
   userId: string,
   payload: TestStartPayload
 ) {
   const { test_run_id, project_id } = payload;
   const roomName = `test:${test_run_id}`;
 
+  // ── 0. Acquire a concurrency slot ─────────────────────────────────────────
+  // Single source of truth for the per-user concurrent-run cap. Acquired here
+  // (covers BOTH the HTTP POST path and the ws `test:start` path) and released
+  // in the `finally` below, so a slot can never leak regardless of which exit
+  // path runs. `slotAcquired` guards the release so we never decrement a slot
+  // we didn't take.
+  let slotAcquired = false;
+
   try {
+      slotAcquired = await acquireSlot(userId);
+      if (!slotAcquired) {
+        io?.to(roomName).emit('test:error', {
+          test_run_id,
+          message: 'Too many concurrent runs. Wait for a running test to finish, then try again.',
+        });
+        socket?.emit('test:error', {
+          test_run_id,
+          message: 'Too many concurrent runs. Wait for a running test to finish, then try again.',
+        });
+        await supabase
+          .from('test_runs')
+          .update({
+            status: 'error',
+            error_message: 'Too many concurrent runs',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', test_run_id);
+        return;
+      }
+
       // ── 1. Validate the test run ──────────────────────────────────────────
       const { data: run, error: runError } = await supabase
         .from('test_runs')
@@ -48,17 +78,17 @@ export async function executeTestOrchestration(
 
       if (runError || !run) {
         // Emit only to the requesting socket — do NOT join the room
-        socket.emit('test:unauthorized', { test_run_id, message: 'Test run not found or unauthorized' });
+        socket?.emit('test:unauthorized', { test_run_id, message: 'Test run not found or unauthorized' });
         return;
       }
 
       if (run.status !== 'pending') {
-        socket.emit('test:error', { test_run_id, message: `Run is already ${run.status}` });
+        socket?.emit('test:error', { test_run_id, message: `Run is already ${run.status}` });
         return;
       }
 
       // ── Ownership confirmed — join the room now ───────────────────────────
-      socket.join(roomName);
+      socket?.join(roomName);
 
       // ── 2. Get project base URL ───────────────────────────────────────────
       const { data: project } = await supabase
@@ -91,13 +121,10 @@ export async function executeTestOrchestration(
         io?.to(roomName).emit('test:status', { test_run_id, message: 'Generating test steps from AI...' });
 
         // Find a valid API key for AI generation
-        const { data: validKeys } = await supabase
-          .from('api_keys')
-          .select('provider, encrypted_key')
-          .eq('user_id', userId)
-          .eq('is_valid', true);
-
-        if (!validKeys || validKeys.length === 0) {
+        let resolvedKey;
+        try {
+          resolvedKey = await resolveAIKey(userId);
+        } catch {
           io?.to(roomName).emit('test:error', { test_run_id, message: 'No valid AI keys found' });
           await supabase
             .from('test_runs')
@@ -106,13 +133,10 @@ export async function executeTestOrchestration(
           return;
         }
 
-        const key = validKeys[0];
-        const rawKey = decrypt(key.encrypted_key as string);
-
         const aiResult = await generateTestCases({
           prompt: run.nl_input,
-          provider: key.provider as ApiKeyProvider,
-          apiKey: rawKey,
+          provider: resolvedKey.provider,
+          apiKey: resolvedKey.apiKey,
           baseUrl,
         });
 
@@ -158,66 +182,82 @@ export async function executeTestOrchestration(
           });
         },
         onStepComplete: async (stepResult) => {
-          // Persist step to DB
-          const { data: insertedStep } = await supabase
-            .from('test_steps')
-            .insert({
-              test_run_id,
-              step_number: stepResult.step_number,
-              action: stepResult.action,
-              selector: stepResult.selector ?? null,
-              value: stepResult.value ?? null,
-              status: stepResult.status,
-              error_message: stepResult.error_message ?? null,
-              duration_ms: stepResult.duration_ms,
-              metadata: {},
-            })
-            .select('id')
-            .single();
+          try {
+            // Persist step to DB
+            const { data: insertedStep } = await supabase
+              .from('test_steps')
+              .insert({
+                test_run_id,
+                step_number: stepResult.step_number,
+                action: stepResult.action,
+                selector: stepResult.selector ?? null,
+                value: stepResult.value ?? null,
+                status: stepResult.status,
+                error_message: stepResult.error_message ?? null,
+                duration_ms: stepResult.duration_ms,
+                metadata: {},
+              })
+              .select('id')
+              .single();
 
-          // Upload screenshot if present
-          let screenshotUrl: string | undefined;
-          if (stepResult.screenshot_buffer) {
-            const screenshotPath = `screenshots/${test_run_id}/step_${stepResult.step_number}.png`;
-            const { error: uploadError } = await supabase.storage
-              .from('test-artifacts')
-              .upload(screenshotPath, stepResult.screenshot_buffer, {
-                contentType: 'image/png',
-                upsert: true,
-              });
-
-            if (!uploadError) {
-              const { data: urlData } = supabase.storage
+            // Upload screenshot if present
+            let screenshotUrl: string | undefined;
+            if (stepResult.screenshot_buffer) {
+              const screenshotPath = `screenshots/${test_run_id}/step_${stepResult.step_number}.png`;
+              const { error: uploadError } = await supabase.storage
                 .from('test-artifacts')
-                .getPublicUrl(screenshotPath);
-              screenshotUrl = urlData.publicUrl;
+                .upload(screenshotPath, stepResult.screenshot_buffer, {
+                  contentType: 'image/png',
+                  upsert: true,
+                });
 
-              // Update the step with screenshot URL
-              if (insertedStep) {
-                await supabase
-                  .from('test_steps')
-                  .update({ screenshot_url: screenshotUrl })
-                  .eq('id', insertedStep.id);
+              if (!uploadError) {
+                const { data: urlData } = supabase.storage
+                  .from('test-artifacts')
+                  .getPublicUrl(screenshotPath);
+                screenshotUrl = urlData.publicUrl;
+
+                // Update the step with screenshot URL
+                if (insertedStep) {
+                  await supabase
+                    .from('test_steps')
+                    .update({ screenshot_url: screenshotUrl })
+                    .eq('id', insertedStep.id);
+                }
               }
             }
-          }
 
-          io?.to(roomName).emit('test:step:complete', {
-            test_run_id,
-            step_number: stepResult.step_number,
-            status: stepResult.status,
-            screenshot_url: screenshotUrl,
-            error_message: stepResult.error_message,
-            duration_ms: stepResult.duration_ms,
-          });
+            io?.to(roomName).emit('test:step:complete', {
+              test_run_id,
+              step_number: stepResult.step_number,
+              status: stepResult.status,
+              screenshot_url: screenshotUrl,
+              error_message: stepResult.error_message,
+              duration_ms: stepResult.duration_ms,
+            });
+          } catch (callbackErr) {
+            logger.error('Error in onStepComplete callback', callbackErr);
+            // Even if DB save or screenshot upload fails, notify client of the step complete event
+            io?.to(roomName).emit('test:step:complete', {
+              test_run_id,
+              step_number: stepResult.step_number,
+              status: stepResult.status,
+              error_message: stepResult.error_message ?? (callbackErr instanceof Error ? callbackErr.message : String(callbackErr)),
+              duration_ms: stepResult.duration_ms,
+            });
+          }
         },
         onScreenshot: (stepNumber, buffer) => {
-          // Stream screenshot as base64 for live preview
-          io?.to(roomName).emit('test:screenshot', {
-            test_run_id,
-            step_number: stepNumber,
-            screenshot_base64: buffer.toString('base64'),
-          });
+          try {
+            // Stream screenshot as base64 for live preview
+            io?.to(roomName).emit('test:screenshot', {
+              test_run_id,
+              step_number: stepNumber,
+              screenshot_base64: buffer.toString('base64'),
+            });
+          } catch (err) {
+            logger.error('Error in onScreenshot callback', err);
+          }
         },
       });
 
@@ -324,7 +364,14 @@ export async function executeTestOrchestration(
       });
 
       // Leave the room on unhandled error to prevent stale subscriptions
-      socket.leave(roomName);
+      socket?.leave(roomName);
+    } finally {
+      // Always release the concurrency slot we acquired — success, early
+      // return, or thrown error. Guarded so an unacquired slot is never
+      // released (which would wrongly decrement another in-flight run).
+      if (slotAcquired) {
+        await releaseSlot(userId);
+      }
     }
 }
 

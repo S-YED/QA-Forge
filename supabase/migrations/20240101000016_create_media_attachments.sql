@@ -30,12 +30,14 @@ CREATE INDEX IF NOT EXISTS idx_media_attachments_entity
 
 ALTER TABLE public.media_attachments ENABLE ROW LEVEL SECURITY;
 
--- Polymorphic RLS: ownership check depends on entity_type.
+-- Polymorphic RLS: ownership check depends on entity_type (or admin check).
 -- Each branch joins back to the owning table to verify auth.uid() access.
 CREATE POLICY "media_attachments_select_policy"
     ON public.media_attachments
     FOR SELECT
     USING (
+        public.is_admin()
+        OR
         (entity_type = 'test_run'
             AND entity_id IN (
                 SELECT id FROM public.test_runs WHERE user_id = auth.uid()
@@ -65,6 +67,8 @@ CREATE POLICY "media_attachments_insert_policy"
     ON public.media_attachments
     FOR INSERT
     WITH CHECK (
+        public.is_admin()
+        OR
         (entity_type = 'test_run'
             AND entity_id IN (
                 SELECT id FROM public.test_runs WHERE user_id = auth.uid()
@@ -94,6 +98,8 @@ CREATE POLICY "media_attachments_update_policy"
     ON public.media_attachments
     FOR UPDATE
     USING (
+        public.is_admin()
+        OR
         (entity_type = 'test_run'
             AND entity_id IN (
                 SELECT id FROM public.test_runs WHERE user_id = auth.uid()
@@ -119,6 +125,8 @@ CREATE POLICY "media_attachments_update_policy"
             ))
     )
     WITH CHECK (
+        public.is_admin()
+        OR
         (entity_type = 'test_run'
             AND entity_id IN (
                 SELECT id FROM public.test_runs WHERE user_id = auth.uid()
@@ -148,6 +156,8 @@ CREATE POLICY "media_attachments_delete_policy"
     ON public.media_attachments
     FOR DELETE
     USING (
+        public.is_admin()
+        OR
         (entity_type = 'test_run'
             AND entity_id IN (
                 SELECT id FROM public.test_runs WHERE user_id = auth.uid()

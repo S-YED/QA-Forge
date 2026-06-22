@@ -36,13 +36,13 @@ CREATE INDEX IF NOT EXISTS idx_app_contexts_embedding
 
 ALTER TABLE public.app_contexts ENABLE ROW LEVEL SECURITY;
 
--- Project-child pattern: app_contexts → projects → user_id
+-- Project-child pattern: app_contexts → projects → user_id (or admin check)
 CREATE POLICY "app_contexts_select_policy"
     ON public.app_contexts
     FOR SELECT
     USING (
         project_id IN (
-            SELECT id FROM public.projects WHERE user_id = auth.uid()
+            SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
         )
     );
 
@@ -51,7 +51,7 @@ CREATE POLICY "app_contexts_insert_policy"
     FOR INSERT
     WITH CHECK (
         project_id IN (
-            SELECT id FROM public.projects WHERE user_id = auth.uid()
+            SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
         )
     );
 
@@ -60,12 +60,12 @@ CREATE POLICY "app_contexts_update_policy"
     FOR UPDATE
     USING (
         project_id IN (
-            SELECT id FROM public.projects WHERE user_id = auth.uid()
+            SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
         )
     )
     WITH CHECK (
         project_id IN (
-            SELECT id FROM public.projects WHERE user_id = auth.uid()
+            SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
         )
     );
 
@@ -74,6 +74,6 @@ CREATE POLICY "app_contexts_delete_policy"
     FOR DELETE
     USING (
         project_id IN (
-            SELECT id FROM public.projects WHERE user_id = auth.uid()
+            SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
         )
     );

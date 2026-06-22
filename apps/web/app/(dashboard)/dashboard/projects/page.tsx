@@ -27,10 +27,10 @@ async function getProjects(accessToken: string): Promise<Project[]> {
 }
 
 export default async function ProjectsPage() {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
 
   // getUser() makes a live network call to validate the token (safe on server).
-  // getSession() only reads the cookie — do NOT use it alone for auth decisions.
+  // getSession() only reads the cookie - do NOT use it alone for auth decisions.
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -39,19 +39,7 @@ export default async function ProjectsPage() {
     data: { session },
   } = await supabase.auth.getSession();
 
-  const projects = user && session?.access_token
-    ? await getProjects(session.access_token)
-    : [];
+  const projects = user && session?.access_token ? await getProjects(session.access_token) : [];
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage your QA testing projects
-        </p>
-      </div>
-      <ProjectsGrid initialProjects={projects} />
-    </div>
-  );
+  return <ProjectsGrid initialProjects={projects} />;
 }

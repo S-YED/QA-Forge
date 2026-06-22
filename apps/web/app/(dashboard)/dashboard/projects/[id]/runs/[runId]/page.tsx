@@ -1,9 +1,10 @@
 import { RunDetailClient } from '@/components/projects/run-detail-client';
 
-export default function RunDetailPage({
+export default async function RunDetailPage({
   params,
 }: {
-  params: { id: string; runId: string };
+  params: Promise<{ id: string; runId: string }>;
 }) {
-  return <RunDetailClient projectId={params.id} runId={params.runId} />;
+  const { id, runId } = await params;
+  return <RunDetailClient projectId={id} runId={runId} />;
 }

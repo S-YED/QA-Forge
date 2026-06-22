@@ -4,12 +4,22 @@
   "version": "0.0.1",
   "type": "module",
   "packageManager": "pnpm@9.15.4",
+  "pnpm": {
+    "overrides": {
+      "ws@<8.21.0": ">=8.21.0",
+      "tmp@<0.2.6": ">=0.2.6",
+      "qs@<6.15.2": ">=6.15.2",
+      "postcss@<8.5.10": ">=8.5.10",
+      "path-to-regexp@<1": "0.1.13"
+    }
+  },
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
-    "type-check": "turbo run type-check"
+    "type-check": "turbo run type-check",
+    "test": "turbo run test"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^7.0.0",

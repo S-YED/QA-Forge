@@ -24,47 +24,47 @@ CREATE INDEX IF NOT EXISTS idx_test_suites_parent_suite_id
 
 ALTER TABLE public.test_suites ENABLE ROW LEVEL SECURITY;
 
--- SELECT: Accessible if the parent project belongs to the current user
+-- SELECT: Accessible if the parent project belongs to the current user OR user is admin
 CREATE POLICY "test_suites_select_policy"
     ON public.test_suites
     FOR SELECT
     USING (
         project_id IN (
-            SELECT id FROM public.projects WHERE user_id = auth.uid()
+            SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
         )
     );
 
--- INSERT: Only allowed if the parent project belongs to the current user
+-- INSERT: Only allowed if the parent project belongs to the current user OR user is admin
 CREATE POLICY "test_suites_insert_policy"
     ON public.test_suites
     FOR INSERT
     WITH CHECK (
         project_id IN (
-            SELECT id FROM public.projects WHERE user_id = auth.uid()
+            SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
         )
     );
 
--- UPDATE: Only allowed if the parent project belongs to the current user
+-- UPDATE: Only allowed if the parent project belongs to the current user OR user is admin
 CREATE POLICY "test_suites_update_policy"
     ON public.test_suites
     FOR UPDATE
     USING (
         project_id IN (
-            SELECT id FROM public.projects WHERE user_id = auth.uid()
+            SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
         )
     )
     WITH CHECK (
         project_id IN (
-            SELECT id FROM public.projects WHERE user_id = auth.uid()
+            SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
         )
     );
 
--- DELETE: Only allowed if the parent project belongs to the current user
+-- DELETE: Only allowed if the parent project belongs to the current user OR user is admin
 CREATE POLICY "test_suites_delete_policy"
     ON public.test_suites
     FOR DELETE
     USING (
         project_id IN (
-            SELECT id FROM public.projects WHERE user_id = auth.uid()
+            SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
         )
     );

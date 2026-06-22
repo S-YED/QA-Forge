@@ -1,9 +1,11 @@
 import express, { type Express } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import { env } from './config/env.js';
-import { defaultLimiter } from './middleware/rate-limiter.js';
+import { defaultLimiter, aiLimiter } from './middleware/rate-limiter.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { authenticate } from './middleware/auth.middleware.js';
+import { demoGuard } from './middleware/demo-guard.js';
 import authRouter from './routes/auth.routes.js';
 import projectsRouter from './routes/projects.routes.js';
 import apiKeysRouter from './routes/api-keys.routes.js';
@@ -12,8 +14,22 @@ import testCasesRouter from './routes/test-cases.routes.js';
 import testRunsRouter from './routes/test-runs.routes.js';
 import aiRouter from './routes/ai.routes.js';
 import bugsRouter from './routes/bugs.routes.js';
+import recordedSessionsRouter from './routes/recorded-sessions.routes.js';
 
 const app: Express = express();
+
+// ── 0. Security headers (helmet) ───────────────────────────────────────────────
+// The API serves JSON only and is consumed cross-origin by the web app, so the
+// HTML-oriented CSP is disabled and Cross-Origin-Resource-Policy is relaxed to
+// 'cross-origin'. All other protective headers (X-Content-Type-Options,
+// X-Frame-Options, Strict-Transport-Security, Referrer-Policy, etc.) keep their
+// secure defaults.
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }),
+);
 
 // ── 1. Body parser ─────────────────────────────────────────────────────────────
 // 10MB limit for context uploads in post-MVP AI routes
@@ -48,30 +64,35 @@ app.get('/api/health', (_req, res) => {
 
 // ── 5. Auth routes ─────────────────────────────────────────────────────────────
 // authenticate is applied per-route inside the router (GET/PUT /me)
+// POST /demo is unauthenticated (it creates the session)
 app.use('/api/auth', authRouter);
 
-// ── 6. Project routes (all protected) ─────────────────────────────────────────
-app.use('/api/projects', authenticate, projectsRouter);
+// ── 6. Project routes (all protected, demo-guarded) ───────────────────────────
+app.use('/api/projects', authenticate, demoGuard, projectsRouter);
 
-// ── 7. API key routes (all protected) ─────────────────────────────────────────
-app.use('/api/api-keys', authenticate, apiKeysRouter);
+// ── 7. API key routes (all protected, demo-guarded) ───────────────────────────
+app.use('/api/api-keys', authenticate, demoGuard, apiKeysRouter);
 
-// ── 8. Test suite routes (all protected, nested under projects) ───────────────
-app.use('/api/projects/:projectId/test-suites', authenticate, testSuitesRouter);
+// ── 8. Test suite routes (all protected, demo-guarded) ────────────────────────
+app.use('/api/projects/:projectId/test-suites', authenticate, demoGuard, testSuitesRouter);
 
-// ── 9. Test case routes (all protected, nested under suites) ──────────────────
-app.use('/api/projects/:projectId/test-suites/:suiteId/test-cases', authenticate, testCasesRouter);
+// ── 9. Test case routes (all protected, demo-guarded) ─────────────────────────
+app.use('/api/projects/:projectId/test-suites/:suiteId/test-cases', authenticate, demoGuard, testCasesRouter);
 
-// ── 10. Test run routes (all protected, nested under projects) ────────────────
-app.use('/api/projects/:projectId/test-runs', authenticate, testRunsRouter);
+// ── 10. Test run routes (all protected, demo-guarded) ─────────────────────────
+app.use('/api/projects/:projectId/test-runs', authenticate, demoGuard, testRunsRouter);
 
-// ── 11. AI generation routes (all protected, nested under projects) ───────────
-app.use('/api/projects/:projectId/ai', authenticate, aiRouter);
+// ── 11. AI generation routes (all protected, demo-guarded, AI rate-limited) ───
+// aiLimiter (10/min) caps the expensive AI-generation endpoints per user.
+app.use('/api/projects/:projectId/ai', authenticate, demoGuard, aiLimiter, aiRouter);
 
-// ── 12. Bug routes (all protected, nested under projects) ─────────────────────
-app.use('/api/projects/:projectId/bugs', authenticate, bugsRouter);
+// ── 12. Bug routes (all protected, demo-guarded) ──────────────────────────────
+app.use('/api/projects/:projectId/bugs', authenticate, demoGuard, bugsRouter);
 
-// ── 13. 404 catch-all ─────────────────────────────────────────────────────────
+// ── 13. Recorded session routes (all protected, demo-guarded) ──────────────────
+app.use('/api/projects/:projectId/recorded-sessions', authenticate, demoGuard, recordedSessionsRouter);
+
+// ── 14. 404 catch-all ─────────────────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({
     error: {
@@ -82,7 +103,8 @@ app.use((req, res) => {
   });
 });
 
-// ── 14. Global error handler (must be last) ───────────────────────────────────
+// ── 15. Global error handler (must be last) ───────────────────────────────────
 app.use(errorHandler);
 
 export default app;
+

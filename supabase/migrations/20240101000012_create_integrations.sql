@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS public.integrations (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- ─── Unique Index ─────────────────────────────────────────────────────────────
+-- ─── Indexes ──────────────────────────────────────────────────────────────────
+
 -- Standard UNIQUE(user_id, project_id, provider) won't work correctly when
 -- project_id IS NULL (NULL != NULL in SQL). Use COALESCE with a sentinel UUID
 -- to enforce uniqueness across both project-scoped and global integrations.
@@ -26,28 +27,32 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_integrations_unique
         provider
     );
 
+-- B-tree index on project_id for faster JOINs and cascade deletions
+CREATE INDEX IF NOT EXISTS idx_integrations_project_id
+    ON public.integrations(project_id);
+
 -- ─── Row Level Security ────────────────────────────────────────────────────────
 
 ALTER TABLE public.integrations ENABLE ROW LEVEL SECURITY;
 
--- Direct ownership via user_id
+-- Direct ownership via user_id (or admin check)
 CREATE POLICY "integrations_select_policy"
     ON public.integrations
     FOR SELECT
-    USING (user_id = auth.uid());
+    USING (user_id = auth.uid() OR public.is_admin());
 
 CREATE POLICY "integrations_insert_policy"
     ON public.integrations
     FOR INSERT
-    WITH CHECK (user_id = auth.uid());
+    WITH CHECK (user_id = auth.uid() OR public.is_admin());
 
 CREATE POLICY "integrations_update_policy"
     ON public.integrations
     FOR UPDATE
-    USING (user_id = auth.uid())
-    WITH CHECK (user_id = auth.uid());
+    USING (user_id = auth.uid() OR public.is_admin())
+    WITH CHECK (user_id = auth.uid() OR public.is_admin());
 
 CREATE POLICY "integrations_delete_policy"
     ON public.integrations
     FOR DELETE
-    USING (user_id = auth.uid());
+    USING (user_id = auth.uid() OR public.is_admin());

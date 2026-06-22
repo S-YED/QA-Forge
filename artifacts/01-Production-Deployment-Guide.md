@@ -43,9 +43,19 @@ Your project ref is the string in your Supabase dashboard URL: `https://supabase
 supabase db push
 ```
 
-This applies all 17 migration files from `supabase/migrations/` to your cloud database in order, creating all 15 tables with RLS policies and triggers.
+This applies all 20 migration files from `supabase/migrations/` to your cloud database in order, creating all 15 tables with RLS policies and triggers (including the demo read-only RLS lockdown in migration 19).
 
-> **Do not run `supabase db reset` against production** — it drops and recreates the database.
+> **⛔ Never run `supabase db reset` (or `db reset --linked`) against production** — it DROPS and recreates the database, destroying all data. Use `db push` only. Do **not** run `supabase/seed.sql` in production either: it creates developer/admin accounts with a shared, git-committed password.
+
+### 1.4b Seed the Demo Account (production-safe)
+
+The public `/demo` link signs in as `demo@qaforge.dev`. That account and its sample data do **not** exist after `db push` — you must seed them, or `/api/auth/demo` will fail. Run the production-safe seed (demo account only, no admin credentials):
+
+```bash
+psql "$DATABASE_URL" -f supabase/seed-prod.sql
+```
+
+Or paste `supabase/seed-prod.sql` into Supabase Studio → **SQL Editor** → **Run**. It is idempotent (safe to re-run).
 
 ### 1.5 Get Your Credentials
 
@@ -54,7 +64,8 @@ Dashboard → **Project Settings** → **API**:
 | Credential | Used As |
 |---|---|
 | Project URL | `SUPABASE_URL` (API) and `NEXT_PUBLIC_SUPABASE_URL` (web) |
-| `anon` public key | `NEXT_PUBLIC_SUPABASE_ANON_KEY` (web) |
+| `anon` public key | `SUPABASE_ANON_KEY` (API) |
+| publishable key (`sb_publishable_...`) | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (web) |
 | `service_role` secret key | `SUPABASE_SERVICE_ROLE_KEY` (API only — never expose to frontend) |
 
 Database connection string: Dashboard → **Project Settings** → **Database** → **Connection string** (URI format) → `DATABASE_URL` (API).
@@ -75,14 +86,15 @@ Database connection string: Dashboard → **Project Settings** → **Database** 
 
 | Setting | Value |
 |---|---|
-| Build Command | `pnpm install --frozen-lockfile && pnpm --filter @qaforge/shared-types build && pnpm --filter @qaforge/api build` |
-| Start Command | `node apps/api/dist/index.js` |
+| Build Command | *leave blank - configured by `nixpacks.toml`* |
+| Start Command | *leave blank - configured by `railway.json`* (`node apps/api/dist/index.js`) |
 
-**Build command breakdown:**
+> **Build config lives in `nixpacks.toml` + `railway.json` at the repo root, so leave the Railway build/start fields blank.** Railway sets `NODE_ENV=production`, which makes pnpm skip `devDependencies` - and `typescript` (`tsc`) is a devDependency the build needs. `nixpacks.toml` overrides the install phase to run a single `NODE_ENV=development pnpm install --frozen-lockfile`, so dev deps are present for the `tsc` build steps. Doing it as one install (instead of a second install in the build phase) avoids pnpm's prod-to-dev "remove and reinstall node_modules from scratch" purge, which is interactive and wipes `node_modules` mid-build. Runtime is unaffected: the start command runs precompiled JS under production `NODE_ENV`.
 
-1. `pnpm install --frozen-lockfile` — installs all dependencies from the repo root, resolving every `workspace:*` reference.
-2. `pnpm --filter @qaforge/shared-types build` — compiles the shared-types package first (required because `@qaforge/api` imports from it).
-3. `pnpm --filter @qaforge/api build` — runs `tsc` in `apps/api`, compiling `src/` to `dist/`.
+**What `nixpacks.toml` does:**
+
+1. **install** (dev mode, one pass): `corepack enable` then `CI=1 NODE_ENV=development pnpm install --frozen-lockfile` - installs all deps incl. devDependencies (`typescript`), resolving every `workspace:*` reference.
+2. **build**: `pnpm --filter '@qaforge/api...' build` - the trailing `...` selects `@qaforge/api` **plus every workspace package it depends on** (`shared-types`, `ai-engine`, `playwright-runner`) and builds them in topological order, so each package's `dist/*.d.ts` exists before the API's `tsc` resolves its imports. Building only `shared-types` + `api` fails with `Cannot find module '@qaforge/ai-engine'`.
 
 **Start command:** Because there is no Root Directory set, the working directory is the repo root, so the start command must include the relative path `apps/api/dist/index.js`.
 
@@ -97,14 +109,25 @@ PORT=4000
 NODE_ENV=production
 CORS_ORIGIN=https://your-vercel-app.vercel.app
 SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=<anon public key from Supabase dashboard → API>
 SUPABASE_SERVICE_ROLE_KEY=<service_role key from Supabase dashboard>
 DATABASE_URL=<connection string from Supabase dashboard → Project Settings → Database>
 ENCRYPTION_KEY=<generate fresh 64-char hex — see command below>
 JWT_SECRET=<generate a strong random string of 32+ characters>
-REDIS_URL=
+REDIS_URL=<redis:// URL — REQUIRED if you run more than 1 API replica; see below>
 ```
 
+> **All of the above except `REDIS_URL` are required** — the API validates them on boot and exits if any are missing (`apps/api/src/config/env.ts`). `SUPABASE_ANON_KEY` is needed by the `/api/auth/demo` endpoint; `DATABASE_URL` by the DB layer.
+
 > **Important:** Generate a **fresh** `ENCRYPTION_KEY` for production — do not reuse your local development key. Any keys encrypted with the local key will not be decryptable with a different production key.
+
+#### Scaling past one instance — set `REDIS_URL`
+
+The API holds three pieces of cross-request state (per-user concurrent-run caps, rate-limit windows, and socket.io rooms for live test streaming). With a single replica these live in memory and work fine — **leave `REDIS_URL` blank**. The moment you run **2+ replicas**, set `REDIS_URL` to a Redis instance (Railway → **New** → **Database** → **Redis**, then reference its `REDIS_URL`). When set, the API automatically:
+- shares concurrency counts + rate limits across instances (atomic, no per-replica multiplication of limits), and
+- enables the socket.io Redis adapter so a run executing on instance B still streams to a client connected to instance A.
+
+Without it under multiple replicas, limits are enforced per-replica and live streaming silently fails for cross-instance clients.
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -123,7 +146,7 @@ GET https://your-railway-url.up.railway.app/api/health
 
 Expected response:
 ```json
-{ "status": "ok", "timestamp": "...", "version": "1.0.0-mvp" }
+{ "status": "ok", "timestamp": "...", "version": "2.0.0-mvp" }
 ```
 
 ---
@@ -143,9 +166,11 @@ Add the following in Vercel → **Environment Variables**:
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key from Supabase dashboard>
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable key (sb_publishable_...) from Supabase dashboard → API Keys>
 NEXT_PUBLIC_API_URL=https://your-railway-url.up.railway.app
 ```
+
+> The web client (`apps/web/lib/supabase/client.ts`) reads `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — the new-format publishable key, not the legacy JWT `anon` key.
 
 ### 3.3 Deploy
 
@@ -174,10 +199,12 @@ This ensures Supabase Auth redirects users to your production frontend after ema
 
 ## Post-Deploy Checklist
 
-- [ ] `supabase db push` completed without errors (all 17 migrations applied)
+- [ ] `supabase db push` completed without errors (all 20 migrations applied)
 - [ ] pgvector extension enabled in Supabase Cloud
+- [ ] `supabase/seed-prod.sql` run against the cloud DB (demo account + sample data)
 - [ ] Railway API health check returns HTTP 200 with `{"status":"ok"}`
 - [ ] Vercel frontend loads at `/login` without errors
+- [ ] `/demo` auto-signs in as the demo account and lands on the dashboard with sample data
 - [ ] Login with a test account works end-to-end
 - [ ] Creating a project works (tests the full browser → Vercel → Railway → Supabase round trip)
 - [ ] `CORS_ORIGIN` on Railway matches the Vercel URL exactly (no trailing slash)

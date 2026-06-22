@@ -35,7 +35,7 @@ router.get('/', async (req, res, next) => {
 // ── POST / ────────────────────────────────────────────────────────────────────
 
 const createKeySchema = z.object({
-  provider: z.enum(['openai', 'anthropic', 'gemini']),
+  provider: z.enum(['openai', 'anthropic', 'gemini', 'openrouter']),
   key: z.string().min(10),
 });
 
@@ -186,7 +186,7 @@ router.post(
       }
 
       const rawKey = decrypt(row.encrypted_key as string);
-      const provider = row.provider as 'openai' | 'anthropic' | 'gemini';
+      const provider = row.provider as 'openai' | 'anthropic' | 'gemini' | 'openrouter';
 
       let isValid = false;
       let validationError: string | undefined;
@@ -224,12 +224,21 @@ router.post(
 // ── Provider health-check helpers ─────────────────────────────────────────────
 
 async function callProviderHealthCheck(
-  provider: 'openai' | 'anthropic' | 'gemini',
+  provider: 'openai' | 'anthropic' | 'gemini' | 'openrouter',
   key: string,
 ): Promise<boolean> {
   switch (provider) {
     case 'openai': {
       const res = await fetch('https://api.openai.com/v1/models', {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+      return res.status === 200;
+    }
+
+    case 'openrouter': {
+      // OpenRouter exposes an authenticated key-introspection endpoint:
+      // 200 = key valid, 401 = invalid. No generation quota consumed.
+      const res = await fetch('https://openrouter.ai/api/v1/key', {
         headers: { Authorization: `Bearer ${key}` },
       });
       return res.status === 200;

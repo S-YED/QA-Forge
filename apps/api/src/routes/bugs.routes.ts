@@ -15,7 +15,7 @@ const uuidParamsSchema = z.object({ id: z.string().uuid() });
 
 router.get('/', async (req, res, next) => {
   try {
-    const projectId = req.params.projectId;
+    const { projectId } = req.params as any;
 
     // Verify project ownership
     const { data: project } = await supabase
@@ -73,11 +73,12 @@ router.get(
   validate(uuidParamsSchema, 'params'),
   async (req, res, next) => {
     try {
+      const { projectId } = req.params as any;
       // Verify project ownership
       const { data: project } = await supabase
         .from('projects')
         .select('id')
-        .eq('id', req.params.projectId)
+        .eq('id', projectId)
         .eq('user_id', req.user.id)
         .single();
 
@@ -89,7 +90,7 @@ router.get(
         .from('bugs')
         .select('*')
         .eq('id', req.params.id)
-        .eq('project_id', req.params.projectId)
+        .eq('project_id', projectId)
         .single();
 
       if (error || !bug) {
@@ -120,7 +121,7 @@ const createBugSchema = z.object({
 
 router.post('/', validate(createBugSchema), async (req, res, next) => {
   try {
-    const projectId = req.params.projectId;
+    const { projectId } = req.params as any;
 
     // Verify project ownership
     const { data: project } = await supabase
@@ -183,11 +184,12 @@ router.put(
   validate(updateBugSchema),
   async (req, res, next) => {
     try {
+      const { projectId } = req.params as any;
       // Verify project ownership
       const { data: project } = await supabase
         .from('projects')
         .select('id')
-        .eq('id', req.params.projectId)
+        .eq('id', projectId)
         .eq('user_id', req.user.id)
         .single();
 
@@ -202,7 +204,7 @@ router.put(
           updated_at: new Date().toISOString(),
         })
         .eq('id', req.params.id)
-        .eq('project_id', req.params.projectId)
+        .eq('project_id', projectId)
         .select()
         .single();
 

@@ -1,0 +1,25 @@
+# Railway / Nixpacks build for the QA Forge pnpm monorepo.
+#
+# Railway sets NODE_ENV=production, which makes pnpm skip devDependencies - but
+# `typescript` (tsc) is a devDependency needed by the build. We override the
+# install phase to run a SINGLE install in development mode so dev deps are
+# present. Doing it as one install (instead of a second install in the build
+# phase) avoids pnpm's prod->dev "remove and reinstall node_modules from scratch"
+# purge, which is interactive and wiped node_modules mid-build. CI=1 keeps pnpm
+# non-interactive. Runtime is unaffected: the start command runs precompiled JS
+# under Railway's production NODE_ENV.
+
+[phases.install]
+cmds = [
+  "npm install -g corepack@0.24.1 && corepack enable",
+  "CI=1 NODE_ENV=development pnpm install --frozen-lockfile",
+]
+
+# Build the API AND its workspace deps in dependency order. The trailing "..."
+# selects @qaforge/api plus every workspace package it depends on
+# (shared-types, ai-engine, playwright-runner); pnpm runs them topologically, so
+# each package's dist/*.d.ts exists before the API's tsc resolves its imports.
+[phases.build]
+cmds = [
+  "pnpm --filter '@qaforge/api...' build",
+]

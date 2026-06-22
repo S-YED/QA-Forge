@@ -2,9 +2,44 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  Plus,
+  ChevronRight,
+  Trash2,
+  Sparkles,
+  Play,
+  X,
+  FileText,
+  ListChecks,
+} from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
+import { useDemoMode } from '@/lib/hooks/use-demo-mode';
+import { toast } from 'sonner';
 import type { TestSuite, TestCase } from '@qaforge/shared-types';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { SeverityBadge } from '@/components/shared/status-badge';
+import { EmptyState } from '@/components/shared/empty-state';
+import { Spinner } from '@/components/shared/spinner';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface SuiteWithCount extends TestSuite {
   test_cases: [{ count: number }];
@@ -22,8 +57,11 @@ interface SuiteDetailResponse {
   test_cases: TestCase[];
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabProps) {
   const router = useRouter();
+  const isDemo = useDemoMode();
   const [expandedSuiteId, setExpandedSuiteId] = useState<string | null>(null);
   const [suiteDetail, setSuiteDetail] = useState<SuiteDetailResponse | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -31,6 +69,20 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
   const [creating, setCreating] = useState(false);
   const [newSuiteName, setNewSuiteName] = useState('');
   const [newSuiteDescription, setNewSuiteDescription] = useState('');
+
+  // Manual Test Case creation states
+  const [showCreateCaseModal, setShowCreateCaseModal] = useState(false);
+  const [selectedSuiteForNewCase, setSelectedSuiteForNewCase] = useState<string | null>(null);
+  const [creatingCase, setCreatingCase] = useState(false);
+  const [caseTitle, setCaseTitle] = useState('');
+  const [caseDescription, setCaseDescription] = useState('');
+  const [caseExpected, setCaseExpected] = useState('');
+  const [casePriority, setCasePriority] = useState<'critical' | 'high' | 'medium' | 'low'>('medium');
+  const [caseType, setCaseType] = useState<string>('functional');
+  const [caseSteps, setCaseSteps] = useState<string[]>(['']);
+
+  // AI Optimization state
+  const [optimizingCaseId, setOptimizingCaseId] = useState<string | null>(null);
 
   // Root-level suites (no parent)
   const rootSuites = suites.filter((s) => !s.parent_suite_id);
@@ -77,6 +129,90 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
     }
   };
 
+  const handleCreateTestCase = async () => {
+    if (!caseTitle.trim() || !selectedSuiteForNewCase) return;
+    setCreatingCase(true);
+
+    try {
+      const formattedSteps = caseSteps
+        .filter((s) => s.trim())
+        .map((step, idx) => ({
+          step_number: idx + 1,
+          instruction: step.trim(),
+        }));
+
+      await apiClient.post(
+        `/api/projects/${projectId}/test-suites/${selectedSuiteForNewCase}/test-cases`,
+        {
+          title: caseTitle.trim(),
+          description: caseDescription.trim() || undefined,
+          expected_result: caseExpected.trim() || undefined,
+          priority: casePriority,
+          type: caseType,
+          steps: formattedSteps,
+        },
+      );
+
+      // Reset
+      setCaseTitle('');
+      setCaseDescription('');
+      setCaseExpected('');
+      setCasePriority('medium');
+      setCaseType('functional');
+      setCaseSteps(['']);
+      setShowCreateCaseModal(false);
+
+      // Reload detail
+      const data = await apiClient.get<SuiteDetailResponse>(
+        `/api/projects/${projectId}/test-suites/${selectedSuiteForNewCase}`,
+      );
+      setSuiteDetail(data);
+      onRefresh();
+    } catch {
+      /* handled */
+    } finally {
+      setCreatingCase(false);
+    }
+  };
+
+  const handleOptimizeTestCase = async (caseId: string, suiteId: string) => {
+    setOptimizingCaseId(caseId);
+
+    // Demo is read-only: simulate the optimize pass with visible feedback.
+    if (isDemo) {
+      await sleep(1500);
+      setSuiteDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              test_cases: prev.test_cases.map((tc) =>
+                tc.id === caseId ? { ...tc, is_ai_generated: true } : tc,
+              ),
+            }
+          : prev,
+      );
+      toast.success('Test case optimized', {
+        description: 'Instructions and selectors refined into structured steps.',
+      });
+      setOptimizingCaseId(null);
+      return;
+    }
+
+    try {
+      await apiClient.post(`/api/projects/${projectId}/ai/optimize/${caseId}`, {});
+
+      // Reload detail
+      const data = await apiClient.get<SuiteDetailResponse>(
+        `/api/projects/${projectId}/test-suites/${suiteId}`,
+      );
+      setSuiteDetail(data);
+    } catch {
+      /* handled */
+    } finally {
+      setOptimizingCaseId(null);
+    }
+  };
+
   const handleDeleteSuite = async (suiteId: string) => {
     if (!confirm('Delete this suite and all its test cases? This action cannot be undone.')) return;
     try {
@@ -86,217 +222,413 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
         setSuiteDetail(null);
       }
       onRefresh();
-    } catch { /* handled */ }
+    } catch {
+      /* handled */
+    }
   };
 
   const handleRunTestCase = async (testCaseId: string) => {
+    // Demo is read-only: open the matching seeded run, which the run view
+    // replays live (step by step, with screenshots and a verdict).
+    if (isDemo) {
+      try {
+        const data = await apiClient.get<{
+          test_runs: { id: string; test_case_id: string | null }[];
+        }>(`/api/projects/${projectId}/test-runs?page=1&per_page=50`);
+        const runs = data.test_runs ?? [];
+        const match = runs.find((r) => r.test_case_id === testCaseId) ?? runs[0];
+        if (match) {
+          router.push(`/dashboard/projects/${projectId}/runs/${match.id}`);
+          return;
+        }
+      } catch {
+        /* fall through to toast */
+      }
+      toast.info('Demo is read-only', {
+        description: 'Sign up to launch real test runs against your own apps.',
+      });
+      return;
+    }
+
     try {
       const data = await apiClient.post<{ test_run: { id: string } }>(
         `/api/projects/${projectId}/test-runs`,
         { test_case_id: testCaseId, mode: 'ai_driven', browser: 'chromium' },
       );
       router.push(`/dashboard/projects/${projectId}/runs/${data.test_run.id}`);
-    } catch { /* handled */ }
+    } catch {
+      /* handled */
+    }
   };
 
   return (
     <div className="space-y-4">
       {/* Header row */}
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-          Test Suites
-        </h2>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-sm font-medium shadow-sm transition-colors hover:bg-accent"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-          New Suite
-        </button>
+        <h3 className="text-sm font-semibold text-foreground">Test suites</h3>
+        <Button variant="outline" size="sm" onClick={() => setShowCreateModal(true)}>
+          <Plus />
+          New suite
+        </Button>
       </div>
 
       {/* Empty state */}
-      {rootSuites.length === 0 && (
-        <div className="rounded-lg border border-dashed p-8 text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>
-          </div>
-          <h3 className="font-semibold">No test suites yet</h3>
-          <p className="text-sm text-muted-foreground mt-1 mb-3">
-            Create a test suite manually or use AI Generate to auto-create tests.
-          </p>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"
-          >
-            Create Suite
-          </button>
-        </div>
-      )}
+      {rootSuites.length === 0 ? (
+        <EmptyState
+          icon={FileText}
+          title="No test suites yet"
+          description="Create a suite manually, or use AI Generate to auto-create a suite full of cases."
+          action={
+            <Button onClick={() => setShowCreateModal(true)}>
+              <Plus />
+              Create suite
+            </Button>
+          }
+        />
+      ) : (
+        <div className="space-y-3">
+          {rootSuites.map((suite) => {
+            const isExpanded = expandedSuiteId === suite.id;
+            const caseCount = suite.test_cases?.[0]?.count ?? 0;
 
-      {/* Suite list */}
-      <div className="space-y-2">
-        {rootSuites.map((suite) => {
-          const isExpanded = expandedSuiteId === suite.id;
-          const caseCount = suite.test_cases?.[0]?.count ?? 0;
-
-          return (
-            <div key={suite.id} className="rounded-lg border bg-card overflow-hidden shadow-sm">
-              {/* Suite header */}
-              <div
-                className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors"
-                onClick={() => toggleSuite(suite.id)}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={cn(
-                      'shrink-0 transition-transform duration-200',
-                      isExpanded && 'rotate-90',
-                    )}
+            return (
+              <div key={suite.id} className="overflow-hidden rounded-lg border bg-card">
+                {/* Suite header */}
+                <div className="flex items-center justify-between gap-2 pr-3">
+                  <button
+                    onClick={() => toggleSuite(suite.id)}
+                    aria-expanded={isExpanded}
+                    className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-accent/40"
                   >
-                    <path d="m9 18 6-6-6-6" />
-                  </svg>
-                  <div className="min-w-0">
-                    <p className="font-medium truncate">{suite.name}</p>
-                    {suite.description && (
-                      <p className="text-xs text-muted-foreground truncate">{suite.description}</p>
-                    )}
+                    <ChevronRight
+                      className={cn(
+                        'size-4 shrink-0 text-muted-foreground transition-transform duration-200',
+                        isExpanded && 'rotate-90 text-primary',
+                      )}
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-foreground">
+                        {suite.name}
+                      </span>
+                      {suite.description && (
+                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                          {suite.description}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Badge variant="secondary">
+                      {caseCount} {caseCount === 1 ? 'case' : 'cases'}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => handleDeleteSuite(suite.id)}
+                      aria-label="Delete suite"
+                      title="Delete suite"
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                    {caseCount} {caseCount === 1 ? 'case' : 'cases'}
-                  </span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDeleteSuite(suite.id); }}
-                    className="rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                    title="Delete suite"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                  </button>
-                </div>
-              </div>
 
-              {/* Expanded: test cases list */}
-              {isExpanded && (
-                <div className="border-t bg-muted/30">
-                  {loadingDetail ? (
-                    <div className="flex items-center justify-center py-6">
-                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent" />
+                {/* Expanded: test cases list */}
+                {isExpanded && (
+                  <div className="border-t border-border bg-secondary/30">
+                    <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+                      <span className="text-xs font-semibold text-muted-foreground">Test cases</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-primary hover:bg-primary/10 hover:text-primary"
+                        onClick={() => {
+                          setSelectedSuiteForNewCase(suite.id);
+                          setShowCreateCaseModal(true);
+                        }}
+                      >
+                        <Plus />
+                        Add case
+                      </Button>
                     </div>
-                  ) : suiteDetail?.test_cases && suiteDetail.test_cases.length > 0 ? (
-                    <div className="divide-y">
-                      {suiteDetail.test_cases.map((tc) => (
-                        <div key={tc.id} className="flex items-center justify-between px-4 py-3 pl-10 hover:bg-accent/30 transition-colors">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium truncate">{tc.title}</p>
-                              {tc.is_ai_generated && (
-                                <span className="shrink-0 rounded bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-600">AI</span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className={cn(
-                                'rounded px-1.5 py-0.5 text-[10px] font-medium',
-                                tc.priority === 'critical' ? 'bg-red-500/10 text-red-600' :
-                                tc.priority === 'high' ? 'bg-orange-500/10 text-orange-600' :
-                                tc.priority === 'medium' ? 'bg-amber-500/10 text-amber-600' :
-                                'bg-slate-500/10 text-slate-600'
-                              )}>
-                                {tc.priority}
-                              </span>
-                              <span className="text-[10px] text-muted-foreground">
-                                {tc.steps?.length ?? 0} steps
-                              </span>
-                              {tc.tags?.map((tag) => (
-                                <span key={tag} className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleRunTestCase(tc.id)}
-                            className="shrink-0 ml-2 inline-flex items-center gap-1 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-emerald-500"
+
+                    {loadingDetail ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Spinner className="text-primary" />
+                      </div>
+                    ) : suiteDetail?.test_cases && suiteDetail.test_cases.length > 0 ? (
+                      <ul className="divide-y divide-border">
+                        {suiteDetail.test_cases.map((tc) => (
+                          <li
+                            key={tc.id}
+                            className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                            Run
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-                      No test cases in this suite. Use AI Generate to add some!
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="truncate text-sm font-semibold text-foreground">
+                                  {tc.title}
+                                </p>
+                                {tc.is_ai_generated && (
+                                  <Badge variant="default" className="shrink-0">
+                                    <Sparkles />
+                                    AI optimized
+                                  </Badge>
+                                )}
+                              </div>
+                              {tc.description && (
+                                <p className="mt-1 line-clamp-1 max-w-xl text-xs text-muted-foreground">
+                                  {tc.description}
+                                </p>
+                              )}
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <SeverityBadge severity={tc.priority} />
+                                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                  <ListChecks className="size-3.5" />
+                                  {tc.steps?.length ?? 0} steps
+                                </span>
+                                {tc.tags?.map((tag) => (
+                                  <Badge key={tag} variant="secondary">
+                                    {tag}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
 
-      {/* ── Create Suite Modal ─────────────────────────────────────────────── */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border bg-card p-6 shadow-2xl mx-4">
-            <h3 className="text-lg font-semibold">Create Test Suite</h3>
-            <p className="text-sm text-muted-foreground mt-1 mb-4">
-              Organize your test cases into logical suites.
-            </p>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Suite Name *</label>
-                <input
-                  type="text"
-                  value={newSuiteName}
-                  onChange={(e) => setNewSuiteName(e.target.value)}
-                  placeholder="e.g. Authentication Tests"
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  autoFocus
-                />
+                            <div className="flex shrink-0 items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOptimizeTestCase(tc.id, suite.id)}
+                                disabled={optimizingCaseId === tc.id}
+                                title="Optimize instructions & selectors with AI"
+                              >
+                                {optimizingCaseId === tc.id ? <Spinner /> : <Sparkles />}
+                                Optimize
+                              </Button>
+                              <Button size="sm" onClick={() => handleRunTestCase(tc.id)}>
+                                <Play />
+                                Run
+                              </Button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                        No test cases in this suite yet. Add one manually or use AI Generate.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Description</label>
-                <textarea
-                  value={newSuiteDescription}
-                  onChange={(e) => setNewSuiteDescription(e.target.value)}
-                  placeholder="Optional description..."
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-                  rows={3}
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 mt-5">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateSuite}
-                disabled={creating || !newSuiteName.trim()}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-50"
-              >
-                {creating ? 'Creating...' : 'Create Suite'}
-              </button>
-            </div>
-          </div>
+            );
+          })}
         </div>
       )}
+
+      {/* ── Create Suite Modal ─────────────────────────────────────────────── */}
+      <Dialog
+        open={showCreateModal}
+        onOpenChange={(o) => {
+          if (!o) setShowCreateModal(false);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create test suite</DialogTitle>
+            <DialogDescription>Organize your test cases into logical suites.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="suite-name">
+                Suite name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="suite-name"
+                value={newSuiteName}
+                onChange={(e) => setNewSuiteName(e.target.value)}
+                placeholder="e.g. Authentication tests"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="suite-description">Description</Label>
+              <Textarea
+                id="suite-description"
+                value={newSuiteDescription}
+                onChange={(e) => setNewSuiteDescription(e.target.value)}
+                placeholder="Optional description…"
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleCreateSuite} disabled={creating || !newSuiteName.trim()}>
+              {creating && <Spinner className="text-primary-foreground" />}
+              {creating ? 'Creating…' : 'Create suite'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Create Test Case Modal ─────────────────────────────────────────── */}
+      <Dialog
+        open={showCreateCaseModal}
+        onOpenChange={(o) => {
+          if (!o) setShowCreateCaseModal(false);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create test case</DialogTitle>
+            <DialogDescription>
+              Add a manual case. You can optimize it into structured, selector-rich steps with AI later.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="case-title">
+                Title <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="case-title"
+                value={caseTitle}
+                onChange={(e) => setCaseTitle(e.target.value)}
+                placeholder="e.g. Successful login with valid password"
+                autoFocus
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="case-priority">Priority</Label>
+                <Select
+                  value={casePriority}
+                  onValueChange={(v) =>
+                    setCasePriority(v as 'critical' | 'high' | 'medium' | 'low')
+                  }
+                >
+                  <SelectTrigger id="case-priority">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="critical">Critical</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="case-type">Type</Label>
+                <Select value={caseType} onValueChange={setCaseType}>
+                  <SelectTrigger id="case-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="functional">Functional</SelectItem>
+                    <SelectItem value="smoke">Smoke</SelectItem>
+                    <SelectItem value="regression">Regression</SelectItem>
+                    <SelectItem value="edge_case">Edge case</SelectItem>
+                    <SelectItem value="accessibility">Accessibility</SelectItem>
+                    <SelectItem value="negative">Negative</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="case-description">Description</Label>
+              <Textarea
+                id="case-description"
+                value={caseDescription}
+                onChange={(e) => setCaseDescription(e.target.value)}
+                placeholder="What is the objective of this test case?"
+                rows={2}
+                className="resize-none"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="case-expected">Expected result</Label>
+              <Input
+                id="case-expected"
+                value={caseExpected}
+                onChange={(e) => setCaseExpected(e.target.value)}
+                placeholder="e.g. User lands on the projects dashboard"
+              />
+            </div>
+
+            {/* Dynamic steps */}
+            <div className="space-y-2">
+              <Label>Steps</Label>
+              <div className="space-y-2">
+                {caseSteps.map((step, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="w-4 shrink-0 select-none font-mono text-xs text-muted-foreground">
+                      {idx + 1}.
+                    </span>
+                    <Input
+                      value={step}
+                      onChange={(e) => {
+                        const newSteps = [...caseSteps];
+                        newSteps[idx] = e.target.value;
+                        setCaseSteps(newSteps);
+                      }}
+                      placeholder={`Step ${idx + 1} instruction…`}
+                    />
+                    {caseSteps.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-9 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => setCaseSteps(caseSteps.filter((_, i) => i !== idx))}
+                        aria-label={`Remove step ${idx + 1}`}
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-primary hover:bg-primary/10 hover:text-primary"
+                onClick={() => setCaseSteps([...caseSteps, ''])}
+              >
+                <Plus />
+                Add step
+              </Button>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setShowCreateCaseModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCreateTestCase}
+              disabled={creatingCase || !caseTitle.trim()}
+            >
+              {creatingCase && <Spinner className="text-primary-foreground" />}
+              {creatingCase ? 'Creating…' : 'Create case'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

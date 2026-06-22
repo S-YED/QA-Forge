@@ -30,9 +30,13 @@ export function validate(schema: ZodSchema, target: ValidationTarget = 'body') {
       return;
     }
 
-    // Replace raw input with the parsed, typed, coerced value
+    // Replace raw input with the parsed, typed, coerced value, merging for params/query to preserve nested route parameters.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (req as any)[target] = result.data;
+    if (target === 'params' || target === 'query') {
+      (req as any)[target] = { ...((req as any)[target] ?? {}), ...result.data };
+    } else {
+      (req as any)[target] = result.data;
+    }
     next();
   };
 }
