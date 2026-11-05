@@ -1,3 +1,10 @@
+> ## ➡️ ACTIVE GOAL (since 5 Nov 2026): December 2026 release
+> The 16 gates below are complete and certified the **demo**. The active goal is now
+> [`artifacts/RELEASE_CHECKLIST.md`](artifacts/RELEASE_CHECKLIST.md) (deadline 31 Dec 2026).
+> Session protocol: read RELEASE_CHECKLIST → [`artifacts/IMPLEMENTATION_STATUS.md`](artifacts/IMPLEMENTATION_STATUS.md)
+> → pick the next ticket on the critical path in [`artifacts/DECEMBER_2026_EXECUTION_PLAN.md`](artifacts/DECEMBER_2026_EXECUTION_PLAN.md).
+> Tick items only with recorded evidence.
+
 # QA Forge — One Shot Goal: Demo Ready → Production Ready
 > **Created:** 2026-06-13  
 > **Status:** 🟢 PASSED — 2026-06-13. All 16 gates verified with evidence (terminal output + browser screenshots). See per-gate evidence lines and the final verdict table.  
