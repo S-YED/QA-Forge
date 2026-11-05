@@ -30,6 +30,7 @@ export class AppError extends Error {
 
 // ── Global error handler ───────────────────────────────────────────────────────
 
+import { AIProviderError } from '@qaforge/ai-engine';
 import logger from '../utils/logger.js';
 import { env } from '../config/env.js';
 
@@ -46,6 +47,12 @@ export function errorHandler(
     path: req.path,
     method: req.method,
   });
+
+  // Provider failures the user can act on (bad key, rate limit, timeout, unusable output).
+  if (err instanceof AIProviderError) {
+    res.status(err.statusCode).json({ error: { code: err.code, message: err.message, details: null } });
+    return;
+  }
 
   if (err instanceof AppError) {
     res.status(err.statusCode).json({

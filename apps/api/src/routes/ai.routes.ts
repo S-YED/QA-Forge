@@ -106,6 +106,7 @@ router.post('/generate', validate(generateSchema), async (req, res, next) => {
       provider: selectedProvider,
       casesGenerated: result.test_cases.length,
       casesRejected: result.rejected.length,
+      model: result.model_used,
       durationMs: result.generation_time_ms,
     });
 
@@ -140,6 +141,7 @@ router.post('/generate', validate(generateSchema), async (req, res, next) => {
       test_cases: insertedCases ?? [],
       rejected: result.rejected,
       provider_used: selectedProvider,
+      model_used: result.model_used,
       generation_time_ms: result.generation_time_ms,
     });
   } catch (err) {
@@ -227,6 +229,7 @@ router.post('/optimize/:caseId', validate(optimizeParamsSchema, 'params'), async
     res.status(200).json({
       test_case: updatedCase,
       provider_used: selectedProvider,
+      model_used: result.model_used,
       optimization_time_ms: result.optimization_time_ms,
     });
   } catch (err) {

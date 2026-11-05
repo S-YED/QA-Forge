@@ -29,6 +29,7 @@ export interface GenerateTestCasesResponse {
   /** Cases the model returned that failed the step contract and were dropped. */
   rejected: { title: string; errors: string[] }[];
   provider_used: ApiKeyProvider;
+  model_used: string;
   generation_time_ms: number;
 }
 
@@ -111,6 +112,63 @@ function envValue(key: string): string | undefined {
   return (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.[key];
 }
 
+// ── Provider errors ───────────────────────────────────────────────────────────
+
+export type AIErrorCode = 'AI_KEY_INVALID' | 'AI_RATE_LIMITED' | 'AI_TIMEOUT' | 'AI_PROVIDER_ERROR' | 'AI_BAD_OUTPUT';
+
+const AI_ERROR_STATUS: Record<AIErrorCode, number> = {
+  AI_KEY_INVALID: 422, // the user's stored key is wrong; not 401, which would mean "your QA Forge session"
+  AI_RATE_LIMITED: 429,
+  AI_TIMEOUT: 504,
+  AI_PROVIDER_ERROR: 502,
+  AI_BAD_OUTPUT: 502,
+};
+
+/** A provider call that failed in a way the user can act on. `statusCode` is the HTTP status to return. */
+export class AIProviderError extends Error {
+  readonly statusCode: number;
+  constructor(
+    readonly code: AIErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'AIProviderError';
+    this.statusCode = AI_ERROR_STATUS[code];
+  }
+}
+
+/** POST JSON to a provider with a timeout (AI_TIMEOUT_MS, default 60 s) and classified errors. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- provider payloads are untyped; callers read fields defensively
+async function postJson(label: string, url: string, headers: Record<string, string>, body: unknown): Promise<any> {
+  const timeoutMs = Number(envValue('AI_TIMEOUT_MS')) || 60_000;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      throw new AIProviderError('AI_TIMEOUT', `${label} did not respond within ${Math.round(timeoutMs / 1000)} s. Try again.`);
+    }
+    throw new AIProviderError('AI_PROVIDER_ERROR', `${label} could not be reached: ${err instanceof Error ? err.message : err}`);
+  }
+  if (!response.ok) {
+    const text = (await response.text().catch(() => '')).slice(0, 300);
+    // Gemini reports a bad key as 400 INVALID_ARGUMENT "API key not valid".
+    if (response.status === 401 || response.status === 403 || (response.status === 400 && /api.?key/i.test(text))) {
+      throw new AIProviderError('AI_KEY_INVALID', `${label} rejected the API key (${response.status}). Update it in Settings, API Keys.`);
+    }
+    if (response.status === 429) {
+      throw new AIProviderError('AI_RATE_LIMITED', `${label} rate limit or quota reached (429). Wait a minute or use another key.`);
+    }
+    throw new AIProviderError('AI_PROVIDER_ERROR', `${label} API error (${response.status}): ${text}`);
+  }
+  return response.json();
+}
+
 type ProviderCall = (
   apiKey: string,
   systemPrompt: string,
@@ -139,14 +197,11 @@ async function callOpenAICompatible(
     jsonResponseFormat?: boolean;
   },
 ): Promise<string> {
-  const response = await fetch(`${opts.baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      ...opts.extraHeaders,
-    },
-    body: JSON.stringify({
+  const data = await postJson(
+    opts.label,
+    `${opts.baseUrl}/chat/completions`,
+    { Authorization: `Bearer ${apiKey}`, ...opts.extraHeaders },
+    {
       model,
       messages: [
         { role: 'system', content: systemPrompt },
@@ -157,18 +212,11 @@ async function callOpenAICompatible(
       // Only OpenAI reliably honors json_object; many free OpenRouter models reject it,
       // so it is opt-in. The JSON contract is still enforced by the prompt + parseModelJson.
       ...(opts.jsonResponseFormat ? { response_format: { type: 'json_object' } } : {}),
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`${opts.label} API error (${response.status}): ${err}`);
-  }
-
-  const data = await response.json();
+    },
+  );
   const content = data?.choices?.[0]?.message?.content;
   if (typeof content !== 'string' || content.length === 0) {
-    throw new Error(`${opts.label} returned no usable content (model ${model})`);
+    throw new AIProviderError('AI_BAD_OUTPUT', `${opts.label} returned no usable content (model ${model})`);
   }
   return content;
 }
@@ -179,32 +227,17 @@ async function callAnthropic(
   userPrompt: string,
   model: string,
 ): Promise<string> {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Anthropic API error (${response.status}): ${err}`);
-  }
-
-  const data = await response.json();
+  const data = await postJson(
+    'Anthropic',
+    'https://api.anthropic.com/v1/messages',
+    { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    { model, max_tokens: 4096, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] },
+  );
   // Anthropic returns content as an array of blocks.
   const textBlock = data?.content?.find?.((b: { type: string }) => b.type === 'text');
   const content = textBlock?.text ?? '';
   if (typeof content !== 'string' || content.length === 0) {
-    throw new Error('Anthropic returned no usable content');
+    throw new AIProviderError('AI_BAD_OUTPUT', 'Anthropic returned no usable content');
   }
   return content;
 }
@@ -217,29 +250,14 @@ async function callGemini(
 ): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ parts: [{ text: userPrompt }] }],
-      generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 4096,
-        responseMimeType: 'application/json',
-      },
-    }),
+  const data = await postJson('Gemini', url, {}, {
+    system_instruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ parts: [{ text: userPrompt }] }],
+    generationConfig: { temperature: 0.4, maxOutputTokens: 4096, responseMimeType: 'application/json' },
   });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Gemini API error (${response.status}): ${err}`);
-  }
-
-  const data = await response.json();
   const content = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (typeof content !== 'string' || content.length === 0) {
-    throw new Error('Gemini returned no usable content');
+    throw new AIProviderError('AI_BAD_OUTPUT', 'Gemini returned no usable content');
   }
   return content;
 }
@@ -290,12 +308,22 @@ async function callProvider(
   systemPrompt: string,
   userPrompt: string,
   requestModel?: string,
-): Promise<string> {
+): Promise<{ content: string; model: string }> {
   const config = PROVIDERS[provider];
   if (!config) {
     throw new Error(`Unsupported provider: ${provider}`);
   }
-  return config.call(apiKey, systemPrompt, userPrompt, resolveModel(provider, requestModel));
+  const model = resolveModel(provider, requestModel);
+  return { content: await config.call(apiKey, systemPrompt, userPrompt, model), model };
+}
+
+/** Parse model text as JSON; unparseable output is a provider failure the user can retry. */
+function parseOutput(raw: string): unknown {
+  try {
+    return parseModelJson(raw);
+  } catch {
+    throw new AIProviderError('AI_BAD_OUTPUT', 'The AI response was not valid JSON. Try again or pick another model.');
+  }
 }
 
 // Parse a model's raw text into JSON, tolerating the common ways models wrap it:
@@ -346,7 +374,7 @@ export async function generateTestCases(
   const systemPrompt = buildSystemPrompt();
   const userPrompt = buildUserPrompt(request.prompt, request.baseUrl);
 
-  const rawResponse = await callProvider(
+  const { content, model } = await callProvider(
     request.provider,
     request.apiKey,
     systemPrompt,
@@ -356,7 +384,7 @@ export async function generateTestCases(
 
   // Parse the AI response — handle raw array, { test_cases: [...] } wrapper,
   // fenced blocks, and JSON embedded in prose.
-  const parsed: unknown = parseModelJson(rawResponse);
+  const parsed: unknown = parseOutput(content);
 
   let rawCases: unknown[];
   if (Array.isArray(parsed)) {
@@ -364,7 +392,7 @@ export async function generateTestCases(
   } else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { test_cases?: unknown }).test_cases)) {
     rawCases = (parsed as { test_cases: unknown[] }).test_cases;
   } else {
-    throw new Error('AI response did not contain a valid test cases array');
+    throw new AIProviderError('AI_BAD_OUTPUT', 'AI response did not contain a valid test cases array');
   }
 
   const testCases: GeneratedTestCase[] = [];
@@ -375,7 +403,8 @@ export async function generateTestCases(
     else rejected.push({ title: r.title, errors: r.errors });
   }
   if (testCases.length === 0) {
-    throw new Error(
+    throw new AIProviderError(
+      'AI_BAD_OUTPUT',
       `AI returned ${rawCases.length} test case(s) but none matched the step contract: ` +
         (rejected[0]?.errors.slice(0, 3).join('; ') ?? 'empty response'),
     );
@@ -385,6 +414,7 @@ export async function generateTestCases(
     test_cases: testCases,
     rejected,
     provider_used: request.provider,
+    model_used: model,
     generation_time_ms: Date.now() - startTime,
   };
 }
@@ -406,6 +436,7 @@ export interface OptimizeTestCaseRequest {
 export interface OptimizedTestCaseResponse {
   test_case: GeneratedTestCase;
   provider_used: ApiKeyProvider;
+  model_used: string;
   optimization_time_ms: number;
 }
 
@@ -452,7 +483,7 @@ export async function optimizeTestCase(
   const systemPrompt = buildOptimizeSystemPrompt();
   const userPrompt = buildOptimizeUserPrompt(request);
 
-  const rawResponse = await callProvider(
+  const { content, model } = await callProvider(
     request.provider,
     request.apiKey,
     systemPrompt,
@@ -460,16 +491,20 @@ export async function optimizeTestCase(
     request.model,
   );
 
-  const parsed: unknown = parseModelJson(rawResponse);
+  const parsed: unknown = parseOutput(content);
 
   const r = validateGeneratedCase(parsed);
   if (!r.ok) {
-    throw new Error(`Optimized test case did not match the step contract: ${r.errors.slice(0, 3).join('; ')}`);
+    throw new AIProviderError(
+      'AI_BAD_OUTPUT',
+      `Optimized test case did not match the step contract: ${r.errors.slice(0, 3).join('; ')}`,
+    );
   }
 
   return {
     test_case: r.testCase,
     provider_used: request.provider,
+    model_used: model,
     optimization_time_ms: Date.now() - startTime,
   };
 }
