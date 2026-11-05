@@ -16,7 +16,13 @@ import { apiClient } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { useDemoMode } from '@/lib/hooks/use-demo-mode';
 import { toast } from 'sonner';
-import type { TestSuite, TestCase } from '@qaforge/shared-types';
+import {
+  STEP_ACTIONS,
+  STEP_ACTION_FIELDS,
+  type StepAction,
+  type TestSuite,
+  type TestCase,
+} from '@qaforge/shared-types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SeverityBadge } from '@/components/shared/status-badge';
@@ -40,6 +46,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+
+interface DraftStep {
+  action: StepAction;
+  instruction: string;
+  selector: string;
+  value: string;
+}
+
+const newDraftStep = (): DraftStep => ({ action: 'click', instruction: '', selector: '', value: '' });
 
 interface SuiteWithCount extends TestSuite {
   test_cases: [{ count: number }];
@@ -79,7 +94,7 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
   const [caseExpected, setCaseExpected] = useState('');
   const [casePriority, setCasePriority] = useState<'critical' | 'high' | 'medium' | 'low'>('medium');
   const [caseType, setCaseType] = useState<string>('functional');
-  const [caseSteps, setCaseSteps] = useState<string[]>(['']);
+  const [caseSteps, setCaseSteps] = useState<DraftStep[]>([newDraftStep()]);
 
   // AI Optimization state
   const [optimizingCaseId, setOptimizingCaseId] = useState<string | null>(null);
@@ -134,12 +149,19 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
     setCreatingCase(true);
 
     try {
+      // Fields the action doesn't use are dropped; the API validates the rest (shared schema).
       const formattedSteps = caseSteps
-        .filter((s) => s.trim())
-        .map((step, idx) => ({
-          step_number: idx + 1,
-          instruction: step.trim(),
-        }));
+        .filter((s) => s.instruction.trim() || s.selector.trim() || s.value)
+        .map((step, idx) => {
+          const needs = STEP_ACTION_FIELDS[step.action];
+          return {
+            step_number: idx + 1,
+            action: step.action,
+            instruction: step.instruction.trim(),
+            selector: needs.selector ? step.selector.trim() : undefined,
+            value: needs.value ? step.value : undefined,
+          };
+        });
 
       await apiClient.post(
         `/api/projects/${projectId}/test-suites/${selectedSuiteForNewCase}/test-cases`,
@@ -159,7 +181,7 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
       setCaseExpected('');
       setCasePriority('medium');
       setCaseType('functional');
-      setCaseSteps(['']);
+      setCaseSteps([newDraftStep()]);
       setShowCreateCaseModal(false);
 
       // Reload detail
@@ -572,41 +594,81 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
             <div className="space-y-2">
               <Label>Steps</Label>
               <div className="space-y-2">
-                {caseSteps.map((step, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <span className="w-4 shrink-0 select-none font-mono text-xs text-muted-foreground">
-                      {idx + 1}.
-                    </span>
-                    <Input
-                      value={step}
-                      onChange={(e) => {
-                        const newSteps = [...caseSteps];
-                        newSteps[idx] = e.target.value;
-                        setCaseSteps(newSteps);
-                      }}
-                      placeholder={`Step ${idx + 1} instruction…`}
-                    />
-                    {caseSteps.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-9 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => setCaseSteps(caseSteps.filter((_, i) => i !== idx))}
-                        aria-label={`Remove step ${idx + 1}`}
-                      >
-                        <X className="size-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
+                {caseSteps.map((step, idx) => {
+                  const needs = STEP_ACTION_FIELDS[step.action];
+                  const update = (patch: Partial<DraftStep>) =>
+                    setCaseSteps(caseSteps.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+                  return (
+                    <div key={idx} className="space-y-2 rounded-md border border-border p-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-4 shrink-0 select-none font-mono text-xs text-muted-foreground">
+                          {idx + 1}.
+                        </span>
+                        <Select
+                          value={step.action}
+                          onValueChange={(v) => update({ action: v as StepAction })}
+                        >
+                          <SelectTrigger className="w-40 shrink-0 font-mono text-xs" aria-label={`Step ${idx + 1} action`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {STEP_ACTIONS.map((a) => (
+                              <SelectItem key={a} value={a} className="font-mono text-xs">
+                                {a}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          value={step.instruction}
+                          onChange={(e) => update({ instruction: e.target.value })}
+                          placeholder="Description, e.g. Click the Sign in button"
+                          aria-label={`Step ${idx + 1} description`}
+                        />
+                        {caseSteps.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-9 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => setCaseSteps(caseSteps.filter((_, i) => i !== idx))}
+                            aria-label={`Remove step ${idx + 1}`}
+                          >
+                            <X className="size-4" />
+                          </Button>
+                        )}
+                      </div>
+                      {(needs.selector || needs.value) && (
+                        <div className="flex gap-2 pl-6">
+                          {needs.selector && (
+                            <Input
+                              value={step.selector}
+                              onChange={(e) => update({ selector: e.target.value })}
+                              placeholder='Selector, e.g. [data-testid="login-submit"]'
+                              aria-label={`Step ${idx + 1} selector`}
+                              className="font-mono text-xs"
+                            />
+                          )}
+                          {needs.value && (
+                            <Input
+                              value={step.value}
+                              onChange={(e) => update({ value: e.target.value })}
+                              placeholder={needs.valueHint ?? 'Value'}
+                              aria-label={`Step ${idx + 1} value`}
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 className="text-primary hover:bg-primary/10 hover:text-primary"
-                onClick={() => setCaseSteps([...caseSteps, ''])}
+                onClick={() => setCaseSteps([...caseSteps, newDraftStep()])}
               >
                 <Plus />
                 Add step

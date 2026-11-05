@@ -1,3 +1,4 @@
+import type { TestCaseStep } from './steps.js';
 import {
   UserRole,
   ApiKeyProvider,
@@ -69,20 +70,6 @@ export interface TestCase {
   updated_at: string;
 }
 
-/** A single step within a TestCase's `steps` JSONB array. */
-export interface TestCaseStep {
-  /** 1-indexed step number */
-  step_number: number;
-  /** Human-readable instruction, e.g. "Click the Login button" */
-  instruction: string;
-  /** Optional Playwright selector */
-  selector?: string;
-  /** Optional value for input actions */
-  value?: string;
-  /** Optional expected outcome */
-  expected?: string;
-}
-
 export interface TestRun {
   id: string;
   test_case_id?: string;
@@ -105,7 +92,10 @@ export interface TestStep {
   id: string;
   test_run_id: string;
   step_number: number;
+  /** Step action (TD-1 enum value for runs after CON-1; free text on older rows) */
   action: string;
+  /** Human-readable step description (migration 23; absent on older rows) */
+  instruction?: string | null;
   selector?: string;
   value?: string;
   status: TestStepStatus;

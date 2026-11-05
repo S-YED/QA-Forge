@@ -79,7 +79,6 @@ describe('resolveAIKey', () => {
   it('throws when no valid keys exist for auto-select', async () => {
     // For auto-select, the code queries without .single()
     // We need to mock the chain differently
-    const mockEqChain = vi.fn();
     mockSingle.mockResolvedValue({ data: null, error: null });
 
     // Re-mock for the auto-select path which doesn't use .single()

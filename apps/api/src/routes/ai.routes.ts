@@ -6,7 +6,6 @@ import { supabase } from '../config/supabase.js';
 import { generateTestCases, optimizeTestCase } from '@qaforge/ai-engine';
 import logger from '../utils/logger.js';
 import { resolveAIKey } from '../utils/resolve-ai-key.js';
-import { ApiKeyProvider } from '@qaforge/shared-types';
 
 // Pre-protected by `authenticate` applied in app.ts.
 
@@ -106,6 +105,7 @@ router.post('/generate', validate(generateSchema), async (req, res, next) => {
       projectId,
       provider: selectedProvider,
       casesGenerated: result.test_cases.length,
+      casesRejected: result.rejected.length,
       durationMs: result.generation_time_ms,
     });
 
@@ -138,6 +138,7 @@ router.post('/generate', validate(generateSchema), async (req, res, next) => {
     res.status(201).json({
       suite_id: suiteId,
       test_cases: insertedCases ?? [],
+      rejected: result.rejected,
       provider_used: selectedProvider,
       generation_time_ms: result.generation_time_ms,
     });
@@ -152,9 +153,14 @@ router.post('/generate', validate(generateSchema), async (req, res, next) => {
 
 // ── POST /projects/:projectId/ai/optimize/:caseId ──────────────────────────────
 
-router.post('/optimize/:caseId', async (req, res, next) => {
+const optimizeParamsSchema = z.object({
+  projectId: z.string().uuid(),
+  caseId: z.string().uuid(),
+});
+
+router.post('/optimize/:caseId', validate(optimizeParamsSchema, 'params'), async (req, res, next) => {
   try {
-    const { projectId, caseId } = req.params as any;
+    const { projectId, caseId } = req.params as z.infer<typeof optimizeParamsSchema>;
 
     // 1. Verify project ownership
     const { data: project } = await supabase
@@ -168,11 +174,14 @@ router.post('/optimize/:caseId', async (req, res, next) => {
       return next(new AppError('NOT_FOUND', 404, 'Project not found'));
     }
 
-    // 2. Fetch the existing test case
+    // 2. Fetch the existing test case — scoped to the verified project via its
+    //    suite. The service-role client bypasses RLS, so without this join any
+    //    user could read/overwrite another user's case by ID (IDOR).
     const { data: testCase, error: caseError } = await supabase
       .from('test_cases')
-      .select('*')
+      .select('*, test_suites!inner(project_id)')
       .eq('id', caseId)
+      .eq('test_suites.project_id', projectId)
       .single();
 
     if (caseError || !testCase) {

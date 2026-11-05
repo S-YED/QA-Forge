@@ -1,4 +1,13 @@
-import type { ApiKeyProvider, TestCaseStep } from '@qaforge/shared-types';
+import {
+  GeneratedTestCaseSchema,
+  STEP_ACTIONS,
+  STEP_ACTION_FIELDS,
+  type ApiKeyProvider,
+  type GeneratedTestCase,
+  type TestCaseStep,
+} from '@qaforge/shared-types';
+
+export type { GeneratedTestCase };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -15,20 +24,46 @@ export interface GenerateTestCasesRequest {
   model?: string;
 }
 
-export interface GeneratedTestCase {
-  title: string;
-  description: string;
-  steps: TestCaseStep[];
-  expected_result: string;
-  priority: 'critical' | 'high' | 'medium' | 'low';
-  type: 'functional' | 'regression' | 'smoke' | 'edge_case' | 'accessibility' | 'negative';
-  tags: string[];
-}
-
 export interface GenerateTestCasesResponse {
   test_cases: GeneratedTestCase[];
+  /** Cases the model returned that failed the step contract and were dropped. */
+  rejected: { title: string; errors: string[] }[];
   provider_used: ApiKeyProvider;
   generation_time_ms: number;
+}
+
+// ── Step contract (shared with the API and runner) ───────────────────────────
+
+/** Prompt text describing the step shape, built from the shared contract so they can't drift. */
+const STEP_FORMAT = `array of { step_number, action, instruction, selector?, value?, expected? } where
+  action is one of: ${STEP_ACTIONS.join(', ')}
+  instruction is a short human-readable description of the step
+  selector is a Playwright selector (prefer [data-testid="..."], then CSS)
+  required fields per action:
+${STEP_ACTIONS.map((a) => {
+  const f = STEP_ACTION_FIELDS[a];
+  const req = [f.selector && 'selector', f.value && `value (${f.valueHint})`].filter(Boolean);
+  return `    ${a}: ${req.length ? req.join(', ') : 'nothing else'}`;
+}).join('\n')}`;
+
+/**
+ * Renumber steps 1..n, then validate against the shared schema. Returns the
+ * parsed case or the list of problems; never trusts the model's shape.
+ */
+export function validateGeneratedCase(
+  raw: unknown,
+): { ok: true; testCase: GeneratedTestCase } | { ok: false; title: string; errors: string[] } {
+  const obj = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const steps = Array.isArray(obj.steps)
+    ? obj.steps.map((step, idx) => ({ ...(step as object), step_number: idx + 1 }))
+    : obj.steps;
+  const result = GeneratedTestCaseSchema.safeParse({ ...obj, steps });
+  if (result.success) return { ok: true, testCase: result.data };
+  return {
+    ok: false,
+    title: typeof obj.title === 'string' ? obj.title : '(untitled)',
+    errors: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
+  };
 }
 
 // ── Prompt Template ──────────────────────────────────────────────────────────
@@ -40,7 +75,7 @@ RULES:
 1. Generate between 3 and 8 test cases per request — aim for full coverage.
 2. Always include a mix of positive (happy path), negative (error handling), and edge case tests.
 3. Each test case must have clear, actionable steps written in natural language.
-4. Steps should be specific enough to translate into Playwright actions (click, fill, navigate, assert).
+4. Every step must use exactly one action from the allowed list and include that action's required fields.
 5. Use CSS selectors where possible in the selector field (e.g., button[type="submit"], #email-input, .login-form).
 6. Prioritize critical user-facing flows as "high" or "critical" priority.
 7. Include accessibility test cases when relevant.
@@ -49,7 +84,7 @@ OUTPUT FORMAT:
 Return a JSON array of test case objects. Each object must have:
 - title: string — concise test case name
 - description: string — what this test validates
-- steps: array of { step_number, instruction, selector?, value?, expected? }
+- steps: ${STEP_FORMAT}
 - expected_result: string — final expected outcome
 - priority: "critical" | "high" | "medium" | "low"
 - type: "functional" | "regression" | "smoke" | "edge_case" | "accessibility" | "negative"
@@ -323,33 +358,32 @@ export async function generateTestCases(
   // fenced blocks, and JSON embedded in prose.
   const parsed: unknown = parseModelJson(rawResponse);
 
-  let testCases: GeneratedTestCase[];
+  let rawCases: unknown[];
   if (Array.isArray(parsed)) {
-    testCases = parsed as GeneratedTestCase[];
-  } else if (parsed && typeof parsed === 'object' && 'test_cases' in parsed) {
-    testCases = (parsed as { test_cases: GeneratedTestCase[] }).test_cases;
+    rawCases = parsed;
+  } else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { test_cases?: unknown }).test_cases)) {
+    rawCases = (parsed as { test_cases: unknown[] }).test_cases;
   } else {
     throw new Error('AI response did not contain a valid test cases array');
   }
 
-  // Validate and normalize step_numbers
-  for (const tc of testCases) {
-    if (!Array.isArray(tc.steps)) tc.steps = [];
-    tc.steps = tc.steps.map((step, idx) => ({
-      step_number: idx + 1,
-      instruction: step.instruction || '',
-      selector: step.selector,
-      value: step.value,
-      expected: step.expected,
-    }));
-    // Ensure defaults
-    tc.priority = tc.priority || 'medium';
-    tc.type = tc.type || 'functional';
-    tc.tags = tc.tags || [];
+  const testCases: GeneratedTestCase[] = [];
+  const rejected: GenerateTestCasesResponse['rejected'] = [];
+  for (const raw of rawCases) {
+    const r = validateGeneratedCase(raw);
+    if (r.ok) testCases.push(r.testCase);
+    else rejected.push({ title: r.title, errors: r.errors });
+  }
+  if (testCases.length === 0) {
+    throw new Error(
+      `AI returned ${rawCases.length} test case(s) but none matched the step contract: ` +
+        (rejected[0]?.errors.slice(0, 3).join('; ') ?? 'empty response'),
+    );
   }
 
   return {
     test_cases: testCases,
+    rejected,
     provider_used: request.provider,
     generation_time_ms: Date.now() - startTime,
   };
@@ -390,7 +424,7 @@ OUTPUT FORMAT:
 Return a JSON object containing:
 - title: string — professional title
 - description: string — improved, clear description
-- steps: array of { step_number, instruction, selector?, value?, expected? } — precise steps
+- steps: ${STEP_FORMAT}
 - expected_result: string — concrete expected outcome
 - priority: "critical" | "high" | "medium" | "low"
 - type: "functional" | "regression" | "smoke" | "edge_case" | "accessibility" | "negative"
@@ -428,21 +462,13 @@ export async function optimizeTestCase(
 
   const parsed: unknown = parseModelJson(rawResponse);
 
-  const tc = parsed as GeneratedTestCase;
-  if (!Array.isArray(tc.steps)) tc.steps = [];
-  tc.steps = tc.steps.map((step, idx) => ({
-    step_number: idx + 1,
-    instruction: step.instruction || '',
-    selector: step.selector,
-    value: step.value,
-    expected: step.expected,
-  }));
-  tc.priority = tc.priority || 'medium';
-  tc.type = tc.type || 'functional';
-  tc.tags = tc.tags || [];
+  const r = validateGeneratedCase(parsed);
+  if (!r.ok) {
+    throw new Error(`Optimized test case did not match the step contract: ${r.errors.slice(0, 3).join('; ')}`);
+  }
 
   return {
-    test_case: tc,
+    test_case: r.testCase,
     provider_used: request.provider,
     optimization_time_ms: Date.now() - startTime,
   };

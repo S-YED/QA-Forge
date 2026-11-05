@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
+import { TestCaseStepsSchema } from '@qaforge/shared-types';
 import { closeRecordingSession } from '../websocket/handlers/recording.handler.js';
 import { executeTestOrchestration } from '../websocket/handlers/test.handler.js';
 
@@ -212,25 +213,25 @@ router.post('/:id/replay', validate(uuidParamsSchema, 'params'), async (req, res
       return next(new AppError('BAD_REQUEST', 400, 'Recording has no actions to replay'));
     }
 
-    // 1. Compile recorded actions to Playwright TestCaseSteps
-    const steps = actions.map((act) => {
-      // Map actions
-      let instruction = `${act.action_type}`;
-      if (act.action_type === 'click') {
-        instruction = `Click element ${act.selector}`;
-      } else if (act.action_type === 'type') {
-        instruction = `Type text into ${act.selector}`;
-      } else if (act.action_type === 'select') {
-        instruction = `Select option from ${act.selector}`;
-      }
-
-      return {
-        step_number: act.action_number,
-        instruction,
-        selector: act.selector || undefined,
-        value: act.value || undefined,
-      };
-    });
+    // 1. Compile recorded actions to canonical steps (the recorder emits click/type/select only)
+    const RECORDED_TO_STEP = { click: 'click', type: 'fill', select: 'select' } as const;
+    const parsedSteps = TestCaseStepsSchema.safeParse(
+      actions.map((act, idx) => {
+        const action = RECORDED_TO_STEP[act.action_type as keyof typeof RECORDED_TO_STEP];
+        const verb = { click: 'Click', fill: 'Fill', select: 'Select option in' }[action] ?? act.action_type;
+        return {
+          step_number: idx + 1,
+          action,
+          instruction: `${verb} ${act.selector ?? ''}`.trim(),
+          selector: act.selector || undefined,
+          value: act.value || undefined,
+        };
+      }),
+    );
+    if (!parsedSteps.success) {
+      return next(new AppError('BAD_REQUEST', 400, 'Recording contains actions that cannot be replayed', parsedSteps.error.format()));
+    }
+    const steps = parsedSteps.data;
 
     // 2. Resolve or create a specific 'Replayed Session Tests' suite for replayed runs
     let suiteId: string;

@@ -1,5 +1,6 @@
 import { ApiKeyProvider, TestRunMode, BugSeverity, BugStatus } from './enums.js';
-import { Profile, ApiKey, TestCaseStep } from './database.js';
+import { Profile, ApiKey } from './database.js';
+import type { TestCaseStep } from './steps.js';
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 

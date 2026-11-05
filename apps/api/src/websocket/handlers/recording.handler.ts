@@ -209,7 +209,7 @@ export function registerRecordingHandlers(io: Server, socket: Socket) {
 
   // ── Start a live browser recording session ──
   socket.on('recording:start', async (payload: StartRecordingPayload) => {
-    const { session_id, project_id, base_url } = payload;
+    const { session_id, base_url } = payload;
     const roomName = `recording:${session_id}`;
     
     try {

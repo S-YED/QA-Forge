@@ -233,11 +233,11 @@ INSERT INTO public.test_cases (
     'Successful login with valid credentials',
     'Verifies that a registered user can log in with correct email and password.',
     '[
-        {"step_number": 1, "instruction": "navigate", "value": "/login"},
-        {"step_number": 2, "instruction": "fill", "selector": "#email", "value": "user@example.com"},
-        {"step_number": 3, "instruction": "fill", "selector": "#password", "value": "Password123!"},
-        {"step_number": 4, "instruction": "click", "selector": "button[type=submit]"},
-        {"step_number": 5, "instruction": "assert", "selector": ".dashboard-header", "value": "visible"}
+        {"step_number": 1, "action": "navigate", "instruction": "Open /login", "value": "/login"},
+        {"step_number": 2, "action": "fill", "instruction": "Fill #email", "selector": "#email", "value": "user@example.com"},
+        {"step_number": 3, "action": "fill", "instruction": "Fill #password", "selector": "#password", "value": "Password123!"},
+        {"step_number": 4, "action": "click", "instruction": "Click button[type=submit]", "selector": "button[type=submit]"},
+        {"step_number": 5, "action": "assert_visible", "instruction": "Check .dashboard-header is visible", "selector": ".dashboard-header"}
     ]'::jsonb,
     'User is redirected to the dashboard with a welcome message.',
     'critical',
@@ -252,11 +252,11 @@ INSERT INTO public.test_cases (
     'Login fails with incorrect password',
     'Verifies that an error message is shown when wrong password is entered.',
     '[
-        {"step_number": 1, "instruction": "navigate", "value": "/login"},
-        {"step_number": 2, "instruction": "fill", "selector": "#email", "value": "user@example.com"},
-        {"step_number": 3, "instruction": "fill", "selector": "#password", "value": "WrongPassword"},
-        {"step_number": 4, "instruction": "click", "selector": "button[type=submit]"},
-        {"step_number": 5, "instruction": "assert", "selector": ".error-message", "value": "visible"}
+        {"step_number": 1, "action": "navigate", "instruction": "Open /login", "value": "/login"},
+        {"step_number": 2, "action": "fill", "instruction": "Fill #email", "selector": "#email", "value": "user@example.com"},
+        {"step_number": 3, "action": "fill", "instruction": "Fill #password", "selector": "#password", "value": "WrongPassword"},
+        {"step_number": 4, "action": "click", "instruction": "Click button[type=submit]", "selector": "button[type=submit]"},
+        {"step_number": 5, "action": "assert_visible", "instruction": "Check .error-message is visible", "selector": ".error-message"}
     ]'::jsonb,
     'An error message "Invalid credentials" is displayed.',
     'high',
@@ -271,10 +271,10 @@ INSERT INTO public.test_cases (
     'Password reset email is sent',
     'Verifies that clicking "Forgot Password" triggers a reset email.',
     '[
-        {"step_number": 1, "instruction": "navigate", "value": "/forgot-password"},
-        {"step_number": 2, "instruction": "fill", "selector": "#email", "value": "user@example.com"},
-        {"step_number": 3, "instruction": "click", "selector": "button[type=submit]"},
-        {"step_number": 4, "instruction": "assert", "selector": ".success-banner", "value": "visible"}
+        {"step_number": 1, "action": "navigate", "instruction": "Open /forgot-password", "value": "/forgot-password"},
+        {"step_number": 2, "action": "fill", "instruction": "Fill #email", "selector": "#email", "value": "user@example.com"},
+        {"step_number": 3, "action": "click", "instruction": "Click button[type=submit]", "selector": "button[type=submit]"},
+        {"step_number": 4, "action": "assert_visible", "instruction": "Check .success-banner is visible", "selector": ".success-banner"}
     ]'::jsonb,
     'A success banner confirms the reset email was sent.',
     'medium',
@@ -289,11 +289,11 @@ INSERT INTO public.test_cases (
     'Add item to cart and verify total',
     'Adds a product to the shopping cart and verifies the cart total updates correctly.',
     '[
-        {"step_number": 1, "instruction": "navigate", "value": "/products/wireless-headphones"},
-        {"step_number": 2, "instruction": "click", "selector": "button.add-to-cart"},
-        {"step_number": 3, "instruction": "assert", "selector": ".cart-badge", "value": "1"},
-        {"step_number": 4, "instruction": "navigate", "value": "/cart"},
-        {"step_number": 5, "instruction": "assert", "selector": ".cart-total", "value": "$79.99"}
+        {"step_number": 1, "action": "navigate", "instruction": "Open /products/wireless-headphones", "value": "/products/wireless-headphones"},
+        {"step_number": 2, "action": "click", "instruction": "Click button.add-to-cart", "selector": "button.add-to-cart"},
+        {"step_number": 3, "action": "assert_text", "instruction": "Check .cart-badge contains 1", "selector": ".cart-badge", "value": "1"},
+        {"step_number": 4, "action": "navigate", "instruction": "Open /cart", "value": "/cart"},
+        {"step_number": 5, "action": "assert_text", "instruction": "Check .cart-total contains $79.99", "selector": ".cart-total", "value": "$79.99"}
     ]'::jsonb,
     'Cart shows 1 item with correct total price.',
     'critical',
@@ -308,13 +308,13 @@ INSERT INTO public.test_cases (
     'Complete checkout with valid payment',
     'Full checkout flow from cart to order confirmation page.',
     '[
-        {"step_number": 1, "instruction": "navigate", "value": "/cart"},
-        {"step_number": 2, "instruction": "click", "selector": "button.checkout"},
-        {"step_number": 3, "instruction": "fill", "selector": "#card-number", "value": "4242424242424242"},
-        {"step_number": 4, "instruction": "fill", "selector": "#card-expiry", "value": "12/28"},
-        {"step_number": 5, "instruction": "fill", "selector": "#card-cvc", "value": "123"},
-        {"step_number": 6, "instruction": "click", "selector": "button.pay-now"},
-        {"step_number": 7, "instruction": "assert", "selector": ".order-confirmation", "value": "visible"}
+        {"step_number": 1, "action": "navigate", "instruction": "Open /cart", "value": "/cart"},
+        {"step_number": 2, "action": "click", "instruction": "Click button.checkout", "selector": "button.checkout"},
+        {"step_number": 3, "action": "fill", "instruction": "Fill #card-number", "selector": "#card-number", "value": "4242424242424242"},
+        {"step_number": 4, "action": "fill", "instruction": "Fill #card-expiry", "selector": "#card-expiry", "value": "12/28"},
+        {"step_number": 5, "action": "fill", "instruction": "Fill #card-cvc", "selector": "#card-cvc", "value": "123"},
+        {"step_number": 6, "action": "click", "instruction": "Click button.pay-now", "selector": "button.pay-now"},
+        {"step_number": 7, "action": "assert_visible", "instruction": "Check .order-confirmation is visible", "selector": ".order-confirmation"}
     ]'::jsonb,
     'Order confirmation page displays with order number and summary.',
     'critical',
@@ -329,14 +329,14 @@ INSERT INTO public.test_cases (
     'Admin creates a new user account',
     'Tests the admin ability to create user accounts with role assignment.',
     '[
-        {"step_number": 1, "instruction": "navigate", "value": "/admin/users"},
-        {"step_number": 2, "instruction": "click", "selector": "button.create-user"},
-        {"step_number": 3, "instruction": "fill", "selector": "#new-user-email", "value": "newuser@test.com"},
-        {"step_number": 4, "instruction": "fill", "selector": "#new-user-name", "value": "Jane Smith"},
-        {"step_number": 5, "instruction": "click", "selector": "#role-select"},
-        {"step_number": 6, "instruction": "click", "selector": "[data-value=editor]"},
-        {"step_number": 7, "instruction": "click", "selector": "button.submit-user"},
-        {"step_number": 8, "instruction": "assert", "selector": ".success-toast", "value": "visible"}
+        {"step_number": 1, "action": "navigate", "instruction": "Open /admin/users", "value": "/admin/users"},
+        {"step_number": 2, "action": "click", "instruction": "Click button.create-user", "selector": "button.create-user"},
+        {"step_number": 3, "action": "fill", "instruction": "Fill #new-user-email", "selector": "#new-user-email", "value": "newuser@test.com"},
+        {"step_number": 4, "action": "fill", "instruction": "Fill #new-user-name", "selector": "#new-user-name", "value": "Jane Smith"},
+        {"step_number": 5, "action": "click", "instruction": "Click #role-select", "selector": "#role-select"},
+        {"step_number": 6, "action": "click", "instruction": "Click [data-value=editor]", "selector": "[data-value=editor]"},
+        {"step_number": 7, "action": "click", "instruction": "Click button.submit-user", "selector": "button.submit-user"},
+        {"step_number": 8, "action": "assert_visible", "instruction": "Check .success-toast is visible", "selector": ".success-toast"}
     ]'::jsonb,
     'New user appears in the user list with correct role.',
     'high',
@@ -351,11 +351,11 @@ INSERT INTO public.test_cases (
     'Update profile display name',
     'User updates their display name in profile settings.',
     '[
-        {"step_number": 1, "instruction": "navigate", "value": "/settings/profile"},
-        {"step_number": 2, "instruction": "fill", "selector": "#display-name", "value": "Updated Name"},
-        {"step_number": 3, "instruction": "click", "selector": "button.save-profile"},
-        {"step_number": 4, "instruction": "assert", "selector": ".success-message", "value": "visible"},
-        {"step_number": 5, "instruction": "assert", "selector": "#display-name", "value": "Updated Name"}
+        {"step_number": 1, "action": "navigate", "instruction": "Open /settings/profile", "value": "/settings/profile"},
+        {"step_number": 2, "action": "fill", "instruction": "Fill #display-name", "selector": "#display-name", "value": "Updated Name"},
+        {"step_number": 3, "action": "click", "instruction": "Click button.save-profile", "selector": "button.save-profile"},
+        {"step_number": 4, "action": "assert_visible", "instruction": "Check .success-message is visible", "selector": ".success-message"},
+        {"step_number": 5, "action": "assert_text", "instruction": "Check #display-name contains Updated Name", "selector": "#display-name", "value": "Updated Name"}
     ]'::jsonb,
     'Display name is updated and persists on page reload.',
     'medium',
@@ -370,10 +370,10 @@ INSERT INTO public.test_cases (
     'Export user data as CSV',
     'Verifies the data export feature generates and downloads a valid CSV file.',
     '[
-        {"step_number": 1, "instruction": "navigate", "value": "/settings/data"},
-        {"step_number": 2, "instruction": "click", "selector": "button.export-csv"},
-        {"step_number": 3, "instruction": "assert", "selector": ".export-progress", "value": "visible"},
-        {"step_number": 4, "instruction": "assert", "selector": ".download-complete", "value": "visible"}
+        {"step_number": 1, "action": "navigate", "instruction": "Open /settings/data", "value": "/settings/data"},
+        {"step_number": 2, "action": "click", "instruction": "Click button.export-csv", "selector": "button.export-csv"},
+        {"step_number": 3, "action": "assert_visible", "instruction": "Check .export-progress is visible", "selector": ".export-progress"},
+        {"step_number": 4, "action": "assert_visible", "instruction": "Check .download-complete is visible", "selector": ".download-complete"}
     ]'::jsonb,
     'CSV file downloads successfully with correct data format.',
     'low',

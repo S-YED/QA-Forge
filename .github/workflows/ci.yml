@@ -51,6 +51,10 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # The runner tests drive a real Chromium against a local fixture page.
+      - name: Install Playwright Chromium
+        run: pnpm --filter @qaforge/playwright-runner exec playwright install --with-deps chromium
+
       - name: Test
         run: pnpm test
 

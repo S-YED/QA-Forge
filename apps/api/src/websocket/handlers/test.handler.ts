@@ -5,7 +5,7 @@ import { generateTestCases } from '@qaforge/ai-engine';
 import logger from '../../utils/logger.js';
 import { resolveAIKey } from '../../utils/resolve-ai-key.js';
 import { acquireSlot, releaseSlot } from '../../middleware/concurrency-limiter.js';
-import type { ApiKeyProvider, TestCaseStep } from '@qaforge/shared-types';
+import type { TestCaseStep } from '@qaforge/shared-types';
 
 /**
  * Payload sent by the client to start a test execution.
@@ -190,6 +190,7 @@ export async function executeTestOrchestration(
                 test_run_id,
                 step_number: stepResult.step_number,
                 action: stepResult.action,
+                instruction: stepResult.instruction,
                 selector: stepResult.selector ?? null,
                 value: stepResult.value ?? null,
                 status: stepResult.status,
@@ -230,6 +231,7 @@ export async function executeTestOrchestration(
             io?.to(roomName).emit('test:step:complete', {
               test_run_id,
               step_number: stepResult.step_number,
+              instruction: stepResult.instruction,
               status: stepResult.status,
               screenshot_url: screenshotUrl,
               error_message: stepResult.error_message,
@@ -263,7 +265,8 @@ export async function executeTestOrchestration(
 
       // ── 6. Finalize run ───────────────────────────────────────────────────
       const completedAt = new Date().toISOString();
-      const finalStatus = result.passed ? 'passed' : 'failed';
+      // 'error' = the run broke (invalid steps, browser, unreachable target); only 'failed' is a product bug.
+      const finalStatus = result.status;
 
       await supabase
         .from('test_runs')
@@ -283,7 +286,7 @@ export async function executeTestOrchestration(
       });
 
       // ── 7. Auto-create bug on failure ─────────────────────────────────────
-      if (!result.passed) {
+      if (finalStatus === 'failed') {
         const failedStep = result.steps.find((s) => s.status === 'failed');
         const screenshotUrls: string[] = [];
 
@@ -297,7 +300,7 @@ export async function executeTestOrchestration(
         }
 
         const bugTitle = failedStep
-          ? `Test failure at step ${failedStep.step_number}: ${failedStep.action.substring(0, 100)}`
+          ? `Test failure at step ${failedStep.step_number}: ${failedStep.instruction.substring(0, 100)}`
           : `Test run ${test_run_id} failed`;
 
         const { data: bug } = await supabase

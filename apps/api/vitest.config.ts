@@ -5,6 +5,8 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/__tests__/**/*.test.ts', 'src/**/*.test.ts'],
+    // Integration tests need a running local Supabase; run via `pnpm test:integration`.
+    exclude: ['**/node_modules/**', '**/dist/**', 'src/**/*.int.test.ts'],
     coverage: {
       provider: 'v8',
       include: [

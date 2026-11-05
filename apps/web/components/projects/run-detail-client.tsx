@@ -55,6 +55,8 @@ function replayDelay(durationMs?: number): number {
 interface LiveStep {
   step_number: number;
   action: string;
+  /** Human-readable description (runs after CON-1); older rows only have `action`. */
+  instruction?: string | null;
   status: string;
   selector?: string;
   value?: string;
@@ -475,7 +477,7 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
       const type =
         data.status === 'passed' ? 'success' : data.status === 'failed' ? 'error' : 'info';
       addTerminalLine(
-        `Step ${data.step_number}: ${data.action} [${data.status}]${
+        `Step ${data.step_number}: ${data.instruction ?? data.action} [${data.status}]${
           data.duration_ms ? ` (${data.duration_ms}ms)` : ''
         }`,
         type as TerminalLine['type'],
@@ -687,7 +689,9 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
                       </span>
 
                       <div className="min-w-0">
-                        <p className="text-sm font-medium capitalize text-foreground">{step.action}</p>
+                        <p className={cn('text-sm font-medium text-foreground', !step.instruction && 'capitalize')}>
+                          {step.instruction || step.action}
+                        </p>
                         {'selector' in step && step.selector && (
                           <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
                             {step.selector}
