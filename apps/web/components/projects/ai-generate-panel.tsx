@@ -61,7 +61,7 @@ export function AIGeneratePanel({
   const [suiteMode, setSuiteMode] = useState<'existing' | 'new'>('new');
   const [generating, setGenerating] = useState(false);
   const [stageIndex, setStageIndex] = useState(-1);
-  const [result, setResult] = useState<{ count: number; suiteName: string; timeMs: number } | null>(
+  const [result, setResult] = useState<{ count: number; suiteName: string; timeMs: number; localDemo?: boolean } | null>(
     null,
   );
   const [error, setError] = useState('');
@@ -131,6 +131,7 @@ export function AIGeneratePanel({
         count: data.test_cases.length,
         suiteName: targetSuiteName(),
         timeMs: data.generation_time_ms,
+        localDemo: data.provider_used === 'local-demo',
       });
       setPrompt('');
       setNewSuiteName('');
@@ -275,7 +276,9 @@ export function AIGeneratePanel({
                 {result.suiteName}”.
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Generated in {(result.timeMs / 1000).toFixed(1)}s
+                {result.localDemo
+                  ? 'Local demo, not AI: fixed example tests for the bundled demo shop. Add an API key in Settings for real generation.'
+                  : `Generated in ${(result.timeMs / 1000).toFixed(1)}s`}
               </p>
               <Button className="mt-4 w-full" onClick={onGenerated}>
                 View test cases

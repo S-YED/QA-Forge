@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Checkout · Acme Shop</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js"></script>
+</head>
+<body>
+  <header><strong><a href="/" data-testid="brand">Acme Shop</a></strong><nav></nav></header>
+  <main>
+    <h1>Checkout</h1>
+    <p data-testid="checkout-step">Step 1 of 3: Shipping</p>
+
+    <form data-testid="shipping-form" novalidate>
+      <label>Full name <input data-testid="ship-name" autocomplete="name"></label>
+      <label>Address <input data-testid="ship-address" autocomplete="street-address"></label>
+      <label>City <input data-testid="ship-city" autocomplete="address-level2"></label>
+      <label>ZIP code <input data-testid="ship-zip" inputmode="numeric" autocomplete="postal-code"></label>
+      <p class="error" data-testid="ship-error" role="alert"></p>
+      <button type="submit" data-testid="ship-next">Continue to payment</button>
+    </form>
+
+    <form data-testid="payment-form" novalidate hidden>
+      <label>Card number <input data-testid="pay-card" inputmode="numeric" autocomplete="cc-number"></label>
+      <label>Expiry (MM/YY) <input data-testid="pay-expiry" autocomplete="cc-exp"></label>
+      <label>CVC <input data-testid="pay-cvc" inputmode="numeric" autocomplete="cc-csc"></label>
+      <p class="error" data-testid="pay-error" role="alert"></p>
+      <div class="row">
+        <button type="button" class="secondary" data-testid="pay-back">Back</button>
+        <button type="submit" data-testid="pay-next">Review order</button>
+      </div>
+    </form>
+
+    <section class="card" data-testid="review" hidden>
+      <p>Ship to <b data-testid="review-name"></b>, <span data-testid="review-address"></span></p>
+      <p data-testid="review-card"></p>
+      <p>Subtotal <b data-testid="review-subtotal">$120.00</b></p>
+      <div class="row">
+        <input data-testid="review-coupon" placeholder="Coupon code" aria-label="Coupon code">
+        <button type="button" class="secondary" data-testid="apply-coupon">Apply</button>
+      </div>
+      <p data-testid="coupon-message"></p>
+      <p>Total <b data-testid="review-total">$120.00</b></p>
+      <button type="button" data-testid="place-order">Place order</button>
+    </section>
+
+    <section class="card" data-testid="order-confirmation" hidden>
+      <p class="success" data-testid="order-confirmation-title">Order placed</p>
+      <p>Order number <b data-testid="order-number"></b></p>
+    </section>
+  </main>
+  <script>
+    const SUBTOTAL = 120;
+    const show = (testid, step) => {
+      for (const id of ['shipping-form', 'payment-form', 'review', 'order-confirmation']) $(id).hidden = id !== testid;
+      if (step) $('checkout-step').textContent = step;
+    };
+    const ship = {};
+
+    $('shipping-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      for (const f of ['name', 'address', 'city', 'zip']) ship[f] = $(`ship-${f}`).value.trim();
+      const error = $('ship-error');
+      error.textContent = Object.values(ship).some((v) => !v)
+        ? 'Fill in every shipping field'
+        : !/^\d{5}$/.test(ship.zip) ? 'ZIP code must be 5 digits' : '';
+      if (!error.textContent) show('payment-form', 'Step 2 of 3: Payment');
+    });
+
+    $('pay-back').addEventListener('click', () => show('shipping-form', 'Step 1 of 3: Shipping'));
+
+    $('payment-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const card = $('pay-card').value.replace(/\s+/g, '');
+      const error = $('pay-error');
+      error.textContent = !/^\d{16}$/.test(card)
+        ? 'Card number must be 16 digits'
+        : !/^(0[1-9]|1[0-2])\/\d{2}$/.test($('pay-expiry').value.trim()) ? 'Expiry must be MM/YY'
+        : !/^\d{3}$/.test($('pay-cvc').value.trim()) ? 'CVC must be 3 digits' : '';
+      if (error.textContent) return;
+      $('review-name').textContent = ship.name;
+      $('review-address').textContent = `${ship.address}, ${ship.city} ${ship.zip}`;
+      $('review-card').textContent = `Card ending ${card.slice(-4)}`;
+      show('review', 'Step 3 of 3: Review');
+    });
+
+    $('apply-coupon').addEventListener('click', () => {
+      const code = $('review-coupon').value.trim().toUpperCase();
+      // Planted bug for demos: SAVE10 is announced as applied, but the total never changes.
+      // QA Forge's local demo tests include a case that catches it, so you can see a failed run and its bug.
+      $('coupon-message').textContent = code === 'SAVE10' ? 'Coupon SAVE10 applied: 10% off' : 'Coupon not recognised';
+      $('review-total').textContent = `$${SUBTOTAL.toFixed(2)}`;
+    });
+
+    $('place-order').addEventListener('click', async () => {
+      $('place-order').disabled = true;
+      await wait(400); // simulated payment call
+      $('order-number').textContent = 'QF-1001';
+      show('order-confirmation', 'Order complete');
+    });
+  </script>
+</body>
+</html>

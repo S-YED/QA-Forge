@@ -1,8 +1,12 @@
 import type { Request, Response, NextFunction } from 'express';
-import type { ZodSchema } from 'zod';
+import { z, type ZodSchema } from 'zod';
 import { AppError } from './error-handler.js';
 
 type ValidationTarget = 'body' | 'query' | 'params';
+
+/** A URL the browser may open: http(s) only (address checks happen at run time, SEC-3). */
+export const httpUrl = () =>
+  z.string().url().refine((u) => /^https?:\/\//i.test(u), 'Must be an http:// or https:// URL');
 
 /**
  * Zod validation middleware factory.

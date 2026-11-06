@@ -1,5 +1,8 @@
-import { chromium, firefox, webkit, type Browser, type BrowserContext, type Page } from 'playwright';
+import type { Browser, BrowserContext, Page, Response } from 'playwright';
 import { TestCaseStepsSchema, TestStepStatus, type TestCaseStep } from '@qaforge/shared-types';
+import { BLOCKED_HEADER, assertAllowedTarget, launchGuardedBrowser } from './target-guard.js';
+
+export { assertAllowedTarget, launchGuardedBrowser } from './target-guard.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -19,6 +22,8 @@ export interface RunTestOptions {
   stepTimeoutMs?: number;
   /** Timeout for page navigations */
   navigationTimeoutMs?: number;
+  /** Hostnames allowed even though they resolve to private/loopback addresses (`*` = all). Default: none. */
+  allowedPrivateHosts?: readonly string[];
   /** Aborting closes the browser and ends the run with status "error" */
   signal?: AbortSignal;
   /** Called when a step starts; awaited */
@@ -52,13 +57,17 @@ export interface RunResult {
 
 // ── Step execution ────────────────────────────────────────────────────────────
 
-/** Resolve a navigate target against the base URL; only http(s) is allowed. */
-export function resolveTarget(value: string, baseUrl: string): string {
-  const url = new URL(value, baseUrl);
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error(`Refusing to navigate to ${url.protocol} URL`);
-  }
-  return url.toString();
+/** Resolve a navigate target against the base URL and check it is allowed. */
+async function resolveTarget(value: string, baseUrl: string, allowedPrivateHosts: readonly string[]): Promise<string> {
+  const url = new URL(value, baseUrl).toString();
+  await assertAllowedTarget(url, allowedPrivateHosts);
+  return url;
+}
+
+/** A navigation that ended on the guard proxy's block page (e.g. via a redirect) is an error, not a page. */
+function throwIfBlocked(response: Response | null) {
+  const reason = response?.headers()[BLOCKED_HEADER];
+  if (reason) throw new Error(`Blocked: ${reason}`);
 }
 
 /** Poll until `check` is true or the timeout passes (assertions that may settle after an action). */
@@ -70,7 +79,13 @@ async function waitUntil(page: Page, timeoutMs: number, check: () => Promise<boo
   }
 }
 
-async function executeStep(page: Page, step: TestCaseStep, baseUrl: string, timeoutMs: number): Promise<void> {
+async function executeStep(
+  page: Page,
+  step: TestCaseStep,
+  baseUrl: string,
+  timeoutMs: number,
+  allowedPrivateHosts: readonly string[],
+): Promise<void> {
   // Interactions use strict locators (an ambiguous selector fails instead of hitting the wrong element);
   // waits and assertions accept the first match.
   const loc = () => page.locator(step.selector!);
@@ -78,7 +93,7 @@ async function executeStep(page: Page, step: TestCaseStep, baseUrl: string, time
 
   switch (step.action) {
     case 'navigate':
-      await page.goto(resolveTarget(value, baseUrl), { waitUntil: 'domcontentloaded' });
+      throwIfBlocked(await page.goto(await resolveTarget(value, baseUrl, allowedPrivateHosts), { waitUntil: 'domcontentloaded' }));
       return;
     case 'click':
       await loc().click();
@@ -131,8 +146,6 @@ async function executeStep(page: Page, step: TestCaseStep, baseUrl: string, time
   }
 }
 
-const BROWSERS = { chromium, firefox, webkit };
-
 // ── Main Runner ──────────────────────────────────────────────────────────────
 
 /**
@@ -147,6 +160,7 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
     viewport = { width: 1280, height: 720 },
     stepTimeoutMs = 15_000,
     navigationTimeoutMs = 30_000,
+    allowedPrivateHosts = [],
     signal,
     onStepStart,
     onStepComplete,
@@ -171,9 +185,9 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
   const steps = parsed.data;
 
   try {
-    resolveTarget(baseUrl, baseUrl);
+    await assertAllowedTarget(baseUrl, allowedPrivateHosts);
   } catch (err) {
-    return finish('error', `Invalid base URL: ${err instanceof Error ? err.message : String(err)}`);
+    return finish('error', `Base URL not allowed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   let browser: Browser | undefined;
@@ -196,7 +210,7 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
     if (signal?.aborted) return finish('error', 'Run cancelled');
 
     try {
-      browser = await BROWSERS[browserName].launch({ headless: true });
+      browser = await launchGuardedBrowser(browserName, allowedPrivateHosts);
     } catch (err) {
       return finish('error', `Browser failed to launch: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -206,7 +220,7 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
     const page = await context.newPage();
 
     try {
-      await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      throwIfBlocked(await page.goto(baseUrl, { waitUntil: 'domcontentloaded' }));
     } catch (err) {
       return finish('error', `Could not open base URL ${baseUrl}: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -224,7 +238,7 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
       const stepStart = Date.now();
       let error: string | undefined;
       try {
-        await executeStep(page, step, baseUrl, stepTimeoutMs);
+        await executeStep(page, step, baseUrl, stepTimeoutMs, allowedPrivateHosts);
       } catch (err) {
         if (signal?.aborted) return finish('error', 'Run cancelled');
         error = err instanceof Error ? err.message : String(err);

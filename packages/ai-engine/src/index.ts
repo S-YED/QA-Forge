@@ -510,3 +510,4 @@ export async function optimizeTestCase(
 }
 
 export { type ApiKeyProvider } from '@qaforge/shared-types';
+export { LOCAL_DEMO_LABEL, LOCAL_DEMO_PROVIDER, localDemoTestCases } from './local-demo.js';

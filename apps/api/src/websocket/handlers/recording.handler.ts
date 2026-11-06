@@ -1,5 +1,7 @@
 import type { Server, Socket } from 'socket.io';
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import type { Browser, BrowserContext, Page } from 'playwright';
+import { assertAllowedTarget, launchGuardedBrowser } from '@qaforge/playwright-runner';
+import { env } from '../../config/env.js';
 import { supabase } from '../../config/supabase.js';
 import logger from '../../utils/logger.js';
 
@@ -209,14 +211,14 @@ export function registerRecordingHandlers(io: Server, socket: Socket) {
 
   // ── Start a live browser recording session ──
   socket.on('recording:start', async (payload: StartRecordingPayload) => {
-    const { session_id, base_url } = payload;
+    const { session_id } = payload;
     const roomName = `recording:${session_id}`;
     
     try {
       // Double check session ownership
       const { data: session } = await supabase
         .from('recorded_sessions')
-        .select('id, status')
+        .select('id, status, base_url')
         .eq('id', session_id)
         .eq('user_id', userId)
         .single();
@@ -237,11 +239,14 @@ export function registerRecordingHandlers(io: Server, socket: Socket) {
         return;
       }
 
+      // Only the URL stored (and validated) with the session is opened, never one from the socket payload.
+      const base_url: string = session.base_url;
+      await assertAllowedTarget(base_url, env.ALLOWED_PRIVATE_HOSTS);
       logger.info({ event: 'recording:browser:launching', session_id, base_url });
       
       // Launch headless browser (headed can be tricky to view inside docker/headless boxes, 
       // but virtual frame buffers allow running headless browsers perfectly with streaming!)
-      const browser = await chromium.launch({ headless: true });
+      const browser = await launchGuardedBrowser('chromium', env.ALLOWED_PRIVATE_HOSTS);
       const context = await browser.newContext({
         viewport: { width: 1280, height: 720 },
       });

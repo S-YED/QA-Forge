@@ -56,7 +56,7 @@ export async function getActiveCount(userId: string): Promise<number> {
  * Atomically tries to acquire a concurrency slot for a user.
  *
  * Returns true (and increments the count) if the user is below MAX_CONCURRENT,
- * otherwise false without changing state. Pair every successful acquire with
+ * otherwise false without changing state. Throws if Redis is configured but unreachable. Pair every successful acquire with
  * exactly one `releaseSlot(userId)`.
  */
 export async function acquireSlot(userId: string): Promise<boolean> {
@@ -71,10 +71,12 @@ export async function acquireSlot(userId: string): Promise<boolean> {
         String(SLOT_TTL_SECONDS),
       );
       return granted === 1;
-    } catch {
-      // Redis unavailable mid-flight — fail open so a Redis blip doesn't take
-      // down test execution. The cap degrades to best-effort until it recovers.
-      return true;
+    } catch (err) {
+      // Fail closed (EXE-2): without the shared counter we can't enforce the cap, so the
+      // run ends as `error` with this message instead of silently exceeding capacity.
+      throw new Error(
+        `Run capacity check unavailable (Redis: ${err instanceof Error ? err.message : String(err)}). Try again shortly.`,
+      );
     }
   }
   const current = activeCounts.get(userId) || 0;

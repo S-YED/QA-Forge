@@ -52,3 +52,13 @@ adds infrastructure that a clean-clone user would have to run.
 - **No fixed sleeps.** Waits use Playwright auto-waiting with the context default timeout (15 s per step, 30 s navigation).
   `assert_text`/`assert_url` poll until the timeout.
 - **http(s)-only navigation** is enforced in the runner now; private-network blocking is SEC-3.
+
+## TD-8 (5 Nov 2026): SSRF guard is a local forward proxy (SEC-3)
+- **Decision.** Every browser launched for a run or recording sends its traffic through an in-process stdlib proxy
+  (`launchGuardedBrowser`). The proxy resolves each destination, refuses private/reserved addresses, and connects to the
+  vetted IP itself. Up-front `assertAllowedTarget` checks give clear messages for the base URL and `navigate` steps.
+- **Why not `context.route`.** Playwright only routes the first URL of a redirect chain, so a public page could 302 the
+  browser to `169.254.169.254` and the screenshot would leak it. A proxy sees every hop, WebSocket and subresource, and
+  pinning the vetted IP removes the DNS-rebinding window.
+- **Exemptions.** `ALLOW_PRIVATE_HOSTS` (comma-separated hostnames, `*` = all, default empty). With `*` no proxy starts.
+- **Ceiling.** WebKit may bypass proxies for loopback; Chromium (`<-loopback>`) and Firefox (pref) are forced through.

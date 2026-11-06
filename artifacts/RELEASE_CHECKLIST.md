@@ -25,8 +25,8 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 - [x] Final status correct (passed/failed/error, `run-lifecycle.int.test.ts`) · [x] Failed runs produce bugs (and errors don't) · [ ] Run history survives refresh
 
 ## Reliability
-- [x] No false-positive passing runs (empty/invalid/unreachable/callback failure → `error`; `runner.test.ts`) · [ ] No duplicate execution · [ ] No permanently stuck `running`
-- [ ] Browser resources cleaned up · [ ] Persistence failures reported · [ ] Socket reconnection recovers DB state
+- [x] No false-positive passing runs (empty/invalid/unreachable/callback failure → `error`; `runner.test.ts`) · [x] No duplicate execution (concurrent-claim test) · [ ] No permanently stuck `running`
+- [ ] Browser resources cleaned up · [x] Persistence failures reported (upload failure → `error`) · [ ] Socket reconnection recovers DB state
 - [ ] Errors logged and diagnosable
 
 ## Security
@@ -34,10 +34,10 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 - [ ] RLS policies verified · [x] Profile role self-escalation blocked — `security.int.test.ts` (local)
 - [ ] Fixes applied to production (mig 22 + API redeploy) — **owner approval required**
 - [ ] API keys encrypted (hex key validated) · [ ] Service-role key backend-only
-- [ ] Storage private · [ ] WebSocket authorization verified · [ ] Browser network restrictions tested
+- [ ] Storage private · [ ] WebSocket authorization verified · [x] Browser network restrictions tested (runner SSRF tests, real Chromium)
 - [ ] No secrets committed (scan)
 
 ## Engineering
 - [x] Build passes — 7/7, 5 Nov 2026 · [x] Type check passes — 7/7 · [x] Lint passes (0 errors) — 7/7
-- [x] Unit tests pass — 65/65 · [ ] Integration tests in CI · [ ] E2E tests pass · [ ] CI covers all of the above
+- [x] Unit tests pass — api 79/79, runner 13/13 (6 Nov 2026) · [ ] Integration tests in CI · [ ] E2E tests pass · [ ] CI covers all of the above
 - [ ] README matches actual commands · [ ] Setup docs accurate · [ ] Release notes

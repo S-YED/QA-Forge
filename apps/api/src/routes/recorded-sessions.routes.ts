@@ -1,11 +1,11 @@
 import { Router, type IRouter } from 'express';
 import { z } from 'zod';
-import { validate } from '../middleware/validation.js';
+import { httpUrl, validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
 import { TestCaseStepsSchema } from '@qaforge/shared-types';
 import { closeRecordingSession } from '../websocket/handlers/recording.handler.js';
-import { executeTestOrchestration } from '../websocket/handlers/test.handler.js';
+import { executeTestOrchestration } from '../services/run-executor.js';
 
 // Router handles requests nested under /projects/:projectId/recorded-sessions
 const router: IRouter = Router({ mergeParams: true });
@@ -97,7 +97,7 @@ router.get('/:id', validate(uuidParamsSchema, 'params'), async (req, res, next) 
 const createSessionSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(1000).optional(),
-  base_url: z.string().url(),
+  base_url: httpUrl(),
   browser: z.enum(['chromium', 'firefox', 'webkit']).optional().default('chromium'),
 });
 
@@ -308,9 +308,8 @@ router.post('/:id/replay', validate(uuidParamsSchema, 'params'), async (req, res
 
     // 5. Trigger async orchestrator execution
     const io = req.app.get('io');
-    executeTestOrchestration(io, undefined, req.user.id, {
+    executeTestOrchestration(io, req.user.id, {
       test_run_id: run.id,
-      test_case_id: testCase.id,
       project_id: projectId,
     }).catch((err) => {
       console.error('Failed to execute replayed test run', err);

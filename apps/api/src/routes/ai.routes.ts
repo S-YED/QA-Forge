@@ -3,7 +3,14 @@ import { z } from 'zod';
 import { validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
-import { generateTestCases, optimizeTestCase } from '@qaforge/ai-engine';
+import {
+  LOCAL_DEMO_LABEL,
+  LOCAL_DEMO_PROVIDER,
+  generateTestCases,
+  localDemoTestCases,
+  optimizeTestCase,
+} from '@qaforge/ai-engine';
+import { env } from '../config/env.js';
 import logger from '../utils/logger.js';
 import { resolveAIKey } from '../utils/resolve-ai-key.js';
 
@@ -37,11 +44,13 @@ router.post('/generate', validate(generateSchema), async (req, res, next) => {
       return next(new AppError('NOT_FOUND', 404, 'Project not found'));
     }
 
-    // 2. Resolve AI provider key
-    const { provider: selectedProvider, apiKey: rawApiKey } = await resolveAIKey(
-      req.user.id,
-      req.body.provider,
-    );
+    // 2. Resolve AI provider key. With AI_LOCAL_DEMO on, a user with no key (who didn't ask for a
+    //    specific provider) gets the fixed local demo cases instead, which are labelled as not AI.
+    const key = await resolveAIKey(req.user.id, req.body.provider).catch((err: unknown) => {
+      if (env.AI_LOCAL_DEMO && !req.body.provider && err instanceof AppError && err.statusCode === 400) return null;
+      throw err;
+    });
+    const selectedProvider = key?.provider ?? LOCAL_DEMO_PROVIDER;
 
     // 3. Resolve or create suite
     let suiteId: string;
@@ -92,13 +101,15 @@ router.post('/generate', validate(generateSchema), async (req, res, next) => {
       promptLength: req.body.prompt.length,
     });
 
-    const result = await generateTestCases({
-      prompt: req.body.prompt,
-      provider: selectedProvider,
-      apiKey: rawApiKey,
-      baseUrl: project.base_url ?? undefined,
-      model: req.body.model,
-    });
+    const result = key
+      ? await generateTestCases({
+          prompt: req.body.prompt,
+          provider: key.provider,
+          apiKey: key.apiKey,
+          baseUrl: project.base_url ?? undefined,
+          model: req.body.model,
+        })
+      : { test_cases: localDemoTestCases(req.body.prompt), rejected: [], model_used: LOCAL_DEMO_LABEL, generation_time_ms: 0 };
 
     logger.info({
       event: 'ai:generate:complete',
@@ -121,8 +132,8 @@ router.post('/generate', validate(generateSchema), async (req, res, next) => {
       priority: tc.priority || 'medium',
       type: tc.type || 'functional',
       tags: tc.tags || [],
-      is_ai_generated: true,
-      source: 'ai_generated' as const,
+      is_ai_generated: Boolean(key),
+      source: key ? ('ai_generated' as const) : ('manual' as const),
       created_at: now,
       updated_at: now,
     }));

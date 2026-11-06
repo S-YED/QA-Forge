@@ -3,7 +3,10 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { runTest, type StepResult } from '../src/index.js';
+import { assertAllowedTarget, runTest as runUnguarded, type RunTestOptions, type StepResult } from '../src/index.js';
+
+// The fixture lives on 127.0.0.1, which the SSRF guard blocks unless allowed explicitly.
+const runTest = (o: RunTestOptions) => runUnguarded({ allowedPrivateHosts: ['127.0.0.1'], ...o });
 
 const PAGES: Record<string, string> = {
   '/': `<!doctype html><title>Home</title>
@@ -13,15 +16,28 @@ const PAGES: Record<string, string> = {
     <p id="out"></p><span class="dup">a</span><span class="dup">b</span>
     <a id="next" href="/next">Next</a>`,
   '/next': `<!doctype html><title>Next</title><h1>Next page</h1>`,
+  '/leak': `<!doctype html><h1>Leak</h1><img src="http://localhost:{PORT}/secret-img">`,
+  '/ws': `<!doctype html><p id="ws">open</p><script>
+    const s = new WebSocket('ws://localhost:{PORT}/secret-ws');
+    s.onclose = s.onerror = () => { document.getElementById('ws').textContent = 'closed' };</script>`,
 };
+/** host + path of every request the fixture received */
+const hits: string[] = [];
 
 let server: http.Server;
 let baseUrl: string;
 
 beforeAll(async () => {
   server = http.createServer((req, res) => {
-    const body = PAGES[req.url ?? ''];
+    hits.push(`${req.headers.host} ${req.url}`);
+    const port = (server.address() as AddressInfo).port;
+    if (req.url === '/hop') return void res.writeHead(302, { Location: `http://localhost:${port}/next` }).end();
+    const body = PAGES[req.url ?? '']?.replaceAll('{PORT}', String(port));
     res.writeHead(body ? 200 : 404, { 'Content-Type': 'text/html' }).end(body ?? 'not found');
+  });
+  server.on('upgrade', (req, socket) => {
+    hits.push(`${req.headers.host} ${req.url}`);
+    socket.destroy();
   });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
@@ -127,7 +143,7 @@ describe('runTest', () => {
   it('refuses non-http navigation', async () => {
     const result = await runTest({ baseUrl, steps: [s(1, 'navigate', { value: 'file:///etc/passwd' })] });
     expect(result.status).toBe('failed');
-    expect(result.steps[0].error_message).toMatch(/Refusing to navigate to file:/);
+    expect(result.steps[0].error_message).toMatch(/Refusing to open file: URL/);
   }, 30_000);
 
   it('ends with error when persistence (a callback) throws', async () => {
@@ -155,4 +171,55 @@ describe('runTest', () => {
     expect(result.status).toBe('error');
     expect(result.error_message).toBe('Run cancelled');
   }, 30_000);
+});
+
+describe('SSRF guard', () => {
+  it('classifies targets by resolved address', async () => {
+    for (const url of [
+      'http://127.0.0.1/', 'http://10.1.2.3/', 'http://172.20.0.1/', 'http://192.168.1.1/', 'http://100.64.0.1/',
+      'http://169.254.169.254/latest/meta-data/', 'http://0.0.0.0/', 'http://2130706433/', 'http://0x7f.1/',
+      'http://[::1]/', 'http://[::ffff:127.0.0.1]/', 'http://[fd00::1]/', 'http://[fe80::1]/', 'http://localhost:4100/',
+      'file:///etc/passwd', 'ftp://example.com/',
+    ]) {
+      await expect(assertAllowedTarget(url), url).rejects.toThrow(/Refusing to open/);
+    }
+    for (const url of ['http://8.8.8.8/', 'https://1.1.1.1/x', 'http://[2606:4700:4700::1111]/']) {
+      await expect(assertAllowedTarget(url), url).resolves.toBeUndefined();
+    }
+    await expect(assertAllowedTarget('http://localhost:4100/', ['localhost'])).resolves.toBeUndefined();
+    await expect(assertAllowedTarget('http://10.0.0.5/', ['*'])).resolves.toBeUndefined();
+    await expect(assertAllowedTarget('file:///etc/passwd', ['*'])).rejects.toThrow(/file:/);
+  });
+
+  it('refuses a private base URL unless that host is allowed', async () => {
+    const result = await runUnguarded({ baseUrl, steps: [s(1, 'assert_visible', { selector: 'h1' })] });
+    expect(result.status).toBe('error');
+    expect(result.error_message).toMatch(/Base URL not allowed: Refusing to open 127\.0\.0\.1.*private/);
+  });
+
+  it('blocks subresources, websockets, redirects and navigation to other private hosts', async () => {
+    hits.length = 0;
+    const page = await runTest({
+      baseUrl,
+      steps: [
+        s(1, 'navigate', { value: '/leak' }),
+        s(2, 'assert_visible', { selector: 'h1' }),
+        s(3, 'navigate', { value: '/ws' }),
+        s(4, 'assert_text', { selector: '#ws', value: 'closed' }),
+      ],
+    });
+    expect(page.error_message).toBeUndefined();
+    expect(page.status).toBe('passed');
+
+    const redirect = await runTest({ baseUrl, stepTimeoutMs: 2_000, steps: [s(1, 'navigate', { value: '/hop' })] });
+    expect(redirect.status).toBe('failed');
+    expect(redirect.steps[0].error_message).toMatch(/^Blocked: Refusing to open localhost: .*private/);
+
+    const direct = await runTest({ baseUrl, steps: [s(1, 'navigate', { value: baseUrl.replace('127.0.0.1', 'localhost') + 'next' })] });
+    expect(direct.status).toBe('failed');
+    expect(direct.steps[0].error_message).toMatch(/^Refusing to open localhost: .*private/);
+
+    expect(hits.some((h) => h.includes('/hop'))).toBe(true); // the guard let the allowed hop through...
+    expect(hits.filter((h) => h.startsWith('localhost'))).toEqual([]); // ...but nothing reached the other host
+  }, 60_000);
 });

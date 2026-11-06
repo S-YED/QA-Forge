@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shopping list · Acme Shop</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js"></script>
+</head>
+<body>
+  <header><strong><a href="/" data-testid="brand">Acme Shop</a></strong><nav></nav></header>
+  <main>
+    <h1>Shopping list</h1>
+    <form class="row" data-testid="item-form" novalidate>
+      <input data-testid="item-name" placeholder="Add an item" aria-label="Item name">
+      <button type="submit" data-testid="item-add">Add</button>
+    </form>
+    <p class="error" data-testid="item-error" role="alert"></p>
+    <p data-testid="item-count"></p>
+    <ul class="items" data-testid="item-list"></ul>
+  </main>
+  <script>
+    const slug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const load = () => { try { return JSON.parse(localStorage.getItem('demo-items')) ?? ['Apples', 'Bread']; } catch { return ['Apples', 'Bread']; } };
+    let items = load();
+
+    function render() {
+      localStorage.setItem('demo-items', JSON.stringify(items));
+      $('item-count').textContent = items.length === 0 ? 'No items yet' : `${items.length} ${items.length === 1 ? 'item' : 'items'}`;
+      $('item-list').replaceChildren(...items.map((name) => {
+        const li = document.createElement('li');
+        li.dataset.testid = `item-row-${slug(name)}`;
+        const label = document.createElement('span');
+        label.textContent = name;
+        const del = document.createElement('button');
+        del.className = 'secondary';
+        del.dataset.testid = `item-delete-${slug(name)}`;
+        del.textContent = 'Delete';
+        del.addEventListener('click', () => { items = items.filter((i) => i !== name); render(); });
+        li.append(label, del);
+        return li;
+      }));
+    }
+
+    $('item-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = $('item-name').value.trim();
+      const error = $('item-error');
+      error.textContent = !name
+        ? 'Item name is required'
+        : name.length > 40 ? 'Item name must be 40 characters or fewer'
+        : items.some((i) => i.toLowerCase() === name.toLowerCase()) ? 'That item is already on the list'
+        : '';
+      if (error.textContent) return;
+      items.push(name);
+      $('item-name').value = '';
+      render();
+    });
+    render();
+  </script>
+</body>
+</html>

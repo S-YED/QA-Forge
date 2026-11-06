@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
-import { executeTestOrchestration } from '../websocket/handlers/test.handler.js';
+import { executeTestOrchestration } from '../services/run-executor.js';
 import { demoRunLimiter } from '../middleware/rate-limiter.js';
 import logger from '../utils/logger.js';
 // All routes nested under /projects/:projectId/test-runs
@@ -104,9 +104,9 @@ router.get(
 // ── POST /projects/:projectId/test-runs ───────────────────────────────────────
 
 const createRunSchema = z.object({
-  test_case_id: z.string().uuid().optional(),
+  // A run always executes a saved (reviewed) test case; run-time AI generation was removed (EXE-1).
+  test_case_id: z.string().uuid(),
   mode: z.enum(['ai_driven', 'manual_recording', 'replay']),
-  nl_input: z.string().max(5000).optional(),
   browser: z.enum(['chromium', 'firefox', 'webkit']).optional().default('chromium'),
 });
 
@@ -130,29 +130,27 @@ router.post('/', demoRunLimiter, validate(createRunSchema), async (req, res, nex
       return next(new AppError('NOT_FOUND', 404, 'Project not found'));
     }
 
-    // If test_case_id is provided, verify it exists and belongs to this project
-    if (req.body.test_case_id) {
-      const { data: testCase } = await supabase
-        .from('test_cases')
-        .select('id, suite_id')
-        .eq('id', req.body.test_case_id)
-        .single();
+    // Verify the test case exists and belongs to this project
+    const { data: testCase } = await supabase
+      .from('test_cases')
+      .select('id, suite_id')
+      .eq('id', req.body.test_case_id)
+      .single();
 
-      if (!testCase) {
-        return next(new AppError('NOT_FOUND', 404, 'Test case not found'));
-      }
+    if (!testCase) {
+      return next(new AppError('NOT_FOUND', 404, 'Test case not found'));
+    }
 
-      // Verify suite belongs to the project
-      const { data: suite } = await supabase
-        .from('test_suites')
-        .select('id')
-        .eq('id', testCase.suite_id)
-        .eq('project_id', projectId)
-        .single();
+    // Verify suite belongs to the project
+    const { data: suite } = await supabase
+      .from('test_suites')
+      .select('id')
+      .eq('id', testCase.suite_id)
+      .eq('project_id', projectId)
+      .single();
 
-      if (!suite) {
-        return next(new AppError('NOT_FOUND', 404, 'Test case does not belong to this project'));
-      }
+    if (!suite) {
+      return next(new AppError('NOT_FOUND', 404, 'Test case does not belong to this project'));
     }
 
     const now = new Date().toISOString();
@@ -162,11 +160,10 @@ router.post('/', demoRunLimiter, validate(createRunSchema), async (req, res, nex
       .insert({
         project_id: projectId,
         user_id: req.user.id,
-        test_case_id: req.body.test_case_id ?? null,
+        test_case_id: req.body.test_case_id,
         mode: req.body.mode,
         status: 'pending',
         browser: req.body.browser ?? 'chromium',
-        nl_input: req.body.nl_input ?? null,
         created_at: now,
       })
       .select()
@@ -178,11 +175,9 @@ router.post('/', demoRunLimiter, validate(createRunSchema), async (req, res, nex
 
     // Trigger execution orchestration immediately
     const io = req.app.get('io');
-    executeTestOrchestration(io, undefined, req.user.id, {
+    executeTestOrchestration(io, req.user.id, {
       test_run_id: run.id,
-      test_case_id: run.test_case_id ?? undefined,
       project_id: projectId as string,
-      nl_input: run.nl_input ?? undefined,
     }).catch(err => {
       logger.error('Failed to execute test run', err);
     });

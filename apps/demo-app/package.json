@@ -1,0 +1,11 @@
+{
+  "name": "@qaforge/demo-app",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Zero-dependency demo shop for QA Forge to test against locally (http://127.0.0.1:4100).",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "start": "node server.mjs"
+  }
+}

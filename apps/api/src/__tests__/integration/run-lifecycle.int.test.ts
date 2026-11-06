@@ -1,5 +1,5 @@
 /**
- * RUN-1 end to end: POST /test-runs → executeTestOrchestration → real Chromium → DB rows.
+ * RUN-1/EXE-1 end to end: POST /test-runs → executeTestOrchestration → real Chromium → DB rows.
  * Prereq: local Supabase (`supabase start && supabase db reset`) and Playwright Chromium.
  * The application under test is a fixture page served by this file on 127.0.0.1.
  */
@@ -7,6 +7,8 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { USERS, signIn, useApi } from './helpers.js';
+import { supabase } from '../../config/supabase.js';
+import { executeTestOrchestration, reapInterruptedRuns, shutdownRuns } from '../../services/run-executor.js';
 
 const api = useApi();
 
@@ -17,6 +19,7 @@ const FIXTURE = `<!doctype html><title>Fixture</title><h1>Hello fixture</h1>
 let target: http.Server;
 let targetUrl: string;
 let token: string;
+let userId: string;
 let projectId: string;
 let casesPath: string;
 
@@ -25,7 +28,7 @@ beforeAll(async () => {
   await new Promise<void>((r) => target.listen(0, '127.0.0.1', r));
   targetUrl = `http://127.0.0.1:${(target.address() as AddressInfo).port}/`;
 
-  token = (await signIn(USERS.bob)).token;
+  ({ token, id: userId } = await signIn(USERS.bob));
   const project = (await (await api('/projects', token, 'POST', { name: 'run1-lifecycle', base_url: targetUrl })).json()) as {
     project: { id: string };
   };
@@ -47,15 +50,21 @@ type RunDetail = {
   bugs: { id: string }[];
 };
 
-async function runCase(steps: unknown[]): Promise<RunDetail> {
+async function createCase(steps: unknown[]): Promise<string> {
   const created = await api(casesPath, token, 'POST', { title: `case ${Date.now()}`, steps });
   expect(created.status).toBe(201);
-  const caseId = ((await created.json()) as { test_case: { id: string } }).test_case.id;
+  return ((await created.json()) as { test_case: { id: string } }).test_case.id;
+}
 
+async function runCase(steps: unknown[]): Promise<RunDetail> {
+  const caseId = await createCase(steps);
   const runRes = await api(`/projects/${projectId}/test-runs`, token, 'POST', { test_case_id: caseId, mode: 'ai_driven' });
   expect(runRes.status).toBe(201);
   const runId = ((await runRes.json()) as { test_run: { id: string } }).test_run.id;
+  return waitForRun(runId);
+}
 
+async function waitForRun(runId: string): Promise<RunDetail> {
   const deadline = Date.now() + 60_000;
   for (;;) {
     const detail = (await (await api(`/projects/${projectId}/test-runs/${runId}`, token)).json()) as RunDetail;
@@ -107,4 +116,98 @@ describe('RUN-1 run lifecycle through the API', () => {
       await api(`/projects/${projectId}`, token, 'PUT', { base_url: targetUrl });
     }
   }, 90_000);
+});
+
+describe('EXE-1 single executor', () => {
+  const ONE_STEP = [{ step_number: 1, action: 'assert_visible', instruction: 'Heading', selector: 'h1' }];
+
+  it('rejects a run without a saved test case', async () => {
+    const res = await api(`/projects/${projectId}/test-runs`, token, 'POST', { mode: 'ai_driven', nl_input: 'do stuff' });
+    expect(res.status).toBe(400);
+  });
+
+  it('executes a run exactly once when started twice concurrently', async () => {
+    const caseId = await createCase([...ONE_STEP, { ...ONE_STEP[0], step_number: 2 }]);
+    const { data: run, error } = await supabase
+      .from('test_runs')
+      .insert({ project_id: projectId, user_id: userId, test_case_id: caseId, mode: 'ai_driven', status: 'pending', browser: 'chromium' })
+      .select('id')
+      .single();
+    expect(error).toBeNull();
+
+    const payload = { test_run_id: run!.id, project_id: projectId };
+    await Promise.all([
+      executeTestOrchestration(undefined, userId, payload),
+      executeTestOrchestration(undefined, userId, payload),
+    ]);
+
+    const detail = await waitForRun(run!.id);
+    expect(detail.test_run.status).toBe('passed');
+    expect(detail.steps.map((s) => s.step_number)).toEqual([1, 2]); // not [1, 1, 2, 2]
+  }, 90_000);
+
+  it('ends with error when a screenshot cannot be stored', async () => {
+    const { data: bucket } = await supabase.storage.getBucket('test-artifacts');
+    expect(bucket).not.toBeNull();
+    await supabase.storage.updateBucket('test-artifacts', { public: bucket!.public, allowedMimeTypes: ['image/jpeg'] });
+    try {
+      const run = await runCase(ONE_STEP);
+      expect(run.test_run.status).toBe('error');
+      expect(run.test_run.error_message).toMatch(/Screenshot upload failed for step 1/);
+      expect(run.test_run.completed_at).not.toBeNull();
+      expect(run.bugs).toHaveLength(0);
+    } finally {
+      await supabase.storage.updateBucket('test-artifacts', {
+        public: bucket!.public,
+        // null (not undefined) clears the restriction; undefined would leave image/jpeg in place.
+        allowedMimeTypes: bucket!.allowed_mime_types ?? null,
+        fileSizeLimit: bucket!.file_size_limit ?? null,
+      });
+    }
+  }, 90_000);
+});
+
+describe('EXE-2 no permanently stuck runs', () => {
+  async function insertRun(status: 'pending' | 'running', steps: unknown[]) {
+    const caseId = await createCase(steps);
+    const { data, error } = await supabase
+      .from('test_runs')
+      .insert({ project_id: projectId, user_id: userId, test_case_id: caseId, mode: 'ai_driven', status, browser: 'chromium' })
+      .select('id')
+      .single();
+    expect(error).toBeNull();
+    return data!.id as string;
+  }
+
+  it('boot reaper marks runs orphaned by a previous process as error', async () => {
+    const runId = await insertRun('running', [{ step_number: 1, action: 'assert_visible', instruction: 'h', selector: 'h1' }]);
+    expect(await reapInterruptedRuns()).toBeGreaterThanOrEqual(1);
+    const run = (await waitForRun(runId)).test_run;
+    expect(run.status).toBe('error');
+    expect(run.error_message).toMatch(/^Interrupted/);
+    expect(run.completed_at).not.toBeNull();
+  });
+
+  it('shutdown cancels an in-flight run and records it as interrupted', async () => {
+    const runId = await insertRun('pending', [
+      { step_number: 1, action: 'assert_visible', instruction: 'Heading', selector: 'h1' },
+      { step_number: 2, action: 'wait_for', instruction: 'Never appears', selector: '#never' },
+    ]);
+    const execution = executeTestOrchestration(undefined, userId, { test_run_id: runId, project_id: projectId });
+
+    // Wait until step 1 is persisted, i.e. the browser is busy on step 2's 15 s wait.
+    for (let i = 0; i < 100; i++) {
+      const { count } = await supabase.from('test_steps').select('id', { count: 'exact', head: true }).eq('test_run_id', runId);
+      if (count) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    const started = Date.now();
+    await shutdownRuns(10_000);
+    await execution;
+    expect(Date.now() - started).toBeLessThan(10_000);
+
+    const run = (await waitForRun(runId)).test_run;
+    expect(run.status).toBe('error');
+    expect(run.error_message).toMatch(/^Interrupted/);
+  }, 60_000);
 });

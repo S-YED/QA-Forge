@@ -8,6 +8,8 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.int.test.ts'],
     setupFiles: ['dotenv/config'],
+    // Fixture sites run on 127.0.0.1; everything else stays behind the SSRF guard.
+    env: { ALLOW_PRIVATE_HOSTS: '127.0.0.1' },
     testTimeout: 30_000,
     fileParallelism: false,
   },
