@@ -14,7 +14,7 @@ ticket is **Verified** in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 | MED | Runs stuck `running` after an API restart: fix implemented, integration test pending a working Docker engine | EXE-2 |
 | MED | Refresh mid-run: fix built (live for pending/running, ack then reload on join/reconnect), not yet checked in a browser | UI-1 |
 | MED | Manual step editor and run-detail `instruction` display not yet checked in a browser (type-checked and built only) | UI-2 / QA-3 |
-| MED | Env templates/docs use the wrong key names; no setup script; seeds still target syedkm.com/example.com, not the demo app | DX-1, DX-2, DEMO-1 |
+| MED | No setup script yet (`pnpm bootstrap`/`doctor`); seeds still target syedkm.com/example.com, not the demo app; README and setup guide still describe the old root `.env.example` | DX-2, DEMO-1, DOC-1 |
 | MED | Local demo generation (`AI_LOCAL_DEMO`) fallback in the generate route not yet integration-tested (fixtures and runner verified) | AI-3 |
 | MED | `test_runs` RLS doesn't tie case to project; `bugs.assigned_to` blocks profile delete | S6 |
 | LOW | 21 `no-explicit-any` lint warnings in `apps/api`; Next.js ESLint plugin not configured | CI-1 |

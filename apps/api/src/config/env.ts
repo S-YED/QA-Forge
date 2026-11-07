@@ -12,11 +12,14 @@ const schema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
-  DATABASE_URL: z.string().min(1),
-  /** 32 bytes represented as a 64-character lowercase hex string.
-   *  Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))" */
-  ENCRYPTION_KEY: z.string().length(64),
-  JWT_SECRET: z.string().min(32),
+  /** 32 random bytes as 64 hex characters; encrypts users' stored AI keys. Non-hex input would
+   *  silently decode to a shorter key, so it is rejected here. */
+  ENCRYPTION_KEY: z
+    .string()
+    .regex(
+      /^[0-9a-fA-F]{64}$/,
+      `must be 64 hex characters. Generate one with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`,
+    ),
   /** Optional in MVP — BullMQ is post-MVP. */
   REDIS_URL: z.string().optional(),
   /** Comma-separated hostnames test runs may reach even though they resolve to private
@@ -33,8 +36,9 @@ export type Env = z.infer<typeof schema>;
 const result = schema.safeParse(process.env);
 
 if (!result.success) {
-  console.error('[env] ❌ Invalid environment variables:');
-  console.error(JSON.stringify(result.error.format(), null, 2));
+  // One line per variable, so a stranger can fix apps/api/.env without reading Zod output.
+  const lines = result.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`);
+  console.error(`[env] Invalid environment variables (see apps/api/.env.example):\n${lines.join('\n')}`);
   process.exit(1);
 }
 
@@ -49,9 +53,7 @@ export const env = {
   SUPABASE_URL: data.SUPABASE_URL,
   SUPABASE_ANON_KEY: data.SUPABASE_ANON_KEY,
   SUPABASE_SERVICE_ROLE_KEY: data.SUPABASE_SERVICE_ROLE_KEY,
-  DATABASE_URL: data.DATABASE_URL,
   ENCRYPTION_KEY: data.ENCRYPTION_KEY,
-  JWT_SECRET: data.JWT_SECRET,
   REDIS_URL: data.REDIS_URL,
   ALLOWED_PRIVATE_HOSTS: data.ALLOW_PRIVATE_HOSTS.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
   AI_LOCAL_DEMO: data.AI_LOCAL_DEMO === 'true',
