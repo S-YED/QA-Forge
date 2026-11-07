@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
+import { signBugScreenshots } from '../utils/artifacts.js';
 
 // All routes nested under /projects/:projectId/bugs
 // Pre-protected by `authenticate` applied in app.ts.
@@ -56,7 +57,7 @@ router.get('/', async (req, res, next) => {
     if (error) return next(error);
 
     res.status(200).json({
-      bugs: bugs ?? [],
+      bugs: await signBugScreenshots(bugs ?? []),
       count: count ?? 0,
       page,
       per_page: perPage,
@@ -97,7 +98,8 @@ router.get(
         return next(new AppError('NOT_FOUND', 404, 'Bug not found'));
       }
 
-      res.status(200).json({ bug });
+      const [signedBug] = await signBugScreenshots([bug]);
+      res.status(200).json({ bug: signedBug });
     } catch (err) {
       next(err);
     }
@@ -212,7 +214,8 @@ router.put(
         return next(new AppError('NOT_FOUND', 404, 'Bug not found'));
       }
 
-      res.status(200).json({ bug });
+      const [signedBug] = await signBugScreenshots([bug]);
+      res.status(200).json({ bug: signedBug });
     } catch (err) {
       next(err);
     }

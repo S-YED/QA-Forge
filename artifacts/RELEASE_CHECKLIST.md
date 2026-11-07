@@ -10,7 +10,7 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 - [ ] Dependency installation works (`pnpm install --frozen-lockfile`)
 - [ ] `pnpm bootstrap` works and is safe to rerun
 - [x] Local Supabase starts — `npx supabase start`, 8 Nov 2026 (after a Windows reboot; Docker/WSL hang noted in KNOWN_ISSUES)
-- [x] All migrations apply cleanly — `supabase db reset`, 23 migrations, 5 Nov 2026
+- [x] All migrations apply cleanly — `supabase db reset`, 23 migrations, 5 Nov 2026; migration 24 via `migration up`, 8 Nov
 - [ ] Demo seed data loads **and targets the local demo app**
 - [ ] Environment configuration validated (`pnpm doctor`)
 - [ ] Playwright browsers installed by the setup
@@ -21,7 +21,7 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 - [ ] AI generation with configured providers · [x] Local demo mode without paid keys (`demo-flow.int.test.ts`, 8 Nov)
 - [ ] Generated cases reviewed and approved before save
 - [x] Runs created · [x] Real browser executes steps (`run-lifecycle.int.test.ts`) · [ ] Live progress visible
-- [ ] Screenshots saved (private) and retrievable · [x] Failed / passed steps recorded correctly (`run-lifecycle.int.test.ts`)
+- [x] Screenshots saved (private) and retrievable (EXE-3 integration, 8 Nov) · [x] Failed / passed steps recorded correctly (`run-lifecycle.int.test.ts`)
 - [x] Final status correct (passed/failed/error, `run-lifecycle.int.test.ts`) · [x] Failed runs produce bugs (and errors don't) · [ ] Run history survives refresh
 
 ## Reliability
@@ -34,7 +34,7 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 - [ ] RLS policies verified · [x] Profile role self-escalation blocked — `security.int.test.ts` (local)
 - [ ] Fixes applied to production (mig 22 + API redeploy) — approved 8 Nov; waiting on the Railway service (gone) and the DB password for `db push`
 - [x] API keys encrypted (hex key validated) — `encryption.test.ts`, `env-example.test.ts` (8 Nov 2026) · [ ] Service-role key backend-only
-- [ ] Storage private · [ ] WebSocket authorization verified · [x] Browser network restrictions tested (runner SSRF tests, real Chromium)
+- [x] Storage private (local; cloud after migration 24) · [ ] WebSocket authorization verified · [x] Browser network restrictions tested (runner SSRF tests, real Chromium)
 - [ ] No secrets committed (scan)
 
 ## Engineering

@@ -4,6 +4,7 @@ import { validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
 import { executeTestOrchestration } from '../services/run-executor.js';
+import { signArtifacts } from '../utils/artifacts.js';
 import { demoRunLimiter } from '../middleware/rate-limiter.js';
 import logger from '../utils/logger.js';
 // All routes nested under /projects/:projectId/test-runs
@@ -90,9 +91,11 @@ router.get(
         .select('id, title, severity, status')
         .eq('test_run_id', req.params.id);
 
+      // Screenshots are private (EXE-3): stored paths become short-lived signed URLs here.
+      const signed = await signArtifacts((steps ?? []).map((s) => s.screenshot_url));
       res.status(200).json({
         test_run: run,
-        steps: steps ?? [],
+        steps: (steps ?? []).map((s, i) => ({ ...s, screenshot_url: signed[i] })),
         bugs: bugs ?? [],
       });
     } catch (err) {

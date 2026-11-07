@@ -45,7 +45,7 @@ afterAll(async () => {
 });
 
 type RunDetail = {
-  test_run: { status: string; error_message: string | null; completed_at: string | null };
+  test_run: { id: string; status: string; error_message: string | null; completed_at: string | null };
   steps: { step_number: number; action: string; instruction: string; status: string; screenshot_url: string | null }[];
   bugs: { id: string }[];
 };
@@ -93,6 +93,23 @@ describe('RUN-1 run lifecycle through the API', () => {
     ]);
     expect(run.steps.every((s) => s.screenshot_url)).toBe(true);
     expect(run.bugs).toHaveLength(0);
+
+    // EXE-3: the row stores the private bucket path; the API hands out a working signed URL,
+    // and the old public URL no longer serves the image.
+    const { data: stored } = await supabase
+      .from('test_steps')
+      .select('screenshot_url')
+      .eq('test_run_id', run.test_run.id)
+      .eq('step_number', 1)
+      .single();
+    expect(stored!.screenshot_url).toBe(`screenshots/${run.test_run.id}/step_1.png`);
+    const signedUrl = run.steps[0].screenshot_url!;
+    expect(signedUrl).toMatch(/\/storage\/v1\/object\/sign\/test-artifacts\/screenshots\//);
+    const image = await fetch(signedUrl);
+    expect(image.status).toBe(200);
+    expect(image.headers.get('content-type')).toBe('image/png');
+    const publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/test-artifacts/${stored!.screenshot_url}`;
+    expect((await fetch(publicUrl)).status).toBeGreaterThanOrEqual(400);
   }, 90_000);
 
   it('a failing assertion ends failed, skips the rest and files a bug', async () => {

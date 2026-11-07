@@ -3,6 +3,7 @@ import { runTest, type BrowserName, type RunStatus, type StepResult } from '@qaf
 import { env } from '../config/env.js';
 import { supabase } from '../config/supabase.js';
 import logger from '../utils/logger.js';
+import { ARTIFACT_BUCKET, screenshotPath, signArtifacts } from '../utils/artifacts.js';
 import { acquireSlot, releaseSlot } from '../middleware/concurrency-limiter.js';
 
 const INTERRUPTED = 'Interrupted: the API stopped while this run was in progress. Start it again.';
@@ -122,18 +123,19 @@ export async function executeTestOrchestration(
     }
 
     // ── Execute ──────────────────────────────────────────────────────────────
-    const screenshotUrls = new Map<number, string>();
+    // Screenshots go to the private bucket; rows keep the path, readers get signed URLs (EXE-3).
+    const screenshotPaths = new Map<number, string>();
 
     const persistStep = async (step: StepResult) => {
       let screenshot_url: string | null = null;
       if (step.screenshot_buffer) {
-        const path = `screenshots/${test_run_id}/step_${step.step_number}.png`;
+        const path = screenshotPath(test_run_id, step.step_number);
         const { error: uploadError } = await supabase.storage
-          .from('test-artifacts')
+          .from(ARTIFACT_BUCKET)
           .upload(path, step.screenshot_buffer, { contentType: 'image/png', upsert: true });
         if (uploadError) throw new Error(`Screenshot upload failed for step ${step.step_number}: ${uploadError.message}`);
-        screenshot_url = supabase.storage.from('test-artifacts').getPublicUrl(path).data.publicUrl;
-        screenshotUrls.set(step.step_number, screenshot_url);
+        screenshot_url = path;
+        screenshotPaths.set(step.step_number, path);
       }
 
       const { error: insertError } = await supabase.from('test_steps').insert({
@@ -151,12 +153,16 @@ export async function executeTestOrchestration(
       });
       if (insertError) throw new Error(`Could not save step ${step.step_number}: ${insertError.message}`);
 
+      // Watchers get a signed URL; no image bytes travel over the socket. The row is already
+      // saved, so a signing hiccup only costs the live preview (the page reloads it on complete).
+      const [signedShot] =
+        room && screenshot_url ? await signArtifacts([screenshot_url]).catch(() => [null]) : [null];
       room?.emit('test:step:complete', {
         test_run_id,
         step_number: step.step_number,
         instruction: step.instruction,
         status: step.status,
-        screenshot_url: screenshot_url ?? undefined,
+        screenshot_url: signedShot ?? undefined,
         error_message: step.error_message,
         duration_ms: step.duration_ms,
       });
@@ -172,16 +178,13 @@ export async function executeTestOrchestration(
         room?.emit('test:step:start', { test_run_id, step_number, action: instruction });
       },
       onStepComplete: persistStep,
-      onScreenshot: (step_number, buffer) => {
-        room?.emit('test:screenshot', { test_run_id, step_number, screenshot_base64: buffer.toString('base64') });
-      },
     });
 
     // ── Bug for genuine failures (after every step is persisted) ─────────────
     let errorMessage = controller.signal.aborted ? INTERRUPTED : (result.error_message ?? null);
     if (result.status === 'failed') {
       const failedStep = result.steps.find((s) => s.status === 'failed');
-      const shot = failedStep && screenshotUrls.get(failedStep.step_number);
+      const shot = failedStep && screenshotPaths.get(failedStep.step_number);
       const now = new Date().toISOString();
       const { data: bug, error: bugError } = await supabase
         .from('bugs')
