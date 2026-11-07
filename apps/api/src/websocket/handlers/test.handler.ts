@@ -10,7 +10,9 @@ export function registerTestHandlers(_io: Server, socket: Socket): void {
   // Validate ownership before allowing a socket to subscribe to run events.
   // An attacker emitting 'test:join' for another user's run ID must not receive
   // any broadcasts emitted to that room.
-  socket.on('test:join', async (payload: { test_run_id: string }) => {
+  // The optional ack fires once the socket is in the room, so a client can then load the
+  // run from the API without missing events emitted between its load and the join (UI-1).
+  socket.on('test:join', async (payload: { test_run_id: string }, ack?: (res: { ok: boolean }) => void) => {
     const userId = socket.data.userId as string;
     const { test_run_id } = payload;
 
@@ -23,9 +25,11 @@ export function registerTestHandlers(_io: Server, socket: Socket): void {
 
     if (error || !run) {
       socket.emit('test:unauthorized', { test_run_id, message: 'Unauthorized' });
+      if (typeof ack === 'function') ack({ ok: false });
       return;
     }
 
-    socket.join(`test:${test_run_id}`);
+    await socket.join(`test:${test_run_id}`);
+    if (typeof ack === 'function') ack({ ok: true });
   });
 }

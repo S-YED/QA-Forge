@@ -39,5 +39,5 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 
 ## Engineering
 - [x] Build passes — 7/7, 5 Nov 2026 · [x] Type check passes — 7/7 · [x] Lint passes (0 errors) — 7/7
-- [x] Unit tests pass — api 79/79, runner 13/13 (6 Nov 2026) · [ ] Integration tests in CI · [ ] E2E tests pass · [ ] CI covers all of the above
+- [x] Unit tests pass — api 82/82, runner 13/13 (8 Nov 2026) · [ ] Integration tests in CI · [ ] E2E tests pass · [ ] CI covers all of the above
 - [ ] README matches actual commands · [ ] Setup docs accurate · [ ] Release notes

@@ -15,6 +15,7 @@ import {
 import { apiClient } from '@/lib/api/client';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { isRunActive, mergeSavedSteps, upsertStep } from '@/lib/run-steps';
 import type { TestRun, TestStep } from '@qaforge/shared-types';
 import { TestRunStatus } from '@qaforge/shared-types';
 import { io as socketIO, type Socket } from 'socket.io-client';
@@ -162,7 +163,10 @@ const lineGlyph: Record<TerminalLine['type'], string> = {
   system: '⚙',
 };
 
-function LiveTerminal({ lines, isLive }: { lines: TerminalLine[]; isLive: boolean }) {
+/** live: streaming a running test. replay: re-animating a finished run's recorded results. */
+type ViewMode = 'live' | 'replay' | null;
+
+function LiveTerminal({ lines, mode }: { lines: TerminalLine[]; mode: ViewMode }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
@@ -184,13 +188,19 @@ function LiveTerminal({ lines, isLive }: { lines: TerminalLine[]; isLive: boolea
       <div className="flex items-center gap-2 border-b border-console-border px-3.5 py-2.5">
         <TerminalSquare className="size-4 text-console-muted" aria-hidden="true" />
         <span className="font-mono text-xs text-console-muted">test-execution.log</span>
-        {isLive && (
+        {mode === 'live' && (
           <span className="ml-auto inline-flex items-center gap-1.5 text-xs font-medium text-console-info">
             <span className="relative flex size-2">
               <span className="absolute inline-flex size-full animate-ping rounded-full bg-console-info opacity-70" />
               <span className="relative inline-flex size-2 rounded-full bg-console-info" />
             </span>
             Live
+          </span>
+        )}
+        {mode === 'replay' && (
+          <span className="ml-auto inline-flex items-center gap-1.5 text-xs font-medium text-console-muted">
+            <RotateCcw className="size-3" aria-hidden="true" />
+            Replay
           </span>
         )}
       </div>
@@ -221,7 +231,7 @@ function LiveTerminal({ lines, isLive }: { lines: TerminalLine[]; isLive: boolea
             </div>
           ))
         )}
-        {isLive && lines.length > 0 && (
+        {mode !== null && lines.length > 0 && (
           <span className="mt-1 inline-block h-3.5 w-2 animate-caret bg-console-info" />
         )}
       </div>
@@ -304,7 +314,7 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
   const [steps, setSteps] = useState<(TestStep | LiveStep)[]>([]);
   const [bugs, setBugs] = useState<RunDetailResponse['bugs']>([]);
   const [loading, setLoading] = useState(true);
-  const [isLive, setIsLive] = useState(false);
+  const [mode, setMode] = useState<ViewMode>(null);
   const [selectedScreenshot, setSelectedScreenshot] = useState<string | null>(null);
   const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([]);
   const [canReplay, setCanReplay] = useState(false);
@@ -327,9 +337,8 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
     [],
   );
 
-  // Scripted live-replay: animate a completed run's steps into the terminal,
-  // timeline, and filmstrip with realistic timing so a read-only demo run still
-  // *looks* live. No backend writes - purely client-side playback of seeded data.
+  // Replay: re-animate a finished run's recorded steps into the terminal, timeline and
+  // filmstrip. Purely client-side and labelled "Replay"; it never claims to be live.
   const startReplay = useCallback(
     async (allSteps: (TestStep | LiveStep)[], finalStatus: string, durationMs?: number) => {
       // Cancel any replay already running, then start a fresh token.
@@ -337,15 +346,13 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
       const signal = { cancelled: false };
       replaySignalRef.current = signal;
 
-      setIsLive(true);
+      setMode('replay');
       setSteps([]);
       setTerminalLines([]);
 
       try {
-        addTerminalLine('Connected to execution server', 'system');
+        addTerminalLine('Replaying a finished run from its recorded results (not live)', 'system');
         await sleep(400, signal);
-        addTerminalLine('Launching browser...', 'running');
-        await sleep(500, signal);
 
         for (const s of allSteps) {
           const stepNumber = s.step_number;
@@ -396,28 +403,32 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
       } catch {
         // Replay was cancelled (navigated away / restarted) - leave as-is.
       } finally {
-        if (!signal.cancelled) setIsLive(false);
+        if (!signal.cancelled) setMode(null);
       }
     },
     [addTerminalLine],
   );
 
-  // Fetch initial data
+  // The API (database) is the source of truth: loaded on open, after every (re)join and on completion.
+  const loadRun = useCallback(async () => {
+    const data = await apiClient.get<RunDetailResponse>(
+      `/api/projects/${projectId}/test-runs/${runId}`,
+    );
+    setRun(data.test_run);
+    setBugs(data.bugs);
+    allStepsRef.current = data.steps;
+    return data;
+  }, [projectId, runId]);
+
   const fetchRun = useCallback(async () => {
     try {
-      const data = await apiClient.get<RunDetailResponse>(
-        `/api/projects/${projectId}/test-runs/${runId}`,
-      );
-      setRun(data.test_run);
-      setBugs(data.bugs);
-      allStepsRef.current = data.steps;
-
-      if (data.test_run.status === 'pending') {
-        // Genuinely pending → real live execution over WebSocket.
+      const data = await loadRun();
+      if (isRunActive(data.test_run.status)) {
+        // Pending or running (e.g. the page was refreshed mid-run) → watch it live.
         setSteps(data.steps);
-        connectAndStartRun();
+        connectLive();
       } else if (data.steps.length > 0) {
-        // Completed run with steps → scripted replay (read-only, looks live).
+        // Finished run → play back its recorded steps, labelled as a replay.
         setCanReplay(true);
         startReplay(data.steps, data.test_run.status, data.test_run.duration_ms ?? undefined);
       } else {
@@ -429,9 +440,9 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
     } finally {
       setLoading(false);
     }
-  }, [projectId, runId, router, startReplay]);
+  }, [projectId, router, startReplay, loadRun]);
 
-  const connectAndStartRun = async () => {
+  const connectLive = async () => {
     const supabase = createClient();
     const {
       data: { session },
@@ -445,11 +456,40 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
     });
 
     socketRef.current = socket;
+    let connectedBefore = false;
 
-    socket.on('connect', () => {
-      setIsLive(true);
-      addTerminalLine('Connected to execution server', 'system');
-      socket.emit('test:join', { test_run_id: runId });
+    // Stop watching and take the final state from the database, not from the last event.
+    const settle = async () => {
+      socket.disconnect();
+      setMode(null);
+      const data = await loadRun().catch(() => null);
+      if (data) setSteps((prev) => mergeSavedSteps(prev, data.steps));
+    };
+
+    // Fires on the first connection and on every reconnection.
+    socket.on('connect', async () => {
+      setMode('live');
+      addTerminalLine(connectedBefore ? 'Reconnected, catching up' : 'Connected to execution server', 'system');
+      connectedBefore = true;
+      // Join first, then reload: whatever was emitted before the join (or while
+      // disconnected) is in the reload, and everything after it arrives as events.
+      const joined = await socket
+        .timeout(10_000)
+        .emitWithAck('test:join', { test_run_id: runId })
+        .catch(() => null);
+      if (!joined?.ok) {
+        setMode(null);
+        addTerminalLine('Could not subscribe to this run. Refresh the page to try again.', 'error');
+        return;
+      }
+      const data = await loadRun().catch(() => null);
+      if (!data) return;
+      setSteps((prev) => mergeSavedSteps(prev, data.steps));
+      if (!isRunActive(data.test_run.status)) {
+        addTerminalLine(`Run already finished: ${data.test_run.status}`, 'system');
+        socket.disconnect();
+        setMode(null);
+      }
     });
 
     socket.on('test:status', (data: { message: string }) => {
@@ -462,18 +502,17 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
     });
 
     socket.on('test:step:start', (data: { step_number: number; action: string }) => {
-      setSteps((prev) => {
-        const exists = prev.find((s) => s.step_number === data.step_number);
-        if (exists) return prev;
-        return [...prev, { step_number: data.step_number, action: data.action, status: 'running' }];
-      });
+      // A start never downgrades a step the client already has (e.g. from a reload).
+      setSteps((prev) =>
+        prev.some((s) => s.step_number === data.step_number)
+          ? prev
+          : upsertStep(prev, { step_number: data.step_number, action: data.action, status: 'running' }),
+      );
       addTerminalLine(`Step ${data.step_number}: ${data.action}`, 'running');
     });
 
     socket.on('test:step:complete', (data: LiveStep) => {
-      setSteps((prev) =>
-        prev.map((s) => (s.step_number === data.step_number ? { ...s, ...data } : s)),
-      );
+      setSteps((prev) => upsertStep(prev, data));
       const type =
         data.status === 'passed' ? 'success' : data.status === 'failed' ? 'error' : 'info';
       addTerminalLine(
@@ -486,11 +525,7 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
 
     socket.on('test:screenshot', (data: { step_number: number; screenshot_base64: string }) => {
       setSteps((prev) =>
-        prev.map((s) =>
-          s.step_number === data.step_number
-            ? { ...s, screenshot_base64: data.screenshot_base64 }
-            : s,
-        ),
+        upsertStep(prev, { step_number: data.step_number, screenshot_base64: data.screenshot_base64 }),
       );
       addTerminalLine(`Screenshot captured for step ${data.step_number}`, 'info');
     });
@@ -508,7 +543,6 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
               }
             : prev,
         );
-        setIsLive(false);
         if (data.status === 'passed') {
           addTerminalLine(`All steps passed ✓ (${(data.duration_ms / 1000).toFixed(1)}s)`, 'success');
         } else {
@@ -517,7 +551,7 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
             'error',
           );
         }
-        socket.disconnect();
+        void settle();
       },
     );
 
@@ -529,28 +563,22 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
       addTerminalLine(`Bug created: ${data.bug_title}`, 'error');
     });
 
+    // The executor always follows test:error with test:complete, which settles the run.
     socket.on('test:error', (data: { message: string }) => {
       setRun((prev) =>
         prev ? { ...prev, status: TestRunStatus.ERROR, error_message: data.message } : prev,
       );
-      setIsLive(false);
       addTerminalLine(`Error: ${data.message}`, 'error');
-      socket.disconnect();
     });
 
     socket.on('disconnect', (reason: string) => {
       // Intentional disconnects (run complete / unmount) are silent; transport
-      // drops surface in the terminal so the user knows streaming paused.
+      // drops surface in the terminal so the user knows streaming paused. The
+      // 'connect' handler rejoins and reloads when the connection comes back.
       if (reason === 'transport close' || reason === 'transport error' || reason === 'ping timeout') {
-        setIsLive(false);
+        setMode(null);
         addTerminalLine('Connection lost - reconnecting...', 'error');
       }
-    });
-
-    socket.io.on('reconnect', () => {
-      setIsLive(true);
-      addTerminalLine('Reconnected to execution server', 'system');
-      socket.emit('test:join', { test_run_id: runId });
     });
 
     socket.on('connect_error', (err: Error) => {
@@ -613,12 +641,12 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
                 onClick={() =>
                   startReplay(allStepsRef.current, run.status, run.duration_ms ?? undefined)
                 }
-                disabled={isLive}
-                title={isLive ? 'Replay in progress' : 'Replay this run'}
+                disabled={mode !== null}
+                title={mode === 'replay' ? 'Replay in progress' : 'Replay this run'}
                 aria-label="Replay this test run"
               >
                 <RotateCcw />
-                {isLive ? 'Replaying…' : 'Replay'}
+                {mode === 'replay' ? 'Replaying…' : 'Replay'}
               </Button>
             )}
 
@@ -636,7 +664,7 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
           </div>
         </div>
 
-        {run.error_message && !isLive && (
+        {run.error_message && mode === null && (
           <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/8 px-4 py-3 text-sm text-destructive">
             <span className="font-semibold">Error:</span> {run.error_message}
           </div>
@@ -651,7 +679,7 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
 
           {steps.length === 0 ? (
             <div className="rounded-lg border border-dashed bg-card p-6 text-center text-sm text-muted-foreground">
-              {isLive ? 'Waiting for steps to execute…' : 'No steps recorded for this run.'}
+              {mode === 'live' ? 'Waiting for steps to execute…' : 'No steps recorded for this run.'}
             </div>
           ) : (
             <ol className="space-y-2">
@@ -721,7 +749,7 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
         {/* Right Column: Live Terminal */}
         <div>
           <SectionLabel>Execution log</SectionLabel>
-          <LiveTerminal lines={terminalLines} isLive={isLive} />
+          <LiveTerminal lines={terminalLines} mode={mode} />
         </div>
       </div>
 

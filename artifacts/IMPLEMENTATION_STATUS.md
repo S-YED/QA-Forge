@@ -3,7 +3,7 @@
 Statuses: Not started · In progress · Implemented, not verified · **Verified** (evidence required) · Blocked · Deferred.
 Backlog definitions: [DECEMBER_2026_EXECUTION_PLAN.md](DECEMBER_2026_EXECUTION_PLAN.md).
 
-_Last updated: 6 Nov 2026_
+_Last updated: 8 Nov 2026_
 
 | ID | Status | Evidence / notes |
 |---|---|---|
@@ -21,14 +21,16 @@ _Last updated: 6 Nov 2026_
 | AI-1 | **Verified (unit)** | `packages/ai-engine`: every provider call goes through `postJson` with `AbortSignal.timeout` (`AI_TIMEOUT_MS`, default 60 s) and throws `AIProviderError`: 401/403 and Gemini's 400 "API key not valid" → `AI_KEY_INVALID` (HTTP 422, not 401, because the web client signs the user out on 401), 429 → `AI_RATE_LIMITED` (429), timeout → `AI_TIMEOUT` (504), other → `AI_PROVIDER_ERROR` (502), unparseable/contract-breaking output → `AI_BAD_OUTPUT` (502). `errorHandler` maps it to `{error:{code,message}}`; responses and logs include `model_used` and duration. Output validation is CON-1. `ai-provider-errors.test.ts` 9 tests (mocked fetch, provider key never in messages); mutation (429 branch and timeout removed) → 2 failures. api 76/76. GitNexus: `callProvider` **CRITICAL** (all generate/optimize; contract kept, covered by mocked-provider tests), `errorHandler` UNKNOWN → grep: only `app.use(errorHandler)` |
 | DEMO-1 | In progress: **demo app verified**; seeds not yet retargeted | `apps/demo-app`: zero-dependency `node server.mjs` on 127.0.0.1:4100 (`PORT`), in `pnpm dev` via turbo. Pages: home, login (valid/invalid/empty), register (field validation, taken email), dashboard (login-gated redirect), shopping list CRUD (add/delete/duplicate/empty), 3-step checkout (shipping, payment, review, order), 404 and 500. `data-testid` on every control. A **planted coupon bug** (SAVE10 announced, total unchanged) gives demos a real failing run. Verified by `local-demo.test.ts` (below): 11 cases pass, the coupon case fails on step 14; 404/500 status and path-escape (`..%2f`) → 404. Left: retarget `seed*.sql` demo projects to the demo app (needs your call on the syedkm.com demo realism; with DX-2) |
 | AI-3 | Implemented; **fixtures verified**, route fallback type-checked, **integration pending Docker** | `packages/ai-engine/src/local-demo.ts`: 12 hand-written cases for the demo app, validated with `GeneratedTestCaseSchema` at load, tagged `local-demo`, picked by prompt keywords (login, register, items, checkout, navigation; no match → all). `AI_LOCAL_DEMO=true` (default false; `.env.example` and local `apps/api/.env` true): `POST /ai/generate` with no key and no explicit provider uses them, `provider_used: 'local-demo'`, `model_used: 'Local demo, not AI'`, saved with `is_ai_generated=false`. Web panel says "Local demo, not AI". `local-demo.test.ts` 3/3: routing; every case run through the real runner against the spawned demo app in Chromium. Mutation (fix the planted bug) → test fails. GitNexus: `generateTestCases`/`resolveAIKey` HIGH but stale (lists `executeTestOrchestration`, which EXE-1 removed); grep: only `ai.routes.ts` + tests; neither function changed |
-| UI-1, EXE-3, AI-2, UI-2, DX-1/2, QA-2/3, CI-1, S6 | Not started | — |
+| UI-1 | Implemented; **join/ack and merge logic verified**, **browser check pending Docker** | Run detail (`run-detail-client.tsx`): `pending` **and** `running` runs connect live (a refresh mid-run no longer falls into the replay). On every connect and reconnect the client emits `test:join` with an ack, and only after the server acks (socket is in the room) reloads the run from the API and merges it, so events sent before the join or while disconnected are recovered. `test:complete` reloads the final state (bugs, screenshot URLs) before disconnecting; `test:error` no longer disconnects early (complete always follows). Step, complete and screenshot events upsert by `step_number` (`lib/run-steps.ts`) instead of dropping unseen steps. Finished runs replay with a "Replay" badge and "Replaying a finished run from its recorded results (not live)", no fake "Connected / Launching browser" lines. Server: `test:join` acks after `await socket.join` (`ok:false` for runs the user doesn't own). Tests: `test.handler.test.ts` 3/3 (ack after join; refused run; no-ack clients), mutation (drop the `await`) → 2 fail; `node apps/web/lib/run-steps.check.mjs` passes. GitNexus: `RunDetailClient` LOW (1 caller, the run page). Left: browser check of refresh mid-run with /browse once local Supabase runs (QA-3 automates it) |
+| EXE-3, AI-2, UI-2, DX-1/2, QA-2/3, CI-1, S6 | Not started | — |
 | Recording/replay, exports, integrations, vector context | Deferred | Charter §13 |
 
 ## Verification commands (6 Nov 2026; integration last run 5 Nov)
 ```
 pnpm type-check                                   # 7/7
 pnpm lint                                         # 7/7, 0 errors, 21 warnings (no-explicit-any)
-pnpm test                                         # api 79/79 (incl. demo app in Chromium), runner 13/13 (real Chromium)
+pnpm test                                         # api 82/82 (incl. demo app in Chromium), runner 13/13 (real Chromium)
+node apps/web/lib/run-steps.check.mjs             # live step merge helper
 pnpm build                                        # 7/7
 supabase db reset                                 # 23 migrations + seed
 pnpm --filter @qaforge/api test:integration       # 12/12 (needs local Supabase + Chromium)
