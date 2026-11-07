@@ -17,16 +17,16 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 - [ ] No undocumented manual steps
 
 ## Product functionality
-- [ ] Registration and login · [ ] Projects · [ ] Test suites · [ ] Manual test cases (structured editor)
+- [ ] Registration and login · [x] Projects · [x] Test suites (browser, 8 Nov) · [ ] Manual test cases (structured editor)
 - [ ] AI generation with configured providers · [x] Local demo mode without paid keys (`demo-flow.int.test.ts`, 8 Nov)
-- [ ] Generated cases reviewed and approved before save
-- [x] Runs created · [x] Real browser executes steps (`run-lifecycle.int.test.ts`) · [ ] Live progress visible
+- [x] Generated cases reviewed and approved before save (AI-2: integration + browser, 8 Nov)
+- [x] Runs created · [x] Real browser executes steps (`run-lifecycle.int.test.ts`) · [x] Live progress visible (browser, 8 Nov)
 - [x] Screenshots saved (private) and retrievable (EXE-3 integration, 8 Nov) · [x] Failed / passed steps recorded correctly (`run-lifecycle.int.test.ts`)
-- [x] Final status correct (passed/failed/error, `run-lifecycle.int.test.ts`) · [x] Failed runs produce bugs (and errors don't) · [ ] Run history survives refresh
+- [x] Final status correct (passed/failed/error, `run-lifecycle.int.test.ts`) · [x] Failed runs produce bugs (and errors don't) · [x] Run history survives refresh (refresh mid-run, browser, 8 Nov)
 
 ## Reliability
 - [x] No false-positive passing runs (empty/invalid/unreachable/callback failure → `error`; `runner.test.ts`) · [x] No duplicate execution (concurrent-claim test) · [x] No permanently stuck `running` (EXE-2 integration, 8 Nov)
-- [ ] Browser resources cleaned up · [x] Persistence failures reported (upload failure → `error`) · [ ] Socket reconnection recovers DB state
+- [ ] Browser resources cleaned up · [x] Persistence failures reported (upload failure → `error`) · [x] Socket reconnection recovers DB state (ack then reload; refresh mid-run, 8 Nov)
 - [ ] Errors logged and diagnosable
 
 ## Security
@@ -39,5 +39,5 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 
 ## Engineering
 - [x] Build passes — 7/7, 5 Nov 2026 · [x] Type check passes — 7/7 · [x] Lint passes (0 errors) — 7/7
-- [x] Unit tests pass — api 88/88, runner 13/13 (8 Nov 2026) · [ ] Integration tests in CI · [ ] E2E tests pass · [ ] CI covers all of the above
+- [x] Unit tests pass — api 85/85, runner 13/13 (8 Nov 2026; CI green) · [ ] Integration tests in CI · [ ] E2E tests pass · [ ] CI covers all of the above (unit + type-check + build green since 8 Nov; no integration/E2E jobs yet)
 - [ ] README matches actual commands · [ ] Setup docs accurate · [ ] Release notes

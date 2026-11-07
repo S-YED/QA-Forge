@@ -10,10 +10,7 @@ ticket is **Verified** in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 | HIGH (prod) | Migration 23 (step `action` backfill) not yet applied to Supabase Cloud. The "API first" order no longer blocks it: no old API is running to strip `action` on edit | REL-3 |
 | HIGH (prod) | Railway build never installed Chromium, so production runs would end "Browser failed to launch". `nixpacks.toml` now installs it (8 Nov); unverified until Railway builds | REL-3 |
 | HIGH (prod) | Screenshots are private locally (EXE-3, mig 24) but the cloud bucket stays public until migration 24 is pushed with 22/23 | REL-3 |
-| MED | AI drafts and the approve/optimize review UI are API-verified but not yet checked in a browser | AI-2 |
-| HIGH | CI was red since June: Turborepo strict env mode hid the API's env vars from tests, and type-check ran before dependency builds. Both fixed 8 Nov; confirm on the next CI run | CI-1 |
-| MED | Refresh mid-run: fix built (live for pending/running, ack then reload on join/reconnect), not yet checked in a browser | UI-1 |
-| MED | Manual step editor and run-detail `instruction` display not yet checked in a browser (type-checked and built only) | UI-2 / QA-3 |
+| MED | Manual step editor not yet checked in a browser (run-detail `instruction` display verified 8 Nov) | UI-2 / QA-3 |
 | MED | No setup script yet (`pnpm bootstrap`/`doctor`); seeds still target syedkm.com/example.com, not the demo app; README and setup guide still describe the old root `.env.example` | DX-2, DEMO-1, DOC-1 |
 | MED | `test_runs` RLS doesn't tie case to project; `bugs.assigned_to` blocks profile delete | S6 |
 | MED | SSRF guard: WebKit may bypass the proxy for loopback (up-front URL checks still apply). Prod: keep `ALLOW_PRIVATE_HOSTS` unset | SEC-3 (ceiling, TD-8) |
