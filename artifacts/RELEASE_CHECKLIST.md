@@ -9,7 +9,7 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 - [ ] Prerequisites documented with versions (Node, pnpm, Docker, Supabase CLI)
 - [ ] Dependency installation works (`pnpm install --frozen-lockfile`)
 - [ ] `pnpm bootstrap` works and is safe to rerun
-- [ ] Local Supabase starts
+- [x] Local Supabase starts — `npx supabase start`, 8 Nov 2026 (after a Windows reboot; Docker/WSL hang noted in KNOWN_ISSUES)
 - [x] All migrations apply cleanly — `supabase db reset`, 23 migrations, 5 Nov 2026
 - [ ] Demo seed data loads **and targets the local demo app**
 - [ ] Environment configuration validated (`pnpm doctor`)
@@ -18,21 +18,21 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 
 ## Product functionality
 - [ ] Registration and login · [ ] Projects · [ ] Test suites · [ ] Manual test cases (structured editor)
-- [ ] AI generation with configured providers · [ ] Local demo mode without paid keys
+- [ ] AI generation with configured providers · [x] Local demo mode without paid keys (`demo-flow.int.test.ts`, 8 Nov)
 - [ ] Generated cases reviewed and approved before save
 - [x] Runs created · [x] Real browser executes steps (`run-lifecycle.int.test.ts`) · [ ] Live progress visible
 - [ ] Screenshots saved (private) and retrievable · [x] Failed / passed steps recorded correctly (`run-lifecycle.int.test.ts`)
 - [x] Final status correct (passed/failed/error, `run-lifecycle.int.test.ts`) · [x] Failed runs produce bugs (and errors don't) · [ ] Run history survives refresh
 
 ## Reliability
-- [x] No false-positive passing runs (empty/invalid/unreachable/callback failure → `error`; `runner.test.ts`) · [x] No duplicate execution (concurrent-claim test) · [ ] No permanently stuck `running`
+- [x] No false-positive passing runs (empty/invalid/unreachable/callback failure → `error`; `runner.test.ts`) · [x] No duplicate execution (concurrent-claim test) · [x] No permanently stuck `running` (EXE-2 integration, 8 Nov)
 - [ ] Browser resources cleaned up · [x] Persistence failures reported (upload failure → `error`) · [ ] Socket reconnection recovers DB state
 - [ ] Errors logged and diagnosable
 
 ## Security
 - [ ] Cross-user access test matrix passes (partial: profiles + optimize — `security.int.test.ts`)
 - [ ] RLS policies verified · [x] Profile role self-escalation blocked — `security.int.test.ts` (local)
-- [ ] Fixes applied to production (mig 22 + API redeploy) — **owner approval required**
+- [ ] Fixes applied to production (mig 22 + API redeploy) — approved 8 Nov; waiting on the Railway service (gone) and the DB password for `db push`
 - [x] API keys encrypted (hex key validated) — `encryption.test.ts`, `env-example.test.ts` (8 Nov 2026) · [ ] Service-role key backend-only
 - [ ] Storage private · [ ] WebSocket authorization verified · [x] Browser network restrictions tested (runner SSRF tests, real Chromium)
 - [ ] No secrets committed (scan)

@@ -9,6 +9,11 @@
 # non-interactive. Runtime is unaffected: the start command runs precompiled JS
 # under Railway's production NODE_ENV.
 
+# Test runs launch real Chromium. Browsers go inside node_modules (path "0") so the runtime
+# image finds them where the build put them; set for build and runtime alike.
+[variables]
+PLAYWRIGHT_BROWSERS_PATH = "0"
+
 [phases.install]
 cmds = [
   "npm install -g corepack@0.24.1 && corepack enable",
@@ -22,4 +27,6 @@ cmds = [
 [phases.build]
 cmds = [
   "pnpm --filter '@qaforge/api...' build",
+  # Chromium plus the system libraries it needs (apt, as root in the build image).
+  "pnpm --filter @qaforge/playwright-runner exec playwright install --with-deps chromium",
 ]
