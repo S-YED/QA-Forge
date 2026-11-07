@@ -10,8 +10,12 @@ import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { USERS, signIn, useApi } from './helpers.js';
+import { supabase } from '../../config/supabase.js';
 
 const api = useApi();
+
+const suiteCount = async (projectId: string) =>
+  (await supabase.from('test_suites').select('id', { count: 'exact', head: true }).eq('project_id', projectId)).count;
 
 let demo: ChildProcess;
 let demoUrl: string;
@@ -69,17 +73,29 @@ describe('AI-3 local demo generation with no AI key', () => {
 
     const gen = await api(`/projects/${projectId}/ai/generate`, token, 'POST', {
       prompt: 'Test the login page and the checkout with a coupon',
-      suite_name: 'Demo shop',
     });
-    expect(gen.status).toBe(201);
-    const body = (await gen.json()) as {
-      provider_used: string;
-      model_used: string;
-      test_cases: { id: string; title: string }[];
-    };
+    expect(gen.status).toBe(200);
+    const body = (await gen.json()) as { provider_used: string; model_used: string; drafts: { title: string }[] };
     expect(body.provider_used).toBe('local-demo');
     expect(body.model_used).toBe('Local demo, not AI');
-    const byTitle = Object.fromEntries(body.test_cases.map((c) => [c.title, c.id]));
+
+    // AI-2: generating saves nothing; only the drafts the user approves are saved.
+    expect(await suiteCount(projectId)).toBe(0);
+    const wanted = ['Log in with the demo account', 'Coupon SAVE10 takes 10% off the total'];
+    const approve = await api(`/projects/${projectId}/ai/approve`, token, 'POST', {
+      suite_name: 'Demo shop',
+      ai_generated: false,
+      test_cases: body.drafts.filter((d) => wanted.includes(d.title)),
+    });
+    expect(approve.status).toBe(201);
+    const saved = (await approve.json()) as { suite_id: string; test_cases: { id: string; title: string }[] };
+    expect(saved.test_cases.map((c) => c.title).sort()).toEqual([...wanted].sort());
+    const { data: rows } = await supabase.from('test_cases').select('is_ai_generated, source').eq('suite_id', saved.suite_id);
+    expect(rows).toEqual([
+      { is_ai_generated: false, source: 'manual' },
+      { is_ai_generated: false, source: 'manual' },
+    ]);
+    const byTitle = Object.fromEntries(saved.test_cases.map((c) => [c.title, c.id]));
     expect(Object.keys(byTitle)).toContain('Log in with the demo account');
     expect(Object.keys(byTitle)).toContain('Coupon SAVE10 takes 10% off the total');
 
@@ -93,6 +109,35 @@ describe('AI-3 local demo generation with no AI key', () => {
     expect(coupon.steps.at(-1)?.status).toBe('failed');
     expect(coupon.bugs).toHaveLength(1);
   }, 120_000);
+
+  it('refuses an invalid draft without leaving an empty suite, and a suite of another user', async () => {
+    const projectId = await createProject('demo-flow-approve', demoUrl);
+    const bad = await api(`/projects/${projectId}/ai/approve`, token, 'POST', {
+      suite_name: 'Should not exist',
+      test_cases: [{ title: 'fill without a value', steps: [{ step_number: 1, action: 'fill', instruction: 'Type', selector: '#x' }] }],
+    });
+    expect(bad.status).toBe(400);
+    expect(await suiteCount(projectId)).toBe(0);
+
+    const { token: bobToken } = await signIn(USERS.bob);
+    const bobProject = ((await (await api('/projects', bobToken, 'POST', { name: 'bob-approve', base_url: demoUrl })).json()) as {
+      project: { id: string };
+    }).project.id;
+    const bobSuite = ((await (await api(`/projects/${bobProject}/test-suites`, bobToken, 'POST', { name: 'bob' })).json()) as {
+      suite: { id: string };
+    }).suite.id;
+    try {
+      const steal = await api(`/projects/${projectId}/ai/approve`, token, 'POST', {
+        suite_id: bobSuite,
+        test_cases: [{ title: 'into bob', steps: [{ step_number: 1, action: 'navigate', instruction: 'Open', value: '/' }] }],
+      });
+      expect(steal.status).toBe(404);
+      const { count } = await supabase.from('test_cases').select('id', { count: 'exact', head: true }).eq('suite_id', bobSuite);
+      expect(count).toBe(0);
+    } finally {
+      await api(`/projects/${bobProject}`, bobToken, 'DELETE');
+    }
+  });
 
   it('does not fall back when the user asks for a specific provider they have no key for', async () => {
     const projectId = await createProject('demo-flow-provider', demoUrl);

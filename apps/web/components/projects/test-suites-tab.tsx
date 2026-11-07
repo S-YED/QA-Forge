@@ -19,10 +19,12 @@ import { toast } from 'sonner';
 import {
   STEP_ACTIONS,
   STEP_ACTION_FIELDS,
+  type GeneratedTestCase,
   type StepAction,
   type TestSuite,
   type TestCase,
 } from '@qaforge/shared-types';
+import { DraftSteps } from '@/components/projects/draft-steps';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SeverityBadge } from '@/components/shared/status-badge';
@@ -98,6 +100,13 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
 
   // AI Optimization state
   const [optimizingCaseId, setOptimizingCaseId] = useState<string | null>(null);
+  // AI-2: an optimized case is a draft until the user applies it.
+  const [optimizeReview, setOptimizeReview] = useState<{
+    caseId: string;
+    suiteId: string;
+    draft: GeneratedTestCase;
+  } | null>(null);
+  const [applyingOptimize, setApplyingOptimize] = useState(false);
 
   // Root-level suites (no parent)
   const rootSuites = suites.filter((s) => !s.parent_suite_id);
@@ -221,17 +230,40 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
     }
 
     try {
-      await apiClient.post(`/api/projects/${projectId}/ai/optimize/${caseId}`, {});
-
-      // Reload detail
-      const data = await apiClient.get<SuiteDetailResponse>(
-        `/api/projects/${projectId}/test-suites/${suiteId}`,
+      const { draft } = await apiClient.post<{ draft: GeneratedTestCase }>(
+        `/api/projects/${projectId}/ai/optimize/${caseId}`,
+        {},
       );
-      setSuiteDetail(data);
-    } catch {
-      /* handled */
+      setOptimizeReview({ caseId, suiteId, draft });
+    } catch (err) {
+      toast.error('Could not optimize this test case', {
+        description: err instanceof Error ? err.message : 'Please try again.',
+      });
     } finally {
       setOptimizingCaseId(null);
+    }
+  };
+
+  const handleApplyOptimize = async () => {
+    if (!optimizeReview) return;
+    setApplyingOptimize(true);
+    try {
+      await apiClient.post(
+        `/api/projects/${projectId}/ai/optimize/${optimizeReview.caseId}/apply`,
+        optimizeReview.draft,
+      );
+      const data = await apiClient.get<SuiteDetailResponse>(
+        `/api/projects/${projectId}/test-suites/${optimizeReview.suiteId}`,
+      );
+      setSuiteDetail(data);
+      setOptimizeReview(null);
+      toast.success('Optimized test case saved');
+    } catch (err) {
+      toast.error('Could not save the optimized test case', {
+        description: err instanceof Error ? err.message : 'Please try again.',
+      });
+    } finally {
+      setApplyingOptimize(false);
     }
   };
 
@@ -687,6 +719,53 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
             >
               {creatingCase && <Spinner className="text-primary-foreground" />}
               {creatingCase ? 'Creating…' : 'Create case'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Review an AI-optimized case before it replaces the saved one (AI-2) */}
+      <Dialog
+        open={optimizeReview !== null}
+        onOpenChange={(o) => {
+          if (!o && !applyingOptimize) setOptimizeReview(null);
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Review the optimized test case</DialogTitle>
+            <DialogDescription>
+              Nothing has changed yet. Apply to replace the saved case with this version.
+            </DialogDescription>
+          </DialogHeader>
+          {optimizeReview && (
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">{optimizeReview.draft.title}</p>
+                {optimizeReview.draft.description && (
+                  <p className="mt-0.5 text-xs text-muted-foreground">{optimizeReview.draft.description}</p>
+                )}
+              </div>
+              <DraftSteps steps={optimizeReview.draft.steps} />
+              {optimizeReview.draft.expected_result && (
+                <p className="text-xs text-muted-foreground">
+                  Expected: {optimizeReview.draft.expected_result}
+                </p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOptimizeReview(null)}
+              disabled={applyingOptimize}
+            >
+              Discard
+            </Button>
+            <Button type="button" onClick={handleApplyOptimize} disabled={applyingOptimize}>
+              {applyingOptimize && <Spinner className="text-primary-foreground" />}
+              {applyingOptimize ? 'Saving…' : 'Apply changes'}
             </Button>
           </DialogFooter>
         </DialogContent>

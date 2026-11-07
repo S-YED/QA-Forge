@@ -33,7 +33,7 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 - [ ] Cross-user access test matrix passes (partial: profiles + optimize — `security.int.test.ts`)
 - [ ] RLS policies verified · [x] Profile role self-escalation blocked — `security.int.test.ts` (local)
 - [ ] Fixes applied to production (mig 22 + API redeploy) — approved 8 Nov; waiting on the Railway service (gone) and the DB password for `db push`
-- [x] API keys encrypted (hex key validated) — `encryption.test.ts`, `env-example.test.ts` (8 Nov 2026) · [ ] Service-role key backend-only
+- [x] API keys encrypted (hex key validated) — `src/utils/encryption.test.ts`, `env-example.test.ts` (8 Nov 2026) · [ ] Service-role key backend-only
 - [x] Storage private (local; cloud after migration 24) · [ ] WebSocket authorization verified · [x] Browser network restrictions tested (runner SSRF tests, real Chromium)
 - [ ] No secrets committed (scan)
 

@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Sparkles, CircleCheck, Circle, TriangleAlert, ArrowRight } from 'lucide-react';
+import { Sparkles, CircleCheck, Circle, TriangleAlert, ArrowRight, Trash2 } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { useDemoMode } from '@/lib/hooks/use-demo-mode';
-import type { TestSuite } from '@qaforge/shared-types';
+import type { GeneratedTestCase, TestSuite } from '@qaforge/shared-types';
+import { DraftSteps } from '@/components/projects/draft-steps';
 import {
   Sheet,
   SheetContent,
@@ -65,6 +66,14 @@ export function AIGeneratePanel({
     null,
   );
   const [error, setError] = useState('');
+  // AI-2: generated cases are drafts until approved; nothing is saved before "Save".
+  const [drafts, setDrafts] = useState<(GeneratedTestCase & { key: number })[] | null>(null);
+  const [draftMeta, setDraftMeta] = useState<{ localDemo: boolean; timeMs: number; rejected: number }>({
+    localDemo: false,
+    timeMs: 0,
+    rejected: 0,
+  });
+  const [saving, setSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -75,6 +84,7 @@ export function AIGeneratePanel({
   useEffect(() => {
     if (open) {
       setResult(null);
+      setDrafts(null);
       setError('');
       setStageIndex(-1);
       setPrompt((p) => (p.trim() ? p : DEFAULT_PROMPT));
@@ -116,25 +126,19 @@ export function AIGeneratePanel({
     }, 1100);
 
     try {
-      const body: Record<string, unknown> = { prompt: prompt.trim() };
-      if (suiteMode === 'existing' && suiteId) body.suite_id = suiteId;
-      else if (suiteMode === 'new' && newSuiteName.trim()) body.suite_name = newSuiteName.trim();
-
       const data = await apiClient.post<{
-        suite_id: string;
-        test_cases: Array<{ id: string; title: string }>;
+        drafts: GeneratedTestCase[];
+        rejected: unknown[];
         provider_used: string;
         generation_time_ms: number;
-      }>(`/api/projects/${projectId}/ai/generate`, body);
+      }>(`/api/projects/${projectId}/ai/generate`, { prompt: prompt.trim() });
 
-      setResult({
-        count: data.test_cases.length,
-        suiteName: targetSuiteName(),
-        timeMs: data.generation_time_ms,
+      setDrafts(data.drafts.map((d, key) => ({ ...d, key })));
+      setDraftMeta({
         localDemo: data.provider_used === 'local-demo',
+        timeMs: data.generation_time_ms,
+        rejected: data.rejected.length,
       });
-      setPrompt('');
-      setNewSuiteName('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Generation failed. Please try again.');
     } finally {
@@ -143,6 +147,49 @@ export function AIGeneratePanel({
       setStageIndex(-1);
     }
   };
+
+  const handleApprove = async () => {
+    if (!drafts?.length) return;
+    setError('');
+    setSaving(true);
+    try {
+      const target =
+        suiteMode === 'existing' && suiteId
+          ? { suite_id: suiteId }
+          : newSuiteName.trim()
+            ? { suite_name: newSuiteName.trim() }
+            : {};
+      const saved = await apiClient.post<{ suite_id: string; test_cases: Array<{ id: string }> }>(
+        `/api/projects/${projectId}/ai/approve`,
+        {
+          ...target,
+          ai_generated: !draftMeta.localDemo,
+          test_cases: drafts.map((d) => {
+            const tc: Partial<typeof d> = { ...d };
+            delete tc.key; // the list key is UI-only
+            return tc;
+          }),
+        },
+      );
+      setResult({
+        count: saved.test_cases.length,
+        suiteName: targetSuiteName(),
+        timeMs: draftMeta.timeMs,
+        localDemo: draftMeta.localDemo,
+      });
+      setDrafts(null);
+      setPrompt('');
+      setNewSuiteName('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Saving failed. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const renameDraft = (key: number, title: string) =>
+    setDrafts((prev) => prev?.map((d) => (d.key === key ? { ...d, title } : d)) ?? null);
+  const removeDraft = (key: number) => setDrafts((prev) => prev?.filter((d) => d.key !== key) ?? null);
 
   const modeButton = (mode: 'new' | 'existing', label: string) => (
     <button
@@ -264,21 +311,73 @@ export function AIGeneratePanel({
             </div>
           )}
 
-          {/* Success */}
+          {/* Review drafts: nothing is saved until the user approves */}
+          {drafts && !generating && (
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Review {drafts.length} draft{drafts.length === 1 ? '' : 's'}
+                </h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Nothing is saved yet. Rename or remove drafts, then save the ones you want.
+                  {draftMeta.localDemo
+                    ? ' Local demo, not AI: fixed example tests for the bundled demo shop. Add an API key in Settings for real generation.'
+                    : ` Generated in ${(draftMeta.timeMs / 1000).toFixed(1)}s.`}
+                  {draftMeta.rejected > 0 &&
+                    ` ${draftMeta.rejected} generated case${draftMeta.rejected === 1 ? ' was' : 's were'} dropped for breaking the step rules.`}
+                </p>
+              </div>
+              {drafts.length === 0 ? (
+                <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+                  All drafts removed. Generate again or close the panel.
+                </p>
+              ) : (
+                <ul className="space-y-3">
+                  {drafts.map((d) => (
+                    <li key={d.key} className="space-y-2 rounded-lg border bg-card p-3">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={d.title}
+                          onChange={(e) => renameDraft(d.key, e.target.value)}
+                          aria-label="Test case title"
+                          disabled={saving}
+                          className="h-8 text-sm font-medium"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeDraft(d.key)}
+                          disabled={saving}
+                          aria-label={`Remove draft ${d.title}`}
+                          title="Remove draft"
+                        >
+                          <Trash2 />
+                        </Button>
+                      </div>
+                      {d.description && <p className="text-xs text-muted-foreground">{d.description}</p>}
+                      <DraftSteps steps={d.steps} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/* Saved */}
           {result && !generating && (
             <div className="rounded-lg border border-success/30 bg-success/8 p-4">
               <div className="flex items-center gap-2">
                 <CircleCheck className="size-4 text-success" />
-                <span className="text-sm font-semibold text-success">Generation complete</span>
+                <span className="text-sm font-semibold text-success">Test cases saved</span>
               </div>
               <p className="mt-1.5 text-sm text-foreground">
-                Created <strong className="font-semibold">{result.count} test cases</strong> in “
+                Saved <strong className="font-semibold">{result.count} test cases</strong> in “
                 {result.suiteName}”.
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {result.localDemo
                   ? 'Local demo, not AI: fixed example tests for the bundled demo shop. Add an API key in Settings for real generation.'
-                  : `Generated in ${(result.timeMs / 1000).toFixed(1)}s`}
+                  : `Generated in ${(result.timeMs / 1000).toFixed(1)}s, reviewed before saving.`}
               </p>
               <Button className="mt-4 w-full" onClick={onGenerated}>
                 View test cases
@@ -289,19 +388,40 @@ export function AIGeneratePanel({
         </div>
 
         <SheetFooter className="border-t px-6 py-5">
-          <Button className="w-full" onClick={handleGenerate} disabled={generating || !prompt.trim()}>
-            {generating ? (
-              <>
-                <Spinner className="text-primary-foreground" />
-                Generating with AI…
-              </>
-            ) : (
-              <>
-                <Sparkles />
-                Generate test cases
-              </>
-            )}
-          </Button>
+          {drafts ? (
+            <div className="flex w-full gap-2">
+              <Button variant="outline" onClick={() => setDrafts(null)} disabled={saving}>
+                Discard
+              </Button>
+              <Button className="flex-1" onClick={handleApprove} disabled={saving || drafts.length === 0}>
+                {saving ? (
+                  <>
+                    <Spinner className="text-primary-foreground" />
+                    Saving…
+                  </>
+                ) : (
+                  <>
+                    <CircleCheck />
+                    Save {drafts.length} test case{drafts.length === 1 ? '' : 's'}
+                  </>
+                )}
+              </Button>
+            </div>
+          ) : (
+            <Button className="w-full" onClick={handleGenerate} disabled={generating || !prompt.trim()}>
+              {generating ? (
+                <>
+                  <Spinner className="text-primary-foreground" />
+                  Generating…
+                </>
+              ) : (
+                <>
+                  <Sparkles />
+                  Generate drafts
+                </>
+              )}
+            </Button>
+          )}
         </SheetFooter>
       </SheetContent>
     </Sheet>
