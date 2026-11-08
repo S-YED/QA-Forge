@@ -8,12 +8,12 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 - [ ] Fresh clone works (Windows + Linux)
 - [ ] Prerequisites documented with versions (Node, pnpm, Docker, Supabase CLI)
 - [ ] Dependency installation works (`pnpm install --frozen-lockfile`)
-- [ ] `pnpm bootstrap` works and is safe to rerun
+- [x] `pnpm bootstrap` works and is safe to rerun (rerun verified 8 Nov; fresh clone under REL-1)
 - [x] Local Supabase starts — `npx supabase start`, 8 Nov 2026 (after a Windows reboot; Docker/WSL hang noted in KNOWN_ISSUES)
 - [x] All migrations apply cleanly — `supabase db reset`, 23 migrations, 5 Nov 2026; migration 24 via `migration up`, 8 Nov
 - [ ] Demo seed data loads **and targets the local demo app**
-- [ ] Environment configuration validated (`pnpm doctor`)
-- [ ] Playwright browsers installed by the setup
+- [x] Environment configuration validated (`pnpm check-setup`; `pnpm doctor` is a pnpm built-in)
+- [x] Playwright browsers installed by the setup (bootstrap)
 - [ ] No undocumented manual steps
 
 ## Product functionality
