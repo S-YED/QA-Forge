@@ -46,6 +46,9 @@ jobs:
       - name: Type-check
         run: pnpm type-check
 
+      - name: Lint
+        run: pnpm lint
+
       - name: Build
         run: pnpm build
 
@@ -61,3 +64,48 @@ jobs:
       - name: Audit (production deps)
         run: pnpm audit --prod --audit-level high
         continue-on-error: true
+
+  # The stranger flow for real: local Supabase in Docker, the API, the web app, the demo shop and
+  # Chromium. No AI keys: generation uses the labelled local demo mode (AI_LOCAL_DEMO).
+  integration-e2e:
+    name: integration · e2e (local Supabase)
+    runs-on: ubuntu-latest
+    needs: verify
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies and Chromium (with system libraries)
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @qaforge/playwright-runner exec playwright install --with-deps chromium
+
+      # The same one command a stranger runs: Supabase, migrations + seed, env files, checks.
+      - name: Bootstrap
+        run: pnpm bootstrap
+
+      - name: Integration tests
+        run: pnpm --filter @qaforge/api test:integration
+
+      - name: E2E tests
+        run: pnpm test:e2e
+
+      - name: Upload E2E traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: .e2e-results
+          retention-days: 7
