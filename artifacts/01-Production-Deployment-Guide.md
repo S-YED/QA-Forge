@@ -212,6 +212,7 @@ This ensures Supabase Auth redirects users to your production frontend after ema
 - [ ] Vercel frontend loads at `/login` without errors
 - [ ] `/demo` auto-signs in as the demo account and lands on the dashboard with sample data
 - [ ] Login with a test account works end-to-end
+- [ ] Sign up works: the "Sign up" link on `/login` creates an account (with email confirmation on, the confirmation link must land on the Vercel URL configured in 3.5)
 - [ ] Creating a project works (tests the full browser → Vercel → Railway → Supabase round trip)
 - [ ] `CORS_ORIGIN` on Railway matches the Vercel URL exactly (no trailing slash)
 - [ ] Supabase Auth redirect URLs include the Vercel URL

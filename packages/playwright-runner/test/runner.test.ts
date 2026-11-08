@@ -1,5 +1,6 @@
 // Runner behaviour against real Chromium and a local fixture site (no network, no Docker).
 // Requires: `pnpm --filter @qaforge/playwright-runner exec playwright install chromium`.
+import { execFileSync } from 'node:child_process';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -24,6 +25,28 @@ const PAGES: Record<string, string> = {
 /** host + path of every request the fixture received */
 const hits: string[] = [];
 
+/** TCP servers listening in this process: the fixture plus any SSRF-guard proxy still open. */
+const listeningServers = () => process.getActiveResourcesInfo().filter((r) => r === 'TCPServerWrap').length;
+let listeningAtStart = 0;
+
+/** Browser processes started by this test process and still alive. */
+function browserChildren(): string[] {
+  if (process.platform === 'win32') {
+    const out = execFileSync(
+      'powershell',
+      ['-NoProfile', '-Command', `Get-CimInstance Win32_Process -Filter "ParentProcessId=${process.pid}" | ForEach-Object { $_.Name }`],
+      { encoding: 'utf8' },
+    );
+    return out.split(/\r?\n/).filter((n) => /chrom|headless/i.test(n));
+  }
+  const out = execFileSync('ps', ['-A', '-o', 'ppid=,comm='], { encoding: 'utf8' });
+  return out
+    .split('\n')
+    .map((l) => l.trim().split(/\s+/))
+    .filter(([ppid, comm]) => Number(ppid) === process.pid && /chrom|headless/i.test(comm ?? ''))
+    .map(([, comm]) => comm);
+}
+
 let server: http.Server;
 let baseUrl: string;
 
@@ -41,6 +64,7 @@ beforeAll(async () => {
   });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
+  listeningAtStart = listeningServers(); // before any browser or guard proxy exists
 });
 afterAll(() => new Promise<void>((r) => server.close(() => r())));
 
@@ -222,4 +246,12 @@ describe('SSRF guard', () => {
     expect(hits.some((h) => h.includes('/hop'))).toBe(true); // the guard let the allowed hop through...
     expect(hits.filter((h) => h.startsWith('localhost'))).toEqual([]); // ...but nothing reached the other host
   }, 60_000);
+});
+
+// Runs after every test above: passed, failed, timed out, unreachable, refused, persistence error and cancelled runs.
+describe('cleanup', () => {
+  it('leaves no browser process or guard proxy behind', () => {
+    expect(browserChildren()).toEqual([]);
+    expect(listeningServers()).toBe(listeningAtStart);
+  });
 });

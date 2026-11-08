@@ -73,7 +73,7 @@ with `ALLOW_PRIVATE_HOSTS`). Users' AI keys are encrypted with AES-256-GCM and n
 | `pnpm build` / `pnpm type-check` / `pnpm lint` | Across the monorepo (Turborepo) |
 | `pnpm test` | Unit tests: API (step contract, env, encryption, AI provider errors, socket join, local demo fixtures) and the runner against real Chromium |
 | `pnpm --filter @qaforge/api test:integration` | API and RLS tests against local Supabase (needs `pnpm db:start`) |
-| `pnpm test:e2e` | The full stranger flow in a browser with Playwright Test; starts the servers it needs |
+| `pnpm test:e2e` | Registration and the full stranger flow in a browser with Playwright Test; starts the servers it needs |
 | `pnpm db:start` / `pnpm db:stop` / `pnpm db:reset` | Local Supabase. `db:reset` wipes local data and reseeds |
 
 CI runs all of it on every push: type-check, lint, build, unit tests, then `pnpm bootstrap`, integration and

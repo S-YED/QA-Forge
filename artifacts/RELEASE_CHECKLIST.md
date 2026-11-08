@@ -17,7 +17,7 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 - [x] No undocumented manual steps — Windows clean clone needed only `pnpm bootstrap` (REL-1, 8 Nov)
 
 ## Product functionality
-- [ ] Registration and login · [x] Projects · [x] Test suites (browser, 8 Nov) · [x] Manual test cases (structured editor: create, edit, delete; browser 8 Nov)
+- [x] Registration and login (`e2e/registration.spec.ts`: sign up from the sign-in page, then sign in again; local, 8 Nov) · [x] Projects · [x] Test suites (browser, 8 Nov) · [x] Manual test cases (structured editor: create, edit, delete; browser 8 Nov)
 - [ ] AI generation with configured providers · [x] Local demo mode without paid keys (`demo-flow.int.test.ts`, 8 Nov)
 - [x] Generated cases reviewed and approved before save (AI-2: integration + browser, 8 Nov)
 - [x] Runs created · [x] Real browser executes steps (`run-lifecycle.int.test.ts`) · [x] Live progress visible (browser, 8 Nov)
@@ -26,7 +26,7 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 
 ## Reliability
 - [x] No false-positive passing runs (empty/invalid/unreachable/callback failure → `error`; `runner.test.ts`) · [x] No duplicate execution (concurrent-claim test) · [x] No permanently stuck `running` (EXE-2 integration, 8 Nov)
-- [ ] Browser resources cleaned up · [x] Persistence failures reported (upload failure → `error`) · [x] Socket reconnection recovers DB state (ack then reload; refresh mid-run, 8 Nov)
+- [x] Browser resources cleaned up — runner test `cleanup`: after passed, failed, timed-out, unreachable, refused, persistence-error and cancelled runs no Chromium child process or SSRF-guard proxy is left (helpers proven to detect a live one), 8 Nov · [x] Persistence failures reported (upload failure → `error`) · [x] Socket reconnection recovers DB state (ack then reload; refresh mid-run, 8 Nov)
 - [ ] Errors logged and diagnosable
 
 ## Security
