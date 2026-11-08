@@ -43,7 +43,13 @@ Your project ref is the string in your Supabase dashboard URL: `https://supabase
 supabase db push
 ```
 
-This applies all 20 migration files from `supabase/migrations/` to your cloud database in order, creating all 15 tables with RLS policies and triggers (including the demo read-only RLS lockdown in migration 19).
+This applies all 25 migration files from `supabase/migrations/` to your cloud database in order: the tables with RLS policies and triggers, the demo read-only lockdown (19), the profile privilege fix (22), the step `action` backfill (23), the private screenshot bucket (24) and the run/case RLS tightening (25). Run `supabase db push --dry-run` first to see exactly which migrations it will apply.
+
+After pushing, check that only the accounts you expect are admins (read-only):
+
+```sql
+SELECT id, email, role, updated_at FROM public.profiles WHERE role = 'admin';
+```
 
 > **⛔ Never run `supabase db reset` (or `db reset --linked`) against production** — it DROPS and recreates the database, destroying all data. Use `db push` only. Do **not** run `supabase/seed.sql` in production either: it creates developer/admin accounts with a shared, git-committed password.
 
@@ -68,7 +74,7 @@ Dashboard → **Project Settings** → **API**:
 | publishable key (`sb_publishable_...`) | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (web) |
 | `service_role` secret key | `SUPABASE_SERVICE_ROLE_KEY` (API only — never expose to frontend) |
 
-Database connection string: Dashboard → **Project Settings** → **Database** → **Connection string** (URI format) → `DATABASE_URL` (API).
+The API does not need a database connection string. You only need one for `psql` (the seed step above): Dashboard → **Project Settings** → **Database** → **Connection string**, session pooler (the direct host is IPv6-only).
 
 ---
 
@@ -111,23 +117,20 @@ CORS_ORIGIN=https://your-vercel-app.vercel.app
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=<anon public key from Supabase dashboard → API>
 SUPABASE_SERVICE_ROLE_KEY=<service_role key from Supabase dashboard>
-DATABASE_URL=<connection string from Supabase dashboard → Project Settings → Database>
 ENCRYPTION_KEY=<generate fresh 64-char hex — see command below>
-JWT_SECRET=<generate a strong random string of 32+ characters>
-REDIS_URL=<redis:// URL — REQUIRED if you run more than 1 API replica; see below>
 ```
 
-> **All of the above except `REDIS_URL` are required** — the API validates them on boot and exits if any are missing (`apps/api/src/config/env.ts`). `SUPABASE_ANON_KEY` is needed by the `/api/auth/demo` endpoint; `DATABASE_URL` by the DB layer.
+> **All of the above are required.** The API validates them on boot and exits with one line per bad variable (`apps/api/src/config/env.ts`). `SUPABASE_ANON_KEY` is needed by the `/api/auth/demo` endpoint. `DATABASE_URL` and `JWT_SECRET` are no longer used; remove them if an old service still has them.
+
+> **Leave `ALLOW_PRIVATE_HOSTS` and `AI_LOCAL_DEMO` unset in production.** The first lets test runs reach private and loopback addresses (an SSRF hole on a server); the second serves fixed example tests instead of AI. Both are for local development only.
+
+> **Chromium:** `nixpacks.toml` installs Playwright's Chromium with its system libraries during the build (`playwright install --with-deps chromium`) into `node_modules` (`PLAYWRIGHT_BROWSERS_PATH=0`), so test runs work on Railway. Not yet confirmed on a live Railway build; if runs fail with a launch error, check the build log for that step.
 
 > **Important:** Generate a **fresh** `ENCRYPTION_KEY` for production — do not reuse your local development key. Any keys encrypted with the local key will not be decryptable with a different production key.
 
-#### Scaling past one instance — set `REDIS_URL`
+#### Run exactly one API instance
 
-The API holds three pieces of cross-request state (per-user concurrent-run caps, rate-limit windows, and socket.io rooms for live test streaming). With a single replica these live in memory and work fine — **leave `REDIS_URL` blank**. The moment you run **2+ replicas**, set `REDIS_URL` to a Redis instance (Railway → **New** → **Database** → **Redis**, then reference its `REDIS_URL`). When set, the API automatically:
-- shares concurrency counts + rate limits across instances (atomic, no per-replica multiplication of limits), and
-- enables the socket.io Redis adapter so a run executing on instance B still streams to a client connected to instance A.
-
-Without it under multiple replicas, limits are enforced per-replica and live streaming silently fails for cross-instance clients.
+Keep the Railway service at **1 replica**. On boot the API marks every `pending`/`running` run as interrupted, which is right after a restart but would kill live runs on other replicas (TD-3 in `artifacts/TECHNICAL_DECISIONS.md`). `REDIS_URL` is optional: when set, run-concurrency counts, rate limits and the socket.io adapter use Redis, but that alone does not make several replicas safe.
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -199,7 +202,10 @@ This ensures Supabase Auth redirects users to your production frontend after ema
 
 ## Post-Deploy Checklist
 
-- [ ] `supabase db push` completed without errors (all 20 migrations applied)
+- [ ] `supabase db push` completed without errors (all 25 migrations applied)
+- [ ] Admin audit query shows only expected admins
+- [ ] Railway service has 1 replica; `ALLOW_PRIVATE_HOSTS` and `AI_LOCAL_DEMO` unset
+- [ ] A test run against a public site passes and its screenshots load (Chromium works on Railway)
 - [ ] pgvector extension enabled in Supabase Cloud
 - [ ] `supabase/seed-prod.sql` run against the cloud DB (demo account + sample data)
 - [ ] Railway API health check returns HTTP 200 with `{"status":"ok"}`

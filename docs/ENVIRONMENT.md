@@ -33,4 +33,4 @@ The root `.env.example` only points to the two per-app templates.
 
 ## Local ports
 Web 3000 (repo memory notes use 3005 when 3000 is taken) · API 4000 · Supabase API 54321 · DB 54322 ·
-Studio 54323 · Inbucket 54324.
+Studio 54323 · Mailpit (email) 54324.

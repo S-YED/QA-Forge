@@ -40,4 +40,4 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 ## Engineering
 - [x] Build passes — 7/7, 5 Nov 2026 · [x] Type check passes — 7/7 · [x] Lint passes (0 errors) — 7/7
 - [x] Unit tests pass — api 85/85, runner 13/13 (8 Nov 2026; CI green) · [x] Integration tests in CI · [x] E2E tests pass (local, `pnpm test:e2e` 4/4, 8 Nov) · [x] CI covers all of the above (type-check, lint, build, unit, integration, E2E; green 8 Nov)
-- [ ] README matches actual commands · [ ] Setup docs accurate · [ ] Release notes
+- [x] README matches actual commands (DOC-1, 8 Nov) · [x] Setup docs accurate (DOC-1, 8 Nov) · [ ] Release notes

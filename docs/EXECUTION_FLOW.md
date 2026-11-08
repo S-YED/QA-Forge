@@ -1,67 +1,55 @@
 # Test Execution Flow
 
-Two sections: **Current** (what the code does on 5 Nov 2026, with defects) and **Target** (what tickets
-EXE-1/2/3, RUN-1 and UI-1 implement). Update "Current" as tickets land.
+What happens from clicking **Run** to a finished run with evidence. This is the delivered behaviour
+(tickets RUN-1, EXE-1/2/3, SEC-3, UI-1, S6), covered by the runner unit tests, the integration tests in
+`apps/api/src/__tests__/integration/` and the E2E suite in `e2e/`.
 
-## Current
-1. UI `test-suites-tab.tsx` → `POST /api/projects/:pid/test-runs {test_case_id, mode:'ai_driven', browser}`.
-2. `test-runs.routes.ts` checks project ownership and that the case belongs to the project, inserts a
-   `test_runs` row with `status='pending'`, then **fire-and-forgets** `executeTestOrchestration` and returns 201.
-3. UI navigates to `/dashboard/projects/:pid/runs/:rid`. `run-detail-client.tsx` GETs the run; **only if
-   `pending`** does it open a socket and emit `test:join`.
-4. `executeTestOrchestration` (`websocket/handlers/test.handler.ts`):
-   acquire concurrency slot → re-read run → `status !== 'pending'` check → read `projects.base_url` →
-   steps from the test case (or, if `nl_input`, **generate with AI at run time and execute unreviewed**) →
-   `update status='running'` (separate statement: **not atomic**) → `runTest()`.
-5. Runner (`packages/playwright-runner/src/index.ts`): launch browser → `goto(baseUrl)` → for each step,
-   regex-classify the free-text `instruction` → run the action → screenshot. The first failure marks the rest
-   `skipped`.
-   `onStepComplete` (**not awaited**) inserts `test_steps`, uploads the PNG to the public `test-artifacts` bucket and
-   sets `screenshot_url`.
-6. Finalize: `status = passed|failed` from `results.every(passed)`. **An empty results array counts as passed**,
-   so a failed initial navigation with zero steps reports PASSED. On failure a `bugs` row is inserted.
-7. A second, competing start path exists: socket `test:start` (unused by the UI, still callable).
-
-### Socket events (server → client), payloads always carry `test_run_id`
-| Event | Payload | Notes |
-|---|---|---|
-| `test:status` | `message` | AI generation progress |
-| `test:running` | `started_at` | |
-| `test:step:start` | `step_number, action` | |
-| `test:step:complete` | `step_number, status, screenshot_url?, error_message?, duration_ms` | |
-| `test:screenshot` | `step_number, screenshot_base64` | full PNG over the socket |
-| `test:complete` | `status, duration_ms, error_message?` | |
-| `test:bug_created` | `bug_id, bug_title` | |
-| `test:error` / `test:unauthorized` | `message` | |
-Client → server: `test:join {test_run_id}` (ownership-checked), `test:start` (to be removed).
-
-### Known defects
-- False PASSED for zero steps / failed navigation.
-- Unknown instructions silently click; "press Enter" is treated as a click.
-- Missing selector/value results in a no-op "passed" step.
-- Timeouts don't cancel the action; the context isn't closed.
-- Duplicate-start race; persistence errors ignored.
-- Runs stuck in `running` after a restart.
-- A `running` run on page refresh plays a scripted replay instead of live progress.
-- Early events are missed; no refetch.
-
-## Target (December)
-1. POST validates ownership, the case and the browser; requires `test_case_id`; inserts `pending`; returns 201.
-2. Executor (`apps/api/src/services/run-executor.ts`) claims the run atomically:
-   `UPDATE test_runs SET status='running', started_at=now() WHERE id=$1 AND status='pending' RETURNING *`.
-   Zero rows means already claimed, so it is a no-op. This is the only start path.
-3. Steps are validated with the shared Zod schema (explicit `action` enum). An invalid case becomes run `error`
-   with field errors and no browser launch.
-4. Runner: target-URL guard (SSRF) → launch → `goto(baseUrl)` → `switch(action)` with Playwright default
-   timeouts and a whole-run AbortSignal → screenshot → **awaited** `onStepComplete`. Browser and context are
-   closed in `finally`.
-   `passed` only if steps > 0, every step ran and passed, and there was no run-level error. Infra and navigation
-   problems yield `error`, not `failed`.
-5. Each step insert and private-storage upload is checked. Any persistence failure makes the run `error` with a
+## Flow
+1. UI (`test-suites-tab.tsx`) calls `POST /api/projects/:pid/test-runs {test_case_id, browser}`.
+2. `test-runs.routes.ts` checks that the project is the caller's and the case belongs to it (the database enforces
+   the same through RLS, migration 25), validates the base URL scheme, inserts a `pending` row, starts the
+   executor and returns 201. This is the only start path; the old socket `test:start` is gone.
+3. The executor (`apps/api/src/services/run-executor.ts`) claims the run atomically:
+   `UPDATE test_runs SET status='running' WHERE id=$1 AND status='pending' RETURNING *`. Zero rows means another
+   call claimed it, and this call does nothing.
+4. Steps are validated with the shared Zod schema (`@qaforge/shared-types`, explicit `action` enum). An invalid
+   case ends as `error` with field messages and no browser launch.
+5. Runner (`packages/playwright-runner`): SSRF guard on the base URL and on every request the page makes (local
+   forward proxy; http/https only; private, loopback, link-local and metadata addresses refused unless listed in
+   `ALLOW_PRIVATE_HOSTS`) → launch Chromium → `goto(baseUrl)` → one explicit handler per action with Playwright
+   timeouts and a whole-run abort signal → screenshot → **awaited** step callback. Context and browser close in
+   `finally`. The first failing step marks the rest `skipped`.
+6. Each step row and its screenshot upload are checked. Screenshots go to the private `test-artifacts` bucket; the
+   row stores the path `screenshots/<run>/step_<n>.png`. A persistence failure ends the run as `error` with a
    `persistence:` message.
-6. Final status with `completed_at` and `duration_ms` on **every** terminal path. Then a bug on `failed`.
-   Then the `test:complete` event.
-7. UI: connects for `pending` and `running`; on join, reconnect and complete it **refetches** the run from the API
-   (authoritative) and upserts events by `step_number`. Screenshots come from signed URLs.
-8. Boot reaper marks stale `pending/running` runs `error: interrupted by server restart`. SIGTERM stops claims and
-   closes browsers.
+7. Outcome: `passed` only when there is at least one step, every step ran and passed, and there was no run-level
+   error. Navigation, guard and infrastructure problems are `error`; a failing assertion is `failed`. Every
+   terminal path sets `completed_at` and `duration_ms`. A `failed` run then files a bug with the failing step's
+   screenshot path, and `test:complete` is emitted last.
+8. Recovery: on boot the API marks runs left `pending`/`running` by a previous process as `error` (interrupted).
+   On SIGTERM/SIGINT it stops accepting connections, cancels in-flight runs and waits up to 15 s for them to
+   record `error`. This assumes a single API instance (see `artifacts/TECHNICAL_DECISIONS.md`, TD-3).
+
+## Reading results
+- `GET /api/projects/:pid/test-runs/:rid` returns the run and its steps, with each screenshot path replaced by a
+  signed URL valid for 1 hour. Bug endpoints sign bug screenshots the same way. Anonymous access to the bucket is
+  refused.
+- The run page (`run-detail-client.tsx`) goes live for `pending` and `running` runs: it joins the socket room,
+  waits for the server's acknowledgement, then reloads the run from the API and merges events by `step_number`, so
+  nothing emitted before the join is lost. It reloads again on reconnect and on completion. Finished runs show as
+  **Replay**.
+
+## Socket events
+Server → client, every payload carries `test_run_id`:
+
+| Event | Payload |
+|---|---|
+| `test:running` | `started_at` |
+| `test:step:start` | `step_number, action` (the step's instruction text) |
+| `test:step:complete` | `step_number, instruction, status, screenshot_url?` (signed), `error_message?, duration_ms` |
+| `test:bug_created` | `bug_id, bug_title` |
+| `test:complete` | `status, duration_ms, error_message?` |
+| `test:error` / `test:unauthorized` | `message` |
+
+Client → server: `test:join {test_run_id}` with an acknowledgement callback. The server checks ownership, joins
+the room, then acks `{ok: true}` (or `{ok: false}` when the run isn't yours).
