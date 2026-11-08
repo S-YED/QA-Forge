@@ -44,3 +44,6 @@ gstack-main/
 Resume/
 skills-lock.json
 .vercel
+
+# Playwright E2E output
+.e2e-results/

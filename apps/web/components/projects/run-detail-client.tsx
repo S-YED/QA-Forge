@@ -319,6 +319,8 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
   const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([]);
   const [canReplay, setCanReplay] = useState(false);
   const socketRef = useRef<Socket | null>(null);
+  // Incremented per mount and on cleanup, so only the current mount's connectLive opens a socket.
+  const effectGen = useRef(0);
   // Holds the full, ordered final steps so the Replay button can re-animate.
   const allStepsRef = useRef<(TestStep | LiveStep)[]>([]);
   // Cancellation token for an in-flight scripted replay.
@@ -420,13 +422,13 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
     return data;
   }, [projectId, runId]);
 
-  const fetchRun = useCallback(async () => {
+  const fetchRun = useCallback(async (gen: number) => {
     try {
       const data = await loadRun();
       if (isRunActive(data.test_run.status)) {
         // Pending or running (e.g. the page was refreshed mid-run) → watch it live.
         setSteps(data.steps);
-        connectLive();
+        connectLive(gen);
       } else if (data.steps.length > 0) {
         // Finished run → play back its recorded steps, labelled as a replay.
         setCanReplay(true);
@@ -442,12 +444,14 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
     }
   }, [projectId, router, startReplay, loadRun]);
 
-  const connectLive = async () => {
+  const connectLive = async (gen: number) => {
     const supabase = createClient();
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    if (!session?.access_token) return;
+    // The mount that asked for this socket may be gone by now (navigated away, or React's dev
+    // double-mount); without this check its late socket would stream every event a second time.
+    if (!session?.access_token || gen !== effectGen.current) return;
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
     const socket = socketIO(apiUrl, {
@@ -587,8 +591,10 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
   };
 
   useEffect(() => {
-    fetchRun();
+    const gen = ++effectGen.current;
+    fetchRun(gen);
     return () => {
+      effectGen.current++; // a connectLive still awaiting its session must not open a socket
       socketRef.current?.disconnect();
       // Stop any in-flight scripted replay so it doesn't update an unmounted tree.
       replaySignalRef.current.cancelled = true;
