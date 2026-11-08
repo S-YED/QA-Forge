@@ -5,9 +5,9 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 [docs/STRANGER_RUN.md](../docs/STRANGER_RUN.md).
 
 ## Installation
-- [ ] Fresh clone works (Windows + Linux)
+- [ ] Fresh clone works (Windows + Linux) — Linux verified by CI (fresh checkout + pnpm bootstrap, 8 Nov); Windows pending
 - [ ] Prerequisites documented with versions (Node, pnpm, Docker, Supabase CLI)
-- [ ] Dependency installation works (`pnpm install --frozen-lockfile`)
+- [x] Dependency installation works (`pnpm install --frozen-lockfile`, CI)
 - [x] `pnpm bootstrap` works and is safe to rerun (rerun verified 8 Nov; fresh clone under REL-1)
 - [x] Local Supabase starts — `npx supabase start`, 8 Nov 2026 (after a Windows reboot; Docker/WSL hang noted in KNOWN_ISSUES)
 - [x] All migrations apply cleanly — `supabase db reset`, 23 migrations, 5 Nov 2026; migration 24 via `migration up`, 8 Nov
@@ -39,5 +39,5 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 
 ## Engineering
 - [x] Build passes — 7/7, 5 Nov 2026 · [x] Type check passes — 7/7 · [x] Lint passes (0 errors) — 7/7
-- [x] Unit tests pass — api 85/85, runner 13/13 (8 Nov 2026; CI green) · [ ] Integration tests in CI · [x] E2E tests pass (local, `pnpm test:e2e` 4/4, 8 Nov) · [ ] CI covers all of the above (unit + type-check + build green since 8 Nov; no integration/E2E jobs yet)
+- [x] Unit tests pass — api 85/85, runner 13/13 (8 Nov 2026; CI green) · [x] Integration tests in CI · [x] E2E tests pass (local, `pnpm test:e2e` 4/4, 8 Nov) · [x] CI covers all of the above (type-check, lint, build, unit, integration, E2E; green 8 Nov)
 - [ ] README matches actual commands · [ ] Setup docs accurate · [ ] Release notes
