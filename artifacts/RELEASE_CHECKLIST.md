@@ -6,7 +6,7 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 
 ## Installation
 - [x] Fresh clone works (Windows + Linux) — Linux by CI run 42462120572; Windows 11 clean clone 8 Nov: bootstrap, unit, integration 21/21, E2E 4/4 (REL-1)
-- [ ] Prerequisites documented with versions (Node, pnpm, Docker, Supabase CLI)
+- [x] Prerequisites documented with versions (Node 20+, pnpm 9.15.4, Docker; Supabase CLI ships as a dev dependency) — README + setup guide (DOC-1)
 - [x] Dependency installation works (`pnpm install --frozen-lockfile`, CI)
 - [x] `pnpm bootstrap` works and is safe to rerun (rerun verified 8 Nov; fresh clone under REL-1)
 - [x] Local Supabase starts — `npx supabase start`, 8 Nov 2026 (after a Windows reboot; Docker/WSL hang noted in KNOWN_ISSUES)
@@ -14,7 +14,7 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 - [ ] Demo seed data loads **and targets the local demo app**
 - [x] Environment configuration validated (`pnpm check-setup`; `pnpm doctor` is a pnpm built-in)
 - [x] Playwright browsers installed by the setup (bootstrap)
-- [ ] No undocumented manual steps
+- [x] No undocumented manual steps — Windows clean clone needed only `pnpm bootstrap` (REL-1, 8 Nov)
 
 ## Product functionality
 - [ ] Registration and login · [x] Projects · [x] Test suites (browser, 8 Nov) · [x] Manual test cases (structured editor: create, edit, delete; browser 8 Nov)
@@ -30,12 +30,12 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 - [ ] Errors logged and diagnosable
 
 ## Security
-- [ ] Cross-user access test matrix passes (partial: profiles + optimize — `security.int.test.ts`)
+- [x] Cross-user access test matrix passes — `cross-user.int.test.ts` (27 routes + AI key + sockets) with `security.int.test.ts` and `s6.int.test.ts` (QA-2, 8 Nov)
 - [ ] RLS policies verified (profiles, test_runs case scoping and storage covered; full matrix pending) · [x] Profile role self-escalation blocked — `security.int.test.ts` (local)
 - [ ] Fixes applied to production (mig 22 + API redeploy) — approved 8 Nov; waiting on the Railway service (gone) and the DB password for `db push`
-- [x] API keys encrypted (hex key validated) — `src/utils/encryption.test.ts`, `env-example.test.ts` (8 Nov 2026) · [ ] Service-role key backend-only
-- [x] Storage private (local; cloud after migration 24) · [ ] WebSocket authorization verified · [x] Browser network restrictions tested (runner SSRF tests, real Chromium)
-- [ ] No secrets committed (scan)
+- [x] API keys encrypted (hex key validated) — `src/utils/encryption.test.ts`, `env-example.test.ts` (8 Nov 2026) · [x] Service-role key backend-only — the key value appears in no file of the web build (`apps/web/.next`) or web env files; the only "service_role" strings there are supabase-js doc comments (8 Nov)
+- [x] Storage private (local; cloud after migration 24) · [x] WebSocket authorization verified — no/forged token refused at connect; cross-user `test:join` refused (`cross-user.int.test.ts`, 8 Nov) · [x] Browser network restrictions tested (runner SSRF tests, real Chromium)
+- [x] No secrets committed (scan) — pattern scan of tracked files and full history (JWT, sb_secret, sk-/sk-ant-/sk-or-v1, AIza, private keys): only a fake test value; no .env or key file ever added; local key files gitignored (8 Nov; gitleaks not installed)
 
 ## Engineering
 - [x] Build passes — 7/7, 5 Nov 2026 · [x] Type check passes — 7/7 · [x] Lint passes (0 errors) — 7/7
