@@ -10,6 +10,7 @@ ticket is **Verified** in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 | HIGH (prod) | Migrations 23 to 25 (step `action` backfill, private screenshots, run/case RLS) not yet applied to Supabase Cloud. The "API first" order no longer blocks it: no old API is running to strip `action` on edit | REL-3 |
 | HIGH (prod) | Railway build never installed Chromium, so production runs would end "Browser failed to launch". `nixpacks.toml` now installs it (8 Nov); unverified until Railway builds | REL-3 |
 | HIGH (prod) | Screenshots are private locally (EXE-3, mig 24) but the cloud bucket stays public until migration 24 is pushed with 22/23 | REL-3 |
+| LOW | Windows: a clone under a very deep path (over ~115 characters) fails to start vitest because pnpm paths exceed 260 characters; setup guide says to clone to a short path or enable long paths | REL-1 (documented) |
 | MED | Seeds still target syedkm.com/example.com, not the demo shop (README/setup guide fixed in DOC-1) | DEMO-1 |
 | MED | SSRF guard: WebKit may bypass the proxy for loopback (up-front URL checks still apply). Prod: keep `ALLOW_PRIVATE_HOSTS` unset | SEC-3 (ceiling, TD-8) |
 | LOW | 21 `no-explicit-any` lint warnings in `apps/api`; Next.js ESLint plugin not configured | CI-1 |

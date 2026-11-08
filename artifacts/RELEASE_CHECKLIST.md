@@ -5,7 +5,7 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 [docs/STRANGER_RUN.md](../docs/STRANGER_RUN.md).
 
 ## Installation
-- [ ] Fresh clone works (Windows + Linux) — Linux verified by CI (fresh checkout + pnpm bootstrap, 8 Nov); Windows pending
+- [x] Fresh clone works (Windows + Linux) — Linux by CI run 42462120572; Windows 11 clean clone 8 Nov: bootstrap, unit, integration 21/21, E2E 4/4 (REL-1)
 - [ ] Prerequisites documented with versions (Node, pnpm, Docker, Supabase CLI)
 - [x] Dependency installation works (`pnpm install --frozen-lockfile`, CI)
 - [x] `pnpm bootstrap` works and is safe to rerun (rerun verified 8 Nov; fresh clone under REL-1)

@@ -106,4 +106,5 @@ pnpm test:e2e                                    # browser end to end; starts AP
 | Browser shows CORS errors | The web app's origin is missing from `CORS_ORIGIN` |
 | Port conflicts on 5432x | Change the ports in `supabase/config.toml` and rerun `pnpm bootstrap` |
 | You want a clean database | `pnpm db:reset` (wipes local data, reapplies migrations and the seed) |
+| Windows: tests fail to start with `ERR_PACKAGE_IMPORT_NOT_DEFINED` (`#module-evaluator`) | The clone path is too deep: pnpm's nested paths pass Windows' 260-character limit. Clone to a short path such as `C:\dev\qa-forge`, or enable long paths (`LongPathsEnabled=1`, needs admin) |
 | `pnpm build` fails while `pnpm dev` is running | Stop the web dev server first; both write `apps/web/.next` |
