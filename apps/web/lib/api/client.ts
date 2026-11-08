@@ -19,6 +19,23 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   return headers;
 }
 
+/**
+ * Flatten the API's validation details (a Zod `format()` tree) into readable lines,
+ * e.g. { steps: { 2: { value: { _errors: ['Required'] } } } } → "Step 3 value: Required".
+ */
+function fieldErrors(details: unknown, path: string[] = []): string[] {
+  if (!details || typeof details !== 'object') return [];
+  const node = details as Record<string, unknown>;
+  const own = Array.isArray(node._errors) && node._errors.length && path.length
+    ? [`${path.join(' ').replace(/^steps (\d+)/, (_, n) => `Step ${Number(n) + 1}`)}: ${node._errors[0]}`]
+    : [];
+  return own.concat(
+    ...Object.entries(node)
+      .filter(([k]) => k !== '_errors')
+      .map(([k, v]) => fieldErrors(v, [...path, k])),
+  );
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
   if (response.status === 401) {
     const supabase = createClient();
@@ -37,7 +54,8 @@ async function handleResponse<T>(response: Response): Promise<T> {
       errorBody?.message ??
       response.statusText ??
       `Request failed: ${response.status}`;
-    throw new Error(message);
+    const fields = fieldErrors(errorBody?.error?.details);
+    throw new Error(fields.length ? `${message}: ${fields.slice(0, 3).join('; ')}` : message);
   }
 
   // Handle 204 No Content

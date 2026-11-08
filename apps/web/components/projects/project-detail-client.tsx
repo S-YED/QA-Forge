@@ -7,6 +7,7 @@ import { apiClient } from '@/lib/api/client';
 import { TestSuitesTab } from '@/components/projects/test-suites-tab';
 import { TestRunsTab } from '@/components/projects/test-runs-tab';
 import { TestRecordingsTab } from '@/components/projects/test-recordings-tab';
+import { TestBugsTab, type ProjectBug } from '@/components/projects/test-bugs-tab';
 import { AIGeneratePanel } from '@/components/projects/ai-generate-panel';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -30,7 +31,7 @@ interface RunsResponse {
   per_page: number;
 }
 
-type TabId = 'suites' | 'runs' | 'recordings';
+type TabId = 'suites' | 'runs' | 'bugs' | 'recordings';
 
 export function ProjectDetailClient({ projectId }: { projectId: string }) {
   const router = useRouter();
@@ -40,6 +41,8 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
   const [runs, setRuns] = useState<TestRun[]>([]);
   const [runsCount, setRunsCount] = useState(0);
   const [recordingsCount, setRecordingsCount] = useState(0);
+  const [bugs, setBugs] = useState<ProjectBug[]>([]);
+  const [bugsCount, setBugsCount] = useState(0);
   const [activeTab, setActiveTab] = useState<TabId>('suites');
   const [loading, setLoading] = useState(true);
   const [showAIPanel, setShowAIPanel] = useState(false);
@@ -89,15 +92,26 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
     }
   }, [projectId]);
 
+  const fetchBugs = useCallback(async () => {
+    try {
+      const data = await apiClient.get<{ bugs: ProjectBug[]; count: number }>(`/api/projects/${projectId}/bugs`);
+      setBugs(data.bugs ?? []);
+      setBugsCount(data.count ?? 0);
+    } catch {
+      /* handled by apiClient */
+    }
+  }, [projectId]);
+
   useEffect(() => {
-    Promise.all([fetchProject(), fetchSuites(), fetchRuns(), fetchRecordings()]).finally(() =>
+    Promise.all([fetchProject(), fetchSuites(), fetchRuns(), fetchRecordings(), fetchBugs()]).finally(() =>
       setLoading(false),
     );
-  }, [fetchProject, fetchSuites, fetchRuns, fetchRecordings]);
+  }, [fetchProject, fetchSuites, fetchRuns, fetchRecordings, fetchBugs]);
 
   const tabs: { id: TabId; label: string; count: number }[] = [
     { id: 'suites', label: 'Suites', count: suites.length },
     { id: 'runs', label: 'Runs', count: runsCount },
+    { id: 'bugs', label: 'Bugs', count: bugsCount },
     { id: 'recordings', label: 'Recordings', count: recordingsCount },
   ];
 
@@ -195,6 +209,9 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
         </TabsContent>
         <TabsContent value="runs">
           <TestRunsTab projectId={projectId} runs={runs} totalCount={runsCount} onRefresh={fetchRuns} />
+        </TabsContent>
+        <TabsContent value="bugs">
+          <TestBugsTab projectId={projectId} bugs={bugs} totalCount={bugsCount} onRefresh={fetchBugs} />
         </TabsContent>
         <TabsContent value="recordings">
           <TestRecordingsTab projectId={projectId} />

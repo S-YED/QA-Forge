@@ -17,7 +17,7 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 - [ ] No undocumented manual steps
 
 ## Product functionality
-- [ ] Registration and login · [x] Projects · [x] Test suites (browser, 8 Nov) · [ ] Manual test cases (structured editor)
+- [ ] Registration and login · [x] Projects · [x] Test suites (browser, 8 Nov) · [x] Manual test cases (structured editor: create, edit, delete; browser 8 Nov)
 - [ ] AI generation with configured providers · [x] Local demo mode without paid keys (`demo-flow.int.test.ts`, 8 Nov)
 - [x] Generated cases reviewed and approved before save (AI-2: integration + browser, 8 Nov)
 - [x] Runs created · [x] Real browser executes steps (`run-lifecycle.int.test.ts`) · [x] Live progress visible (browser, 8 Nov)

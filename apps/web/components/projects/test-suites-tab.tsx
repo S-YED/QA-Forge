@@ -11,6 +11,7 @@ import {
   X,
   FileText,
   ListChecks,
+  Pencil,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
@@ -97,6 +98,47 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
   const [casePriority, setCasePriority] = useState<'critical' | 'high' | 'medium' | 'low'>('medium');
   const [caseType, setCaseType] = useState<string>('functional');
   const [caseSteps, setCaseSteps] = useState<DraftStep[]>([newDraftStep()]);
+  // Set when the case dialog edits an existing case instead of creating one (UI-2).
+  const [editingCaseId, setEditingCaseId] = useState<string | null>(null);
+
+  const resetCaseForm = () => {
+    setEditingCaseId(null);
+    setCaseTitle('');
+    setCaseDescription('');
+    setCaseExpected('');
+    setCasePriority('medium');
+    setCaseType('functional');
+    setCaseSteps([newDraftStep()]);
+  };
+
+  const openNewCase = (suiteId: string) => {
+    resetCaseForm();
+    setSelectedSuiteForNewCase(suiteId);
+    setShowCreateCaseModal(true);
+  };
+
+  const openEditCase = (tc: TestCase, suiteId: string) => {
+    setEditingCaseId(tc.id);
+    setSelectedSuiteForNewCase(suiteId);
+    setCaseTitle(tc.title);
+    setCaseDescription(tc.description ?? '');
+    setCaseExpected(tc.expected_result ?? '');
+    setCasePriority((tc.priority as 'critical' | 'high' | 'medium' | 'low') ?? 'medium');
+    setCaseType(tc.type ?? 'functional');
+    const steps = (tc.steps ?? []) as { action?: string; instruction?: string; selector?: string; value?: string }[];
+    setCaseSteps(
+      steps.length
+        ? steps.map((s) => ({
+            // Legacy rows without an action open as "click" so the editor can fix them.
+            action: ((s.action as StepAction) ?? 'click') as StepAction,
+            instruction: s.instruction ?? '',
+            selector: s.selector ?? '',
+            value: s.value ?? '',
+          }))
+        : [newDraftStep()],
+    );
+    setShowCreateCaseModal(true);
+  };
 
   // AI Optimization state
   const [optimizingCaseId, setOptimizingCaseId] = useState<string | null>(null);
@@ -172,25 +214,20 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
           };
         });
 
-      await apiClient.post(
-        `/api/projects/${projectId}/test-suites/${selectedSuiteForNewCase}/test-cases`,
-        {
-          title: caseTitle.trim(),
-          description: caseDescription.trim() || undefined,
-          expected_result: caseExpected.trim() || undefined,
-          priority: casePriority,
-          type: caseType,
-          steps: formattedSteps,
-        },
-      );
+      const casesPath = `/api/projects/${projectId}/test-suites/${selectedSuiteForNewCase}/test-cases`;
+      const body = {
+        title: caseTitle.trim(),
+        description: caseDescription.trim() || undefined,
+        expected_result: caseExpected.trim() || undefined,
+        priority: casePriority,
+        type: caseType,
+        steps: formattedSteps,
+      };
+      if (editingCaseId) await apiClient.put(`${casesPath}/${editingCaseId}`, body);
+      else await apiClient.post(casesPath, body);
+      toast.success(editingCaseId ? 'Test case saved' : 'Test case created');
 
-      // Reset
-      setCaseTitle('');
-      setCaseDescription('');
-      setCaseExpected('');
-      setCasePriority('medium');
-      setCaseType('functional');
-      setCaseSteps([newDraftStep()]);
+      resetCaseForm();
       setShowCreateCaseModal(false);
 
       // Reload detail
@@ -199,10 +236,28 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
       );
       setSuiteDetail(data);
       onRefresh();
-    } catch {
-      /* handled */
+    } catch (err) {
+      // e.g. the step contract's field-level message ("steps.1.value: …")
+      toast.error('Could not save the test case', {
+        description: err instanceof Error ? err.message : 'Please try again.',
+      });
     } finally {
       setCreatingCase(false);
+    }
+  };
+
+  const handleDeleteCase = async (caseId: string, suiteId: string) => {
+    if (!confirm('Delete this test case and its run history? This cannot be undone.')) return;
+    try {
+      await apiClient.del(`/api/projects/${projectId}/test-suites/${suiteId}/test-cases/${caseId}`);
+      const data = await apiClient.get<SuiteDetailResponse>(`/api/projects/${projectId}/test-suites/${suiteId}`);
+      setSuiteDetail(data);
+      onRefresh();
+      toast.success('Test case deleted');
+    } catch (err) {
+      toast.error('Could not delete the test case', {
+        description: err instanceof Error ? err.message : 'Please try again.',
+      });
     }
   };
 
@@ -398,10 +453,7 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
                         variant="ghost"
                         size="sm"
                         className="h-7 text-primary hover:bg-primary/10 hover:text-primary"
-                        onClick={() => {
-                          setSelectedSuiteForNewCase(suite.id);
-                          setShowCreateCaseModal(true);
-                        }}
+                        onClick={() => openNewCase(suite.id)}
                       >
                         <Plus />
                         Add case
@@ -451,6 +503,25 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
                             </div>
 
                             <div className="flex shrink-0 items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openEditCase(tc, suite.id)}
+                                aria-label={`Edit ${tc.title}`}
+                                title="Edit steps"
+                              >
+                                <Pencil />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                onClick={() => handleDeleteCase(tc.id, suite.id)}
+                                aria-label={`Delete ${tc.title}`}
+                                title="Delete test case"
+                              >
+                                <Trash2 />
+                              </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -542,9 +613,11 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create test case</DialogTitle>
+            <DialogTitle>{editingCaseId ? 'Edit test case' : 'Create test case'}</DialogTitle>
             <DialogDescription>
-              Add a manual case. You can optimize it into structured, selector-rich steps with AI later.
+              {editingCaseId
+                ? 'Each step needs an action plus the selector and value that action uses.'
+                : 'Add a manual case. You can optimize it into structured, selector-rich steps with AI later.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -718,7 +791,7 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
               disabled={creatingCase || !caseTitle.trim()}
             >
               {creatingCase && <Spinner className="text-primary-foreground" />}
-              {creatingCase ? 'Creating…' : 'Create case'}
+              {creatingCase ? 'Saving…' : editingCaseId ? 'Save changes' : 'Create case'}
             </Button>
           </DialogFooter>
         </DialogContent>
