@@ -46,6 +46,7 @@ export function errorHandler(
     stack: env.NODE_ENV !== 'production' ? err.stack : undefined,
     path: req.path,
     method: req.method,
+    userId: req.user?.id, // absent before authentication
   });
 
   // Provider failures the user can act on (bad key, rate limit, timeout, unusable output).

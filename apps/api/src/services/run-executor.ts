@@ -69,7 +69,15 @@ export async function executeTestOrchestration(
     if (error) logger.error({ event: 'run:finalize_failed', testRunId: test_run_id, error: error.message });
     if (status === 'error') room?.emit('test:error', { test_run_id, message: error_message });
     room?.emit('test:complete', { test_run_id, status, duration_ms: extra.duration_ms, error_message });
-    logger.info({ event: 'run:complete', testRunId: test_run_id, status, durationMs: Date.now() - startedMs });
+    // The reason goes in the log too, so a failed or errored run is diagnosable without the database.
+    logger[status === 'error' ? 'warn' : 'info']({
+      event: 'run:complete',
+      testRunId: test_run_id,
+      userId,
+      status,
+      durationMs: Date.now() - startedMs,
+      ...(error_message ? { errorMessage: error_message } : {}),
+    });
   };
 
   // ── Atomic claim (before anything else, so duplicates never touch the run) ──

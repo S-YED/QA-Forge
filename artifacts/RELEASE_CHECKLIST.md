@@ -27,7 +27,7 @@ output or test name) recorded in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 ## Reliability
 - [x] No false-positive passing runs (empty/invalid/unreachable/callback failure → `error`; `runner.test.ts`) · [x] No duplicate execution (concurrent-claim test) · [x] No permanently stuck `running` (EXE-2 integration, 8 Nov)
 - [x] Browser resources cleaned up — runner test `cleanup`: after passed, failed, timed-out, unreachable, refused, persistence-error and cancelled runs no Chromium child process or SSRF-guard proxy is left (helpers proven to detect a live one), 8 Nov · [x] Persistence failures reported (upload failure → `error`) · [x] Socket reconnection recovers DB state (ack then reload; refresh mid-run, 8 Nov)
-- [ ] Errors logged and diagnosable
+- [x] Errors logged and diagnosable — every run end logs `run:complete` with run id, user id, status, duration and the reason (warn level for `error`, so it reaches production logs); request errors log path, method and user id. Fixed: development logs printed structured events as "[object Object]" (now readable JSON, `logger.test.ts`). Checked live 8 Nov with a run against an unreachable URL
 
 ## Security
 - [x] Cross-user access test matrix passes — `cross-user.int.test.ts` (27 routes + AI key + sockets) with `security.int.test.ts` and `s6.int.test.ts` (QA-2, 8 Nov)
