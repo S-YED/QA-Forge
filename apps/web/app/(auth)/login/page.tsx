@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect } from 'react';
+import { use, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-export default function LoginPage() {
+export default function LoginPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  // /login?view=sign_up opens the sign-up form directly ("Create free account", demo banner).
+  const signUp = use(searchParams).view === 'sign_up';
   const router = useRouter();
   const supabase = createClient();
 
@@ -28,7 +30,7 @@ export default function LoginPage() {
   return (
     <Card className="w-full shadow-sm">
       <CardHeader className="items-center gap-2 pb-2 text-center">
-        <CardTitle className="text-xl">Sign in to QA Forge</CardTitle>
+        <CardTitle className="text-xl">{signUp ? 'Create your QA Forge account' : 'Sign in to QA Forge'}</CardTitle>
         <CardDescription>AI-powered end-to-end testing platform</CardDescription>
       </CardHeader>
       <CardContent>
@@ -67,7 +69,7 @@ export default function LoginPage() {
             },
           }}
           providers={[]}
-          view="sign_in"
+          view={signUp ? 'sign_up' : 'sign_in'}
           showLinks={true}
           redirectTo={`${typeof window !== 'undefined' ? window.location.origin : ''}/dashboard/projects`}
         />

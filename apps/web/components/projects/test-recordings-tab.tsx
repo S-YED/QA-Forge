@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { CircleDot, Clock, Calendar, ArrowRight } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
+import { toastError } from '@/lib/toast-error';
 import { toast } from 'sonner';
 import { useDemoMode } from '@/lib/hooks/use-demo-mode';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -69,8 +70,8 @@ export function TestRecordingsTab({ projectId }: TestRecordingsTabProps) {
         `/api/projects/${projectId}/recorded-sessions`,
       );
       setSessions(data.recorded_sessions ?? []);
-    } catch {
-      // Handled by apiClient
+    } catch (err) {
+      toastError('Could not load recordings', err);
     } finally {
       setLoading(false);
     }
@@ -113,8 +114,8 @@ export function TestRecordingsTab({ projectId }: TestRecordingsTabProps) {
       setBaseUrl('');
 
       router.push(`/dashboard/projects/${projectId}/recordings/${session.id}`);
-    } catch {
-      // Handled by apiClient
+    } catch (err) {
+      toastError('Could not start the recording', err);
     } finally {
       setCreating(false);
     }

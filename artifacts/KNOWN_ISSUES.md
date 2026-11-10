@@ -13,10 +13,7 @@ ticket is **Verified** in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 | LOW | Windows: a clone under a very deep path (over ~115 characters) fails to start vitest because pnpm paths exceed 260 characters; setup guide says to clone to a short path or enable long paths | REL-1 (documented) |
 | LOW | Rare local integration flakes in real-browser run tests: SEC-3 "private host ... as error" (1 of 6 full runs) and RUN-1 "a passing case ends passed" (1 of 4), 8 Nov. Each passed alone and in every rerun; CI green on every push. Ruled out: the dev API's boot reaper (no reaps logged). Cause not found; watch CI | QA-2 |
 | HIGH | Recordings cannot record: the viewport is a still image with no click/key forwarding, so no actions are captured (plan A4) | UX |
-| MED | Export script turns most actions into comments, breaks absolute URLs, does not escape values (plan C) | UX |
-| MED | AI key "Validate" reports success for an invalid key (API returns 200 is_valid:false) (plan C) | UX |
 | MED | No loading feedback on several waits: no loading.tsx, Run/Delete/Refresh/Sign out without pending state, Run can be double-clicked (plan B) | UX |
-| MED | Errors swallowed without a toast (create/delete suite, run, start recording, project loads); runs labelled "Ai Driven"; no edit/delete for projects, no suite rename, bug status not editable, no "load more" (plan C) | UX |
 | MED | Seeds still target syedkm.com/example.com, not the demo shop (README/setup guide fixed in DOC-1) | DEMO-1 |
 | MED | SSRF guard: WebKit may bypass the proxy for loopback (up-front URL checks still apply). Prod: keep `ALLOW_PRIVATE_HOSTS` unset | SEC-3 (ceiling, TD-8) |
 | LOW | 21 `no-explicit-any` lint warnings in `apps/api`; Next.js ESLint plugin not configured | CI-1 |

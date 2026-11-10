@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { FlaskConical, ArrowRight } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -11,6 +11,15 @@ import { createClient } from '@/lib/supabase/client';
  */
 export function DemoBanner() {
   const [isDemo, setIsDemo] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const router = useRouter();
+
+  // Leave the shared demo account first, or the sign-up page would still be signed in as demo.
+  const signUp = async () => {
+    setLeaving(true);
+    await createClient().auth.signOut();
+    router.push('/login?view=sign_up');
+  };
 
   useEffect(() => {
     async function checkDemoUser() {
@@ -42,13 +51,15 @@ export function DemoBanner() {
       <span className="text-info">
         Demo mode - read-only sandbox.
       </span>
-      <Link
-        href="/login"
-        className="inline-flex items-center gap-1 font-semibold text-info underline decoration-info/40 underline-offset-2 transition-colors hover:decoration-info"
+      <button
+        type="button"
+        onClick={signUp}
+        disabled={leaving}
+        className="inline-flex items-center gap-1 font-semibold text-info underline decoration-info/40 underline-offset-2 transition-colors hover:decoration-info disabled:opacity-60"
       >
-        Sign up for full access
+        {leaving ? 'Opening sign-up…' : 'Sign up for full access'}
         <ArrowRight className="size-3" aria-hidden="true" />
-      </Link>
+      </button>
     </div>
   );
 }

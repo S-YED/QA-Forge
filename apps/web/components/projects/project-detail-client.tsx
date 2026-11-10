@@ -4,9 +4,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Globe, Sparkles } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
+import { toastError } from '@/lib/toast-error';
 import { TestSuitesTab } from '@/components/projects/test-suites-tab';
 import { TestRunsTab } from '@/components/projects/test-runs-tab';
 import { TestRecordingsTab } from '@/components/projects/test-recordings-tab';
+import { ProjectActions } from '@/components/projects/project-actions';
 import { TestBugsTab, type ProjectBug } from '@/components/projects/test-bugs-tab';
 import { AIGeneratePanel } from '@/components/projects/ai-generate-panel';
 import { Button } from '@/components/ui/button';
@@ -43,6 +45,9 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
   const [recordingsCount, setRecordingsCount] = useState(0);
   const [bugs, setBugs] = useState<ProjectBug[]>([]);
   const [bugsCount, setBugsCount] = useState(0);
+  // "Load more" appends the next page (the API serves at most 50 per page).
+  const [runsPage, setRunsPage] = useState(1);
+  const [bugsPage, setBugsPage] = useState(1);
   const [activeTab, setActiveTab] = useState<TabId>('suites');
   const [loading, setLoading] = useState(true);
   const [showAIPanel, setShowAIPanel] = useState(false);
@@ -52,7 +57,8 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
       const data = await apiClient.get<ProjectDetailResponse>(`/api/projects/${projectId}`);
       setProject(data.project);
       setStats(data.stats);
-    } catch {
+    } catch (err) {
+      toastError('Could not open this project', err);
       router.push('/dashboard/projects');
     }
   }, [projectId, router]);
@@ -61,8 +67,8 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
     try {
       const data = await apiClient.get<SuitesResponse>(`/api/projects/${projectId}/test-suites`);
       setSuites(data.suites ?? []);
-    } catch {
-      /* handled by apiClient */
+    } catch (err) {
+      toastError('Could not load test suites', err);
     }
   }, [projectId]);
 
@@ -72,10 +78,11 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
         const data = await apiClient.get<RunsResponse>(
           `/api/projects/${projectId}/test-runs?page=${page}&per_page=20`,
         );
-        setRuns(data.test_runs ?? []);
+        setRuns((prev) => (page === 1 ? (data.test_runs ?? []) : [...prev, ...(data.test_runs ?? [])]));
         setRunsCount(data.count ?? 0);
-      } catch {
-        /* handled by apiClient */
+        setRunsPage(page);
+      } catch (err) {
+        toastError('Could not load runs', err);
       }
     },
     [projectId],
@@ -87,18 +94,21 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
         `/api/projects/${projectId}/recorded-sessions`,
       );
       setRecordingsCount(data.recorded_sessions?.length ?? 0);
-    } catch {
-      /* handled by apiClient */
+    } catch (err) {
+      toastError('Could not load recordings', err);
     }
   }, [projectId]);
 
-  const fetchBugs = useCallback(async () => {
+  const fetchBugs = useCallback(async (page = 1) => {
     try {
-      const data = await apiClient.get<{ bugs: ProjectBug[]; count: number }>(`/api/projects/${projectId}/bugs`);
-      setBugs(data.bugs ?? []);
+      const data = await apiClient.get<{ bugs: ProjectBug[]; count: number }>(
+        `/api/projects/${projectId}/bugs?page=${page}&per_page=20`,
+      );
+      setBugs((prev) => (page === 1 ? (data.bugs ?? []) : [...prev, ...(data.bugs ?? [])]));
       setBugsCount(data.count ?? 0);
-    } catch {
-      /* handled by apiClient */
+      setBugsPage(page);
+    } catch (err) {
+      toastError('Could not load bugs', err);
     }
   }, [projectId]);
 
@@ -138,9 +148,10 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
 
         <div className="mt-3 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 space-y-2.5">
-            <h1 className="truncate text-2xl font-bold tracking-tight lg:text-3xl">
-              {project.name}
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1 className="truncate text-2xl font-bold tracking-tight lg:text-3xl">{project.name}</h1>
+              <ProjectActions project={project} onSaved={fetchProject} />
+            </div>
             {project.description && (
               <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
                 {project.description}
@@ -208,10 +219,22 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
           <TestSuitesTab projectId={projectId} suites={suites} onRefresh={fetchSuites} />
         </TabsContent>
         <TabsContent value="runs">
-          <TestRunsTab projectId={projectId} runs={runs} totalCount={runsCount} onRefresh={fetchRuns} />
+          <TestRunsTab
+            projectId={projectId}
+            runs={runs}
+            totalCount={runsCount}
+            onRefresh={fetchRuns}
+            onLoadMore={() => fetchRuns(runsPage + 1)}
+          />
         </TabsContent>
         <TabsContent value="bugs">
-          <TestBugsTab projectId={projectId} bugs={bugs} totalCount={bugsCount} onRefresh={fetchBugs} />
+          <TestBugsTab
+            projectId={projectId}
+            bugs={bugs}
+            totalCount={bugsCount}
+            onRefresh={() => fetchBugs(1)}
+            onLoadMore={() => fetchBugs(bugsPage + 1)}
+          />
         </TabsContent>
         <TabsContent value="recordings">
           <TestRecordingsTab projectId={projectId} />

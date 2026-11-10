@@ -16,6 +16,7 @@ import { apiClient } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { useDemoMode } from '@/lib/hooks/use-demo-mode';
 import { toast } from 'sonner';
+import { toastError } from '@/lib/toast-error';
 import { type GeneratedTestCase, type StepAction, type TestSuite, type TestCase } from '@qaforge/shared-types';
 import { DraftSteps } from '@/components/projects/draft-steps';
 import {
@@ -75,9 +76,13 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
   const [expandedSuiteId, setExpandedSuiteId] = useState<string | null>(null);
   const [suiteDetail, setSuiteDetail] = useState<SuiteDetailResponse | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  // The one action in flight, e.g. "run:<caseId>": its button shows a spinner and can't be pressed twice.
+  const [busy, setBusy] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newSuiteName, setNewSuiteName] = useState('');
+  // Set when the suite dialog renames an existing suite instead of creating one.
+  const [editingSuiteId, setEditingSuiteId] = useState<string | null>(null);
   const [newSuiteDescription, setNewSuiteDescription] = useState('');
 
   // Manual Test Case creation states
@@ -163,11 +168,18 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
         `/api/projects/${projectId}/test-suites/${suiteId}`,
       );
       setSuiteDetail(data);
-    } catch {
-      // Error handled by apiClient
+    } catch (err) {
+      toastError('Could not load the test cases', err);
     } finally {
       setLoadingDetail(false);
     }
+  };
+
+  const openSuiteDialog = (suite?: TestSuite) => {
+    setEditingSuiteId(suite?.id ?? null);
+    setNewSuiteName(suite?.name ?? '');
+    setNewSuiteDescription(suite?.description ?? '');
+    setShowCreateModal(true);
   };
 
   const handleCreateSuite = async () => {
@@ -175,16 +187,25 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
     setCreating(true);
 
     try {
-      await apiClient.post(`/api/projects/${projectId}/test-suites`, {
-        name: newSuiteName.trim(),
-        description: newSuiteDescription.trim() || undefined,
-      });
+      if (editingSuiteId) {
+        await apiClient.put(`/api/projects/${projectId}/test-suites/${editingSuiteId}`, {
+          name: newSuiteName.trim(),
+          description: newSuiteDescription.trim() || null,
+        });
+        toast.success('Suite saved');
+      } else {
+        await apiClient.post(`/api/projects/${projectId}/test-suites`, {
+          name: newSuiteName.trim(),
+          description: newSuiteDescription.trim() || undefined,
+        });
+        toast.success('Suite created');
+      }
       setNewSuiteName('');
       setNewSuiteDescription('');
       setShowCreateModal(false);
       onRefresh();
-    } catch {
-      // Error handled by apiClient
+    } catch (err) {
+      toastError(editingSuiteId ? 'Could not save the suite' : 'Could not create the suite', err);
     } finally {
       setCreating(false);
     }
@@ -248,6 +269,7 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
 
   const handleDeleteCase = async (caseId: string, suiteId: string) => {
     if (!confirm('Delete this test case and its run history? This cannot be undone.')) return;
+    setBusy(`delete-case:${caseId}`);
     try {
       await apiClient.del(`/api/projects/${projectId}/test-suites/${suiteId}/test-cases/${caseId}`);
       const data = await apiClient.get<SuiteDetailResponse>(`/api/projects/${projectId}/test-suites/${suiteId}`);
@@ -255,9 +277,9 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
       onRefresh();
       toast.success('Test case deleted');
     } catch (err) {
-      toast.error('Could not delete the test case', {
-        description: err instanceof Error ? err.message : 'Please try again.',
-      });
+      toastError('Could not delete the test case', err);
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -324,6 +346,7 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
 
   const handleDeleteSuite = async (suiteId: string) => {
     if (!confirm('Delete this suite and all its test cases? This action cannot be undone.')) return;
+    setBusy(`delete-suite:${suiteId}`);
     try {
       await apiClient.del(`/api/projects/${projectId}/test-suites/${suiteId}`);
       if (expandedSuiteId === suiteId) {
@@ -331,8 +354,11 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
         setSuiteDetail(null);
       }
       onRefresh();
-    } catch {
-      /* handled */
+      toast.success('Suite deleted');
+    } catch (err) {
+      toastError('Could not delete the suite', err);
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -359,14 +385,18 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
       return;
     }
 
+    if (busy) return; // one start per click: no duplicate runs from a double click
+    setBusy(`run:${testCaseId}`);
     try {
       const data = await apiClient.post<{ test_run: { id: string } }>(
         `/api/projects/${projectId}/test-runs`,
         { test_case_id: testCaseId, mode: 'ai_driven', browser: 'chromium' },
       );
+      // keep the spinner until the run page takes over
       router.push(`/dashboard/projects/${projectId}/runs/${data.test_run.id}`);
-    } catch {
-      /* handled */
+    } catch (err) {
+      toastError('Could not start the run', err);
+      setBusy(null);
     }
   };
 
@@ -375,7 +405,7 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
       {/* Header row */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Test suites</h3>
-        <Button variant="outline" size="sm" onClick={() => setShowCreateModal(true)}>
+        <Button variant="outline" size="sm" onClick={() => openSuiteDialog()}>
           <Plus />
           New suite
         </Button>
@@ -388,7 +418,7 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
           title="No test suites yet"
           description="Create a suite manually, or use AI Generate to auto-create a suite full of cases."
           action={
-            <Button onClick={() => setShowCreateModal(true)}>
+            <Button onClick={() => openSuiteDialog()}>
               <Plus />
               Create suite
             </Button>
@@ -434,12 +464,23 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="size-8 text-muted-foreground"
+                      onClick={() => openSuiteDialog(suite)}
+                      aria-label={`Rename ${suite.name}`}
+                      title="Rename suite"
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       onClick={() => handleDeleteSuite(suite.id)}
+                      disabled={busy === `delete-suite:${suite.id}`}
                       aria-label="Delete suite"
                       title="Delete suite"
                     >
-                      <Trash2 className="size-4" />
+                      {busy === `delete-suite:${suite.id}` ? <Spinner /> : <Trash2 className="size-4" />}
                     </Button>
                   </div>
                 </div>
@@ -517,24 +558,29 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
                                 size="icon"
                                 className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                                 onClick={() => handleDeleteCase(tc.id, suite.id)}
+                                disabled={busy === `delete-case:${tc.id}`}
                                 aria-label={`Delete ${tc.title}`}
                                 title="Delete test case"
                               >
-                                <Trash2 />
+                                {busy === `delete-case:${tc.id}` ? <Spinner /> : <Trash2 />}
                               </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleOptimizeTestCase(tc.id, suite.id)}
                                 disabled={optimizingCaseId === tc.id}
-                                title="Optimize instructions & selectors with AI"
+                                title="Rewrite the steps more clearly with AI (you review before saving)"
                               >
                                 {optimizingCaseId === tc.id ? <Spinner /> : <Sparkles />}
                                 Optimize
                               </Button>
-                              <Button size="sm" onClick={() => handleRunTestCase(tc.id)}>
-                                <Play />
-                                Run
+                              <Button
+                                size="sm"
+                                onClick={() => handleRunTestCase(tc.id)}
+                                disabled={busy?.startsWith('run:')}
+                              >
+                                {busy === `run:${tc.id}` ? <Spinner className="text-primary-foreground" /> : <Play />}
+                                {busy === `run:${tc.id}` ? 'Starting…' : 'Run'}
                               </Button>
                             </div>
                           </li>
@@ -562,7 +608,7 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create test suite</DialogTitle>
+            <DialogTitle>{editingSuiteId ? 'Rename test suite' : 'Create test suite'}</DialogTitle>
             <DialogDescription>Organize your test cases into logical suites.</DialogDescription>
           </DialogHeader>
 
@@ -598,7 +644,7 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
             </Button>
             <Button type="button" onClick={handleCreateSuite} disabled={creating || !newSuiteName.trim()}>
               {creating && <Spinner className="text-primary-foreground" />}
-              {creating ? 'Creating…' : 'Create suite'}
+              {creating ? 'Saving…' : editingSuiteId ? 'Save changes' : 'Create suite'}
             </Button>
           </DialogFooter>
         </DialogContent>

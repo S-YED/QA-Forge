@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Plus, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api/client';
+import { toastError } from '@/lib/toast-error';
 import { AddApiKeyModal } from '@/components/settings/add-api-key-modal';
 import type { ApiKeyResponse } from '@qaforge/shared-types';
 import { Button } from '@/components/ui/button';
@@ -31,19 +32,21 @@ export function AiKeysManager({ initialKeys }: AiKeysManagerProps) {
     try {
       const data = await apiClient.get<ApiKeysListResponse>('/api/api-keys');
       setKeys(data.keys ?? []);
-    } catch {
-      // apiClient handles 401
+    } catch (err) {
+      toastError('Could not refresh your keys', err);
     }
   };
 
   const handleValidate = async (id: string) => {
     setValidatingId(id);
     try {
-      await apiClient.post(`/api/api-keys/${id}/validate`);
+      // 200 means the check ran; the answer is in is_valid (a rejected key is not a failed request).
+      const result = await apiClient.post<{ is_valid: boolean; error?: string }>(`/api/api-keys/${id}/validate`);
       await refreshKeys();
-      toast.success('Key validated');
-    } catch {
-      toast.error('Could not validate key');
+      if (result.is_valid) toast.success('Key works');
+      else toast.error('This key was rejected by the provider', { description: result.error ?? 'Check the key and try again.' });
+    } catch (err) {
+      toast.error('Could not check the key', { description: err instanceof Error ? err.message : undefined });
     } finally {
       setValidatingId(null);
     }

@@ -21,3 +21,10 @@ test('register a new account, then sign in with it', async ({ page, context }) =
   await expect(page).toHaveURL(/\/dashboard\/projects/);
   await expect(page.getByRole('button', { name: 'New project' })).toBeVisible();
 });
+
+test('"Create free account" opens the sign-up form', async ({ page }) => {
+  await page.goto('/landing');
+  await page.getByRole('link', { name: 'Create free account' }).first().click();
+  await expect(page.getByText('Create your QA Forge account')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign up' })).toBeVisible();
+});

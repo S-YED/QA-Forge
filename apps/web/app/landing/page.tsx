@@ -134,7 +134,7 @@ export default function LandingPage() {
               <Link href="/login">Sign in</Link>
             </Button>
             <Button size="sm" asChild>
-              <Link href="/login">
+              <Link href="/login?view=sign_up">
                 Get started
                 <ArrowRight />
               </Link>
@@ -167,7 +167,7 @@ export default function LandingPage() {
                 </Link>
               </Button>
               <Button size="lg" variant="outline" asChild>
-                <Link href="/login">Create free account</Link>
+                <Link href="/login?view=sign_up">Create free account</Link>
               </Button>
             </div>
             <p className="mt-6 text-xs text-muted-foreground">
@@ -274,7 +274,7 @@ export default function LandingPage() {
                 asChild
                 className="border-console-border bg-transparent text-console-foreground hover:bg-white/5 hover:text-console-foreground"
               >
-                <Link href="/login">Create free account</Link>
+                <Link href="/login?view=sign_up">Create free account</Link>
               </Button>
             </div>
           </div>

@@ -1,20 +1,13 @@
 import type { Locator, Page } from 'playwright';
-import type { StepAction } from '@qaforge/shared-types';
+import { looksLikeSelector, type StepAction } from '@qaforge/shared-types';
 
 /**
  * A step's target is either a selector (CSS, XPath or a Playwright engine such as `role=` / `text=`) or the
  * words a person sees: a button's text, a field's label or placeholder, a heading, a test id.
- * Plain words are resolved here, deterministically, with Playwright's user-facing locators.
+ * Plain words are resolved here, deterministically, with Playwright's user-facing locators. The exported script
+ * (shared-types `stepsToPlaywright`) mirrors this order; keep them in step.
  */
-const ENGINE_PREFIX = /^(css|xpath|text|role|id|data-testid|internal:[\w-]+)=/;
-const CSS_START = /^(#|\.|\[|\/\/|\(\/\/)/;
-/** tag followed by a CSS piece, e.g. `button[type=submit]`, `input#email`, `div > a`, `li:nth-child(2)` */
-const TAG_CSS = /^[a-z][a-z0-9-]*([#.[]|:[a-z-]|\s*>)/i;
-
-export function looksLikeSelector(target: string): boolean {
-  const t = target.trim();
-  return ENGINE_PREFIX.test(t) || CSS_START.test(t) || TAG_CSS.test(t);
-}
+export { looksLikeSelector };
 
 type Candidate = (page: Page, text: string, exact: boolean) => Locator;
 type Role = Parameters<Page['getByRole']>[0];

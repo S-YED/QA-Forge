@@ -13,15 +13,16 @@ import {
   Camera,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
+import { toastError } from '@/lib/toast-error';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { isRunActive, mergeSavedSteps, upsertStep } from '@/lib/run-steps';
 import type { TestRun, TestStep } from '@qaforge/shared-types';
-import { TestRunStatus } from '@qaforge/shared-types';
+import { TestRunStatus, stepsToPlaywright } from '@qaforge/shared-types';
 import { io as socketIO, type Socket } from 'socket.io-client';
 import { Button } from '@/components/ui/button';
 import { StatusBadge, SeverityBadge } from '@/components/shared/status-badge';
-import { CenteredSpinner } from '@/components/shared/spinner';
+import { CenteredSpinner, Spinner } from '@/components/shared/spinner';
 
 interface RunDetailResponse {
   test_run: TestRun & {
@@ -69,58 +70,21 @@ interface LiveStep {
 
 // ── Code Exporter Utility ─────────────────────────────────────────────────────
 
-function generatePlaywrightCode(
-  steps: (TestStep | LiveStep)[],
-  testTitle: string,
-  baseUrl?: string,
-): string {
-  const lines: string[] = [
-    `import { test, expect } from '@playwright/test';`,
-    ``,
-    `test('${testTitle.replace(/'/g, "\\'")}', async ({ page }) => {`,
-  ];
-
-  for (const step of steps) {
-    const action = step.action;
-    const selector = 'selector' in step ? step.selector : undefined;
-    const value = 'value' in step ? step.value : undefined;
-
-    switch (action) {
-      case 'navigate':
-        lines.push(`  await page.goto('${baseUrl || ''}${value || '/'}');`);
-        break;
-      case 'fill':
-        lines.push(`  await page.locator('${selector}').fill('${value || ''}');`);
-        break;
-      case 'click':
-        lines.push(`  await page.locator('${selector}').click();`);
-        break;
-      case 'assert':
-        if (value === 'visible') {
-          lines.push(`  await expect(page.locator('${selector}')).toBeVisible();`);
-        } else {
-          lines.push(`  await expect(page.locator('${selector}')).toHaveText('${value || ''}');`);
-        }
-        break;
-      case 'wait':
-        lines.push(`  await page.waitForTimeout(${value || '1000'});`);
-        break;
-      default:
-        lines.push(`  // ${action}: ${selector || ''} ${value || ''}`);
-    }
-  }
-
-  lines.push(`});`);
-  lines.push(``);
-  return lines.join('\n');
-}
-
 function downloadPlaywrightScript(
   steps: (TestStep | LiveStep)[],
   testTitle: string,
   baseUrl?: string,
 ) {
-  const code = generatePlaywrightCode(steps, testTitle, baseUrl);
+  const code = stepsToPlaywright(
+    steps.map((st) => ({
+      action: st.action,
+      instruction: st.instruction,
+      selector: 'selector' in st ? st.selector : undefined,
+      value: 'value' in st ? st.value : undefined,
+    })),
+    testTitle,
+    baseUrl,
+  );
   const slug = testTitle
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -311,6 +275,21 @@ function SectionLabel({ children, count }: { children: React.ReactNode; count?: 
 export function RunDetailClient({ projectId, runId }: { projectId: string; runId: string }) {
   const router = useRouter();
   const [run, setRun] = useState<RunDetailResponse['test_run'] | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  // Export from the saved run, not the on-screen list: live events carry no element or value, and a replay
+  // animation shows only part of the steps.
+  const exportScript = async () => {
+    setExporting(true);
+    try {
+      const data = await apiClient.get<RunDetailResponse>(`/api/projects/${projectId}/test-runs/${runId}`);
+      downloadPlaywrightScript(data.steps, testTitle, data.test_run.projects?.base_url ?? undefined);
+    } catch (err) {
+      toastError('Could not export the script', err);
+    } finally {
+      setExporting(false);
+    }
+  };
   const [steps, setSteps] = useState<(TestStep | LiveStep)[]>([]);
   const [bugs, setBugs] = useState<RunDetailResponse['bugs']>([]);
   const [loading, setLoading] = useState(true);
@@ -437,7 +416,8 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
         // No steps recorded → nothing to animate.
         setSteps(data.steps);
       }
-    } catch {
+    } catch (err) {
+      toastError('Could not open this run', err);
       router.push(`/dashboard/projects/${projectId}`);
     } finally {
       setLoading(false);
@@ -628,7 +608,8 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
               <StatusBadge status={run.status} />
               <span className="capitalize">
-                {run.mode.replace('_', ' ')} · {run.browser || 'chromium'}
+                {/* every run executes saved steps; "ai_driven" is a legacy mode value, not AI at run time */}
+                {run.mode === 'replay' ? 'Replay of recording' : 'Run'} · {run.browser || 'chromium'}
               </span>
               {run.duration_ms != null && (
                 <span className="font-mono text-xs">
@@ -657,15 +638,13 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
             )}
 
             <Button
-              onClick={() =>
-                downloadPlaywrightScript(steps, testTitle, run.projects?.base_url ?? undefined)
-              }
-              disabled={!hasCompletedSteps}
+              onClick={exportScript}
+              disabled={!hasCompletedSteps || exporting}
               title={hasCompletedSteps ? 'Download as Playwright TypeScript' : 'Run a test first'}
               aria-label="Export as Playwright TypeScript"
             >
-              <Download />
-              Export script
+              {exporting ? <Spinner className="text-primary-foreground" /> : <Download />}
+              {exporting ? 'Exporting…' : 'Export script'}
             </Button>
           </div>
         </div>

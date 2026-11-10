@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Plus, FolderPlus, Globe, Calendar, ChevronRight } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
+import { toastError } from '@/lib/toast-error';
 import { CreateProjectModal } from '@/components/projects/create-project-modal';
 import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -29,8 +30,8 @@ export function ProjectsGrid({ initialProjects }: ProjectsGridProps) {
     try {
       const data = await apiClient.get<ProjectsResponse>('/api/projects');
       setProjects(data.projects ?? []);
-    } catch {
-      // Silently fail - the apiClient handles 401 redirect
+    } catch (err) {
+      toastError('Could not refresh projects', err);
     }
   };
 

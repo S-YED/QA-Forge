@@ -6,12 +6,15 @@ import type { TestRun } from '@qaforge/shared-types';
 import { EmptyState } from '@/components/shared/empty-state';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/shared/spinner';
+import { usePending } from '@/lib/hooks/use-pending';
 
 interface TestRunsTabProps {
   projectId: string;
   runs: (TestRun & { test_cases?: { title: string } | null })[];
   totalCount: number;
-  onRefresh: (page?: number) => void;
+  onRefresh: (page?: number) => unknown;
+  onLoadMore: () => unknown;
 }
 
 function formatDuration(ms?: number): string {
@@ -36,8 +39,9 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export function TestRunsTab({ projectId, runs, totalCount, onRefresh }: TestRunsTabProps) {
+export function TestRunsTab({ projectId, runs, totalCount, onRefresh, onLoadMore }: TestRunsTabProps) {
   const router = useRouter();
+  const { pending, track } = usePending();
 
   if (runs.length === 0) {
     return (
@@ -53,8 +57,8 @@ export function TestRunsTab({ projectId, runs, totalCount, onRefresh }: TestRuns
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Recent runs</h3>
-        <Button variant="ghost" size="sm" onClick={() => onRefresh(1)}>
-          <RefreshCw />
+        <Button variant="ghost" size="sm" onClick={track('refresh', () => onRefresh(1))} disabled={!!pending}>
+          {pending === 'refresh' ? <Spinner /> : <RefreshCw />}
           Refresh
         </Button>
       </div>
@@ -97,9 +101,15 @@ export function TestRunsTab({ projectId, runs, totalCount, onRefresh }: TestRuns
       </div>
 
       {totalCount > runs.length && (
-        <p className="text-center text-xs text-muted-foreground">
-          Showing {runs.length} of {totalCount} runs
-        </p>
+        <div className="flex flex-col items-center gap-2">
+          <p className="text-xs text-muted-foreground">
+            Showing {runs.length} of {totalCount} runs
+          </p>
+          <Button variant="outline" size="sm" onClick={track('more', onLoadMore)} disabled={!!pending}>
+            {pending === 'more' && <Spinner />}
+            {pending === 'more' ? 'Loading…' : 'Load more'}
+          </Button>
+        </div>
       )}
     </div>
   );

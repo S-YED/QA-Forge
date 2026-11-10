@@ -22,6 +22,8 @@ interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
+  /** Shown but not built yet: marked so nobody expects it to work */
+  soon?: boolean;
 }
 
 const navGroups: { label: string; items: NavItem[] }[] = [
@@ -34,7 +36,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { label: 'AI keys', href: '/dashboard/settings/ai-keys', icon: KeyRound },
       { label: 'Profile', href: '/dashboard/settings/profile', icon: User },
-      { label: 'Integrations', href: '/dashboard/settings/integrations', icon: Plug },
+      { label: 'Integrations', href: '/dashboard/settings/integrations', icon: Plug, soon: true },
     ],
   },
 ];
@@ -120,6 +122,11 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
                       )}
                     />
                     {item.label}
+                    {item.soon && (
+                      <span className="ml-auto rounded-full border border-border px-1.5 text-[0.625rem] font-medium text-muted-foreground">
+                        Soon
+                      </span>
+                    )}
                   </Link>
                 );
               })}

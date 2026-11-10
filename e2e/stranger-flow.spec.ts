@@ -139,3 +139,36 @@ test('a step with a missing part is marked in the editor instead of failing late
   await expect(page.getByText('"Click" needs an element: the text you see on it, its label, or a selector')).toBeVisible();
   await expect(page.getByText('Test case created')).toHaveCount(0);
 });
+
+test('Export script downloads a test that finds elements by their words', async ({ page }) => {
+  await runCase(page, 'E2E plain sentences');
+  await expect(page.getByText('All steps passed')).toBeVisible({ timeout: 90_000 });
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Export/ }).click()]);
+  const code = await (await import('node:fs/promises')).readFile((await download.path())!, 'utf8');
+  expect(code).toContain('await page.goto(new URL("/login", BASE_URL).toString());');
+  expect(code).toContain('(await find(page, "Email", "field")).fill("demo@qaforge.dev");');
+  expect(code).toContain('await expect.poll(() => page.url()).toContain("/dashboard");');
+});
+
+// Last: it renames the suite the tests above open by name.
+test('the project, a suite and a bug can be edited', async ({ page }) => {
+  await page.goto(projectUrl);
+  await page.getByRole('button', { name: 'Project options' }).click();
+  await page.getByRole('menuitem', { name: 'Edit project' }).click();
+  await page.getByRole('dialog').getByLabel('Name', { exact: true }).fill(`${project} (edited)`);
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByRole('heading', { name: `${project} (edited)` })).toBeVisible();
+
+  await page.getByRole('button', { name: `Rename ${suite}` }).click();
+  await page.getByRole('dialog').getByLabel(/Suite name/).fill(`${suite} renamed`);
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByText(`${suite} renamed`, { exact: true })).toBeVisible();
+
+  await page.getByRole('tab', { name: /Bugs/ }).click();
+  await page.getByLabel(/^Status of /).first().click();
+  await page.getByRole('option', { name: 'Resolved' }).click();
+  await expect(page.getByText('Bug status updated')).toBeVisible();
+  await page.reload();
+  await page.getByRole('tab', { name: /Bugs/ }).click();
+  await expect(page.getByLabel(/^Status of /).first()).toHaveText('Resolved');
+});
