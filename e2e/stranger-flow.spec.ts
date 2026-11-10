@@ -172,3 +172,45 @@ test('the project, a suite and a bug can be edited', async ({ page }) => {
   await page.getByRole('tab', { name: /Bugs/ }).click();
   await expect(page.getByLabel(/^Status of /).first()).toHaveText('Resolved');
 });
+
+test('record a login by clicking and typing in the live viewport, then replay it green', async ({ page, context }) => {
+  // Where the demo login fields sit at the recorder's 1280x720 viewport (same page, same layout).
+  const probe = await context.newPage();
+  await probe.setViewportSize({ width: 1280, height: 720 });
+  await probe.goto(`${DEMO_SHOP}login`);
+  const box = async (id: string) => (await probe.getByTestId(id).boundingBox())!;
+  const at = { email: await box('login-email'), password: await box('login-password'), submit: await box('login-submit') };
+  await probe.close();
+
+  await page.goto(projectUrl);
+  await page.getByRole('tab', { name: /Recordings/ }).click();
+  await page.getByRole('button', { name: /Record session|Start first recording/ }).first().click();
+  await page.getByLabel(/Session name/).fill('E2E recorded login');
+  await page.getByLabel(/Target base URL/).fill(`${DEMO_SHOP}login`);
+  await page.getByRole('button', { name: 'Launch browser' }).click();
+  await expect(page).toHaveURL(/\/recordings\//);
+  const screen = page.getByAltText('Recorded browser viewport');
+  await expect(screen).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Click and type in the screen below/)).toBeVisible();
+
+  // Click a browser-pixel position on the displayed (letterboxed) frame, as a person would.
+  const clickAt = async (b: { x: number; y: number; width: number; height: number }) => {
+    const r = (await screen.boundingBox())!;
+    const scale = Math.min(r.width / 1280, r.height / 720);
+    const ox = (r.width - 1280 * scale) / 2;
+    const oy = (r.height - 720 * scale) / 2;
+    await page.mouse.click(r.x + ox + (b.x + b.width / 2) * scale, r.y + oy + (b.y + b.height / 2) * scale);
+  };
+  await clickAt(at.email);
+  await page.keyboard.type('demo@qaforge.dev');
+  await clickAt(at.password);
+  await page.keyboard.type('Demo1234!');
+  await clickAt(at.submit);
+  await expect(page.getByText('Log in', { exact: true })).toBeVisible({ timeout: 20_000 }); // the click was recorded
+  await expect(page.getByText('Email', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Conclude session' }).click();
+  await page.getByRole('button', { name: /Compile & replay/ }).click();
+  await expect(page).toHaveURL(/\/runs\//, { timeout: 30_000 });
+  await expect(page.getByText('All steps passed')).toBeVisible({ timeout: 90_000 });
+});

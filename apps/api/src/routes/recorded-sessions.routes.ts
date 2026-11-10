@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { httpUrl, validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
-import { TestCaseStepsSchema } from '@qaforge/shared-types';
+import { TestCaseStepsSchema, describeStep } from '@qaforge/shared-types';
 import { closeRecordingSession } from '../websocket/handlers/recording.handler.js';
 import { executeTestOrchestration } from '../services/run-executor.js';
 
@@ -215,19 +215,25 @@ router.post('/:id/replay', validate(uuidParamsSchema, 'params'), async (req, res
 
     // 1. Compile recorded actions to canonical steps (the recorder emits click/type/select only)
     const RECORDED_TO_STEP = { click: 'click', type: 'fill', select: 'select' } as const;
-    const parsedSteps = TestCaseStepsSchema.safeParse(
-      actions.map((act, idx) => {
+    // Step 1 opens the page the recording started on: a run otherwise starts at the project's base URL,
+    // which may be a different page (e.g. a recording made on /login of a project based on /).
+    const openStart = { step_number: 1, action: 'navigate' as const, instruction: describeStep({ action: 'navigate', value: session.base_url }), value: session.base_url };
+    const parsedSteps = TestCaseStepsSchema.safeParse([
+      openStart,
+      ...actions.map((act, idx) => {
         const action = RECORDED_TO_STEP[act.action_type as keyof typeof RECORDED_TO_STEP];
-        const verb = { click: 'Click', fill: 'Fill', select: 'Select option in' }[action] ?? act.action_type;
+        const selector = act.selector || undefined;
+        const value = act.value || undefined;
         return {
-          step_number: idx + 1,
+          step_number: idx + 2,
           action,
-          instruction: `${verb} ${act.selector ?? ''}`.trim(),
-          selector: act.selector || undefined,
-          value: act.value || undefined,
+          // Reads like a written step: Click "Sign in", Type "ada@example.com" into "Email"
+          instruction: action ? describeStep({ action, selector, value }) : String(act.action_type),
+          selector,
+          value,
         };
       }),
-    );
+    ]);
     if (!parsedSteps.success) {
       return next(new AppError('BAD_REQUEST', 400, 'Recording contains actions that cannot be replayed', parsedSteps.error.format()));
     }

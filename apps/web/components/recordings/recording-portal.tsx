@@ -25,6 +25,9 @@ interface SessionAction {
   metadata?: { screenshot?: string } | null;
 }
 
+/** Keys forwarded to the recording browser; printable characters are sent as typed text. */
+const SPECIAL_KEYS = new Set(['Enter', 'Tab', 'Backspace', 'Delete', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 interface RecordedSession {
@@ -59,6 +62,21 @@ export function RecordingPortal({ projectId, sessionId }: RecordingPortalProps) 
 
   const socketRef = useRef<Socket | null>(null);
   const timelineEndRef = useRef<HTMLDivElement | null>(null);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const typeBufferRef = useRef('');
+  const typeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastWheelRef = useRef(0);
+
+  const sendInput = (input: Record<string, unknown>) =>
+    socketRef.current?.emit('recording:input', { session_id: sessionId, ...input });
+
+  /** Send what was typed since the last flush (also before a click or special key, to keep the order). */
+  const flushTyping = () => {
+    if (typeTimerRef.current) clearTimeout(typeTimerRef.current);
+    typeTimerRef.current = null;
+    if (typeBufferRef.current) sendInput({ kind: 'type', text: typeBufferRef.current });
+    typeBufferRef.current = '';
+  };
   const allActionsRef = useRef<SessionAction[]>([]);
   const playTokenRef = useRef(0);
   const startedRef = useRef(false);
@@ -132,8 +150,8 @@ export function RecordingPortal({ projectId, sessionId }: RecordingPortalProps) 
           setLiveMessage('Live stream active');
         });
 
-        socket.on('recording:frame', (data: { screenshot_base64: string }) => {
-          setCurrentFrame(data.screenshot_base64);
+        socket.on('recording:frame', (data: { screenshot_base64: string; mime?: string }) => {
+          setCurrentFrame(`data:${data.mime ?? 'image/png'};base64,${data.screenshot_base64}`);
           setIsLive(true);
           setLiveMessage('Live stream active');
         });
@@ -222,6 +240,7 @@ export function RecordingPortal({ projectId, sessionId }: RecordingPortalProps) 
 
   const handleStopRecording = async () => {
     if (!socketRef.current) return;
+    flushTyping();
     socketRef.current.emit('recording:stop', { session_id: sessionId });
   };
 
@@ -272,10 +291,49 @@ export function RecordingPortal({ projectId, sessionId }: RecordingPortalProps) 
 
   // Live socket frames arrive as base64; seeded/demo frames are asset URLs.
   const frameSrc = currentFrame
-    ? currentFrame.startsWith('/') || currentFrame.startsWith('http')
+    ? /^(data:|\/|https?:)/.test(currentFrame)
       ? currentFrame
       : `data:image/png;base64,${currentFrame}`
     : null;
+
+  // The viewport drives the recording browser while a live session is open.
+  const liveInput = session.status === 'recording' && isLive && !!frameSrc;
+
+  const onViewportClick = (e: React.MouseEvent<HTMLImageElement>) => {
+    if (!liveInput) return;
+    flushTyping();
+    // Map the click from the displayed (object-contain, letterboxed) image back to browser pixels.
+    const img = e.currentTarget;
+    const rect = img.getBoundingClientRect();
+    const nw = img.naturalWidth || 1280;
+    const nh = img.naturalHeight || 720;
+    const scale = Math.min(rect.width / nw, rect.height / nh);
+    const x = (e.clientX - rect.left - (rect.width - nw * scale) / 2) / scale;
+    const y = (e.clientY - rect.top - (rect.height - nh * scale) / 2) / scale;
+    if (x < 0 || y < 0 || x > nw || y > nh) return;
+    sendInput({ kind: 'click', x: Math.round((x * 1280) / nw), y: Math.round((y * 720) / nh) });
+    viewportRef.current?.focus();
+  };
+
+  const onViewportKey = (e: React.KeyboardEvent) => {
+    if (!liveInput || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key.length === 1) {
+      // Printable characters are batched so a word arrives as one input, not one per letter.
+      e.preventDefault();
+      typeBufferRef.current += e.key;
+      typeTimerRef.current ??= setTimeout(flushTyping, 300);
+    } else if (SPECIAL_KEYS.has(e.key)) {
+      e.preventDefault();
+      flushTyping();
+      sendInput({ kind: 'key', key: e.key });
+    }
+  };
+
+  const onViewportWheel = (e: React.WheelEvent) => {
+    if (!liveInput || Date.now() - lastWheelRef.current < 250) return;
+    lastWheelRef.current = Date.now();
+    sendInput({ kind: 'scroll', dy: Math.round(e.deltaY * 2) });
+  };
 
   return (
     <div className="space-y-6">
@@ -363,6 +421,12 @@ export function RecordingPortal({ projectId, sessionId }: RecordingPortalProps) 
             <h2 className="text-sm font-semibold text-foreground">Live viewport</h2>
             <Badge variant={isLive ? 'info' : 'secondary'}>{liveMessage}</Badge>
           </div>
+          {liveInput && (
+            <p className="text-xs text-muted-foreground">
+              Click and type in the screen below. Every click, typed text and chosen option becomes a step; press
+              Conclude session when you are done.
+            </p>
+          )}
 
           <div className="flex aspect-[16/10] flex-col overflow-hidden rounded-lg border border-console-border bg-console shadow-sm">
             {/* Browser chrome */}
@@ -376,31 +440,32 @@ export function RecordingPortal({ projectId, sessionId }: RecordingPortalProps) 
             </div>
 
             {/* Screen */}
-            <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black">
+            <div
+              ref={viewportRef}
+              tabIndex={liveInput ? 0 : -1}
+              onKeyDown={onViewportKey}
+              onWheel={onViewportWheel}
+              aria-label={liveInput ? 'Recording browser: click and type here to record steps' : 'Recorded browser viewport'}
+              className={cn(
+                'relative flex flex-1 items-center justify-center overflow-hidden bg-black outline-none',
+                liveInput && 'focus-visible:ring-2 focus-visible:ring-primary',
+              )}
+            >
               {frameSrc ? (
                 <img
                   src={frameSrc}
                   alt="Recorded browser viewport"
-                  className="size-full object-contain"
+                  onClick={onViewportClick}
+                  className={cn('size-full object-contain', liveInput && 'cursor-pointer')}
+                  draggable={false}
                 />
               ) : (
                 <div className="scrollbar-console absolute inset-0 flex flex-col justify-between overflow-y-auto p-5 font-mono text-xs text-console-muted">
                   <div className="space-y-1.5">
-                    <p className="font-semibold text-console-accent">QA Forge session agent initialized</p>
-                    <p>[{new Date().toLocaleTimeString()}] Spawning browser sandbox container…</p>
-                    <p>[{new Date().toLocaleTimeString()}] Invoking Playwright runner (browser={session.browser})…</p>
-                    <p>[{new Date().toLocaleTimeString()}] Setting up screen recording hooks…</p>
-                    <p>[{new Date().toLocaleTimeString()}] Injecting event-capture scripts into the DOM…</p>
-                    {isLive ? (
-                      <p className="text-console-success">
-                        [{new Date().toLocaleTimeString()}] Browser connected. Loading DOM…
-                      </p>
-                    ) : (
-                      <p className="flex items-center gap-2 pt-1 text-console-info">
-                        <Spinner className="text-console-info" />
-                        {liveMessage}
-                      </p>
-                    )}
+                    <p className="flex items-center gap-2 text-console-info">
+                      <Spinner className="text-console-info" />
+                      {liveMessage}
+                    </p>
                   </div>
                   <div className="flex justify-between border-t border-console-border pt-2 text-[0.625rem] text-console-muted/70">
                     <span>target: {session.browser}</span>

@@ -12,7 +12,6 @@ ticket is **Verified** in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 | HIGH (prod) | Screenshots are private locally (EXE-3, mig 24) but the cloud bucket stays public until migration 24 is pushed with 22/23 | REL-3 |
 | LOW | Windows: a clone under a very deep path (over ~115 characters) fails to start vitest because pnpm paths exceed 260 characters; setup guide says to clone to a short path or enable long paths | REL-1 (documented) |
 | LOW | Rare local integration flakes in real-browser run tests: SEC-3 "private host ... as error" (1 of 6 full runs) and RUN-1 "a passing case ends passed" (1 of 4), 8 Nov. Each passed alone and in every rerun; CI green on every push. Ruled out: the dev API's boot reaper (no reaps logged). Cause not found; watch CI | QA-2 |
-| HIGH | Recordings cannot record: the viewport is a still image with no click/key forwarding, so no actions are captured (plan A4) | UX |
 | LOW | Production latency: authenticated API calls take 0.5–2 s because Railway and Supabase (Sydney) are far apart; Vercel is pinned to syd1, Railway region still to move to Southeast Asia (user action) | UX-3 |
 | MED | Seeds still target syedkm.com/example.com, not the demo shop (README/setup guide fixed in DOC-1) | DEMO-1 |
 | MED | SSRF guard: WebKit may bypass the proxy for loopback (up-front URL checks still apply). Prod: keep `ALLOW_PRIVATE_HOSTS` unset | SEC-3 (ceiling, TD-8) |
