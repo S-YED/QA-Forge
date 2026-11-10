@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -17,6 +18,7 @@ import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/theme-provider';
 import { Logo } from '@/components/brand/logo';
+import { Spinner } from '@/components/shared/spinner';
 
 interface NavItem {
   label: string;
@@ -48,7 +50,9 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
 
+  const [signingOut, setSigningOut] = useState(false);
   const handleSignOut = async () => {
+    setSigningOut(true);
     await supabase.auth.signOut();
     router.push('/login');
   };
@@ -145,10 +149,11 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
           </button>
           <button
             onClick={handleSignOut}
-            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            disabled={signingOut}
+            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-60"
           >
-            <LogOut className="size-[18px]" />
-            Sign out
+            {signingOut ? <Spinner /> : <LogOut className="size-[18px]" />}
+            {signingOut ? 'Signing out…' : 'Sign out'}
           </button>
         </div>
       </aside>

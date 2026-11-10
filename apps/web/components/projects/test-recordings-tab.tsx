@@ -8,7 +8,8 @@ import { toastError } from '@/lib/toast-error';
 import { toast } from 'sonner';
 import { useDemoMode } from '@/lib/hooks/use-demo-mode';
 import { EmptyState } from '@/components/shared/empty-state';
-import { CenteredSpinner, Spinner } from '@/components/shared/spinner';
+import { Spinner } from '@/components/shared/spinner';
+import { ListSkeleton } from '@/components/shared/page-skeletons';
 import { Button } from '@/components/ui/button';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import {
@@ -130,7 +131,7 @@ export function TestRecordingsTab({ projectId }: TestRecordingsTabProps) {
   };
 
   if (loading) {
-    return <CenteredSpinner label="Loading recordings…" />;
+    return <ListSkeleton label="Loading recordings" />;
   }
 
   return (

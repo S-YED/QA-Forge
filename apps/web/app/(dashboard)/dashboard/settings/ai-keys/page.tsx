@@ -1,4 +1,4 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, getUser } from '@/lib/supabase/server';
 import { AiKeysManager } from '@/components/settings/ai-keys-manager';
 import { PageHeader } from '@/components/shared/page-header';
 import type { ApiKeyResponse } from '@qaforge/shared-types';
@@ -31,9 +31,7 @@ export default async function AiKeysPage() {
 
   // getUser() makes a live network call to validate the token (safe on server).
   // getSession() only reads the cookie - do NOT use it alone for auth decisions.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser(); // shared with the layout: one Supabase check per request
 
   const {
     data: { session },

@@ -22,7 +22,8 @@ import { TestRunStatus, stepsToPlaywright } from '@qaforge/shared-types';
 import { io as socketIO, type Socket } from 'socket.io-client';
 import { Button } from '@/components/ui/button';
 import { StatusBadge, SeverityBadge } from '@/components/shared/status-badge';
-import { CenteredSpinner, Spinner } from '@/components/shared/spinner';
+import { Spinner } from '@/components/shared/spinner';
+import { RunDetailSkeleton } from '@/components/shared/page-skeletons';
 
 interface RunDetailResponse {
   test_run: TestRun & {
@@ -582,7 +583,7 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
   }, [fetchRun]);
 
   if (loading) {
-    return <CenteredSpinner label="Loading run…" />;
+    return <RunDetailSkeleton />;
   }
 
   if (!run) return null;

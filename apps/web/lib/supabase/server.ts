@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { cache } from 'react';
 
 export async function createServerSupabaseClient() {
   const cookieStore = await cookies();
@@ -26,3 +27,15 @@ export async function createServerSupabaseClient() {
     },
   );
 }
+
+/**
+ * The signed-in user, verified with Supabase once per request: the dashboard layout and the page share it instead
+ * of each making its own network call.
+ */
+export const getUser = cache(async () => {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
+});

@@ -14,7 +14,7 @@ import { AIGeneratePanel } from '@/components/projects/ai-generate-panel';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Stat, StatGroup } from '@/components/shared/stat';
-import { CenteredSpinner } from '@/components/shared/spinner';
+import { ProjectDetailSkeleton } from '@/components/shared/page-skeletons';
 import type { Project, TestSuite, TestRun } from '@qaforge/shared-types';
 
 interface ProjectDetailResponse {
@@ -126,7 +126,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
   ];
 
   if (loading) {
-    return <CenteredSpinner label="Loading project…" />;
+    return <ProjectDetailSkeleton />;
   }
 
   if (!project) return null;

@@ -1,4 +1,4 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, getUser } from '@/lib/supabase/server';
 import { ProjectsGrid } from '@/components/projects/projects-grid';
 import type { Project } from '@qaforge/shared-types';
 
@@ -31,9 +31,7 @@ export default async function ProjectsPage() {
 
   // getUser() makes a live network call to validate the token (safe on server).
   // getSession() only reads the cookie - do NOT use it alone for auth decisions.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser(); // shared with the layout: one Supabase check per request
 
   const {
     data: { session },

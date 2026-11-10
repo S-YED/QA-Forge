@@ -11,7 +11,8 @@ import { cn } from '@/lib/utils';
 import { useDemoMode, resolveDemoMode } from '@/lib/hooks/use-demo-mode';
 import { Button } from '@/components/ui/button';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
-import { CenteredSpinner, Spinner } from '@/components/shared/spinner';
+import { Spinner } from '@/components/shared/spinner';
+import { RecordingSkeleton } from '@/components/shared/page-skeletons';
 
 interface SessionAction {
   id: string;
@@ -264,7 +265,7 @@ export function RecordingPortal({ projectId, sessionId }: RecordingPortalProps) 
   };
 
   if (loading) {
-    return <CenteredSpinner label="Loading workbench…" />;
+    return <RecordingSkeleton />;
   }
 
   if (!session) return null;

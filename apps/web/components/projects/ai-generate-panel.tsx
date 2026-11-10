@@ -62,6 +62,8 @@ export function AIGeneratePanel({
   const [suiteMode, setSuiteMode] = useState<'existing' | 'new'>('new');
   const [generating, setGenerating] = useState(false);
   const [stageIndex, setStageIndex] = useState(-1);
+  // Seconds since a real generation started: honest progress instead of invented stages.
+  const [elapsed, setElapsed] = useState(0);
   const [result, setResult] = useState<{ count: number; suiteName: string; timeMs: number; localDemo?: boolean } | null>(
     null,
   );
@@ -118,12 +120,10 @@ export function AIGeneratePanel({
       return;
     }
 
-    // Real generation: advance the stage indicator while the engine works.
-    let i = 0;
-    const timer = setInterval(() => {
-      i = Math.min(i + 1, STAGES.length - 1);
-      setStageIndex(i);
-    }, 1100);
+    // Real generation: the provider gives no progress, so show how long it has been working.
+    setElapsed(0);
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000);
 
     try {
       const data = await apiClient.post<{
@@ -278,9 +278,24 @@ export function AIGeneratePanel({
           </div>
 
           {/* Generating progress */}
-          {generating && (
+          {generating && !isDemo && (
+            <div className="flex items-center gap-3 rounded-lg border bg-secondary/40 p-4" role="status">
+              <Spinner className="text-primary" />
+              <div className="text-sm">
+                <p className="font-medium text-foreground">
+                  Generating test cases… <span className="font-mono text-muted-foreground">{elapsed}s</span>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  AI providers usually answer in 10 to 40 seconds. Nothing is saved until you approve the drafts.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Demo: simulated stages (the read-only sandbox runs no AI) */}
+          {generating && isDemo && (
             <div className="rounded-lg border bg-secondary/40 p-4">
-              <p className="mb-3 text-sm font-medium text-foreground">Generating test cases</p>
+              <p className="mb-3 text-sm font-medium text-foreground">Generating test cases (demo)</p>
               <ul className="space-y-2.5">
                 {STAGES.map((s, i) => (
                   <li key={s} className="flex items-center gap-2.5 text-sm">
