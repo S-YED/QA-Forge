@@ -32,7 +32,9 @@ function text(raw: string): string {
 
 const CHECK = '(?:check|verify|assert|expect|ensure|confirm|make sure)\\s+(?:that\\s+)?';
 const SHOWN = '(?:\\s+(?:is|are)\\s+(?:shown|visible|displayed|present|there|on (?:the )?(?:page|screen)))?';
-const isPath = (v: string) => /^(\/|https?:\/\/|[\w-]+(\.[\w-]+)+(\/|$))/i.test(v);
+/** A quoted phrase taken whole (so `"Sign in now"` keeps its "in"), else the fewest words. */
+const WORDS = `("[^"]*"|'[^']*'|“[^”]*”|.+?)`;
+const isPath =(v: string) => /^(\/|https?:\/\/|[\w-]+(\.[\w-]+)+(\/|$))/i.test(v);
 
 type Rule = [RegExp, (m: RegExpExecArray) => StepParts];
 const RULES: Rule[] = [
@@ -43,9 +45,11 @@ const RULES: Rule[] = [
   [new RegExp(`^${CHECK}(?:the\\s+)?(?:page\\s+)?(?:address|url|path)\\s+(?:contains|includes|has|is|ends with)\\s+(.+)$`, 'i'),
     (m) => ({ action: 'assert_url', value: text(m[1]) })],
   [new RegExp(`^${CHECK}(?:i am|i'm|we are|the user is|user is)\\s+on\\s+(.+)$`, 'i'), (m) => ({ action: 'assert_url', value: text(m[1]) })],
-  [/^(?:type|enter|input|write|fill in|fill)\s+(.+?)\s+(?:into|in to|in)\s+(.+)$/i, (m) => ({ action: 'fill', value: text(m[1]), selector: target(m[2]) })],
+  [new RegExp(`^(?:type|enter|input|write|fill in|fill)\\s+${WORDS}\\s+(?:into|in to|in)\\s+(.+)$`, 'i'),
+    (m) => ({ action: 'fill', value: text(m[1]), selector: target(m[2]) })],
   [/^(?:fill in|fill|set)\s+(.+?)\s+(?:with|to)\s+(.+)$/i, (m) => ({ action: 'fill', selector: target(m[1]), value: text(m[2]) })],
-  [/^(?:choose|select|pick)\s+(.+?)\s+(?:from|in)\s+(.+)$/i, (m) => ({ action: 'select', value: text(m[1]), selector: target(m[2]) })],
+  [new RegExp(`^(?:choose|select|pick)\\s+${WORDS}\\s+(?:from|in)\\s+(.+)$`, 'i'),
+    (m) => ({ action: 'select', value: text(m[1]), selector: target(m[2]) })],
   [/^(?:hover over|hover on|hover|mouse over)\s+(.+)$/i, (m) => ({ action: 'hover', selector: target(m[1]) })],
   [/^press\s+(.+\s+button)$/i, (m) => ({ action: 'click', selector: target(m[1]) })],
   [/^press\s+(?:the\s+)?(.+?)(?:\s+key)?(?:\s+(?:in|on)\s+(.+))?$/i, (m) => ({
@@ -56,7 +60,7 @@ const RULES: Rule[] = [
   [/^scroll\s+(?:down\s+|up\s+)?to\s+(.+)$/i, (m) => ({ action: 'scroll', selector: target(m[1]) })],
   [new RegExp(`^wait\\s+(?:until|for|till)\\s+(.+?)${SHOWN}(?:\\s+to\\s+(?:appear|show|load))?$`, 'i'),
     (m) => ({ action: 'wait_for', selector: target(m[1]) })],
-  [new RegExp(`^${CHECK}(.+?)\\s+(?:contains|has text|has the text|shows|says|reads|includes)\\s+(.+)$`, 'i'),
+  [new RegExp(`^${CHECK}${WORDS}\\s+(?:contains|has text|has the text|shows|says|reads|includes)\\s+(.+)$`, 'i'),
     (m) => ({ action: 'assert_text', selector: target(m[1]), value: text(m[2]) })],
   [new RegExp(`^(?:${CHECK}|see\\s+)(.+?)${SHOWN}$`, 'i'), (m) => ({ action: 'assert_visible', selector: target(m[1]) })],
 ];

@@ -238,8 +238,9 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
       const casesPath = `/api/projects/${projectId}/test-suites/${selectedSuiteForNewCase}/test-cases`;
       const body = {
         title: caseTitle.trim(),
-        description: caseDescription.trim() || undefined,
-        expected_result: caseExpected.trim() || undefined,
+        // null clears the field on edit; create leaves it out
+        description: caseDescription.trim() || (editingCaseId ? null : undefined),
+        expected_result: caseExpected.trim() || (editingCaseId ? null : undefined),
         priority: casePriority,
         type: caseType,
         steps: formattedSteps,

@@ -2,6 +2,7 @@
 // a short-lived signed URL. Values that are not bucket paths (seeded demo images such as
 // `/demo/x.png`, external URLs) pass through unchanged.
 import { supabase } from '../config/supabase.js';
+import logger from './logger.js';
 
 export const ARTIFACT_BUCKET = 'test-artifacts';
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
@@ -14,8 +15,9 @@ export async function signArtifacts(values: (string | null | undefined)[]): Prom
   const paths = [...new Set(values.filter((v): v is string => !!v && isArtifactPath(v)))];
   if (paths.length === 0) return values.map((v) => v ?? null);
   const { data, error } = await supabase.storage.from(ARTIFACT_BUCKET).createSignedUrls(paths, SIGNED_URL_TTL_SECONDS);
-  if (error) throw new Error(`Could not sign screenshot URLs: ${error.message}`);
-  const signed = new Map(data.map((d) => [d.path, d.signedUrl]));
+  // A storage hiccup costs the screenshots, never the run or bug list they belong to.
+  if (error) logger.warn(`Could not sign screenshot URLs: ${error.message}`);
+  const signed = new Map((data ?? []).map((d) => [d.path, d.signedUrl]));
   return values.map((v) => (!v ? null : isArtifactPath(v) ? (signed.get(v) ?? null) : v));
 }
 

@@ -43,4 +43,37 @@ describe('stepsToPlaywright (Export script)', () => {
     expect(looksLikeSelector('#go')).toBe(true);
     expect(looksLikeSelector('Sign in')).toBe(false);
   });
+
+  it('exports old run results that still say assert / wait as real checks', () => {
+    const code = stepsToPlaywright(
+      [
+        { action: 'assert', selector: '.dashboard-header', value: 'visible' },
+        { action: 'assert', selector: 'h1', value: 'Hey there!' },
+        { action: 'wait', value: '500' },
+        { action: 'wait', selector: '#done' },
+      ],
+      't',
+    );
+    expect(code).not.toContain('Unsupported');
+    expect(code).toContain('await expect(page.locator(".dashboard-header").first()).toBeVisible();');
+    expect(code).toContain('await expect((await find(page, "h1", "any")).first()).toContainText("Hey there!");');
+    expect(code).toContain('await page.waitForTimeout(500);');
+    expect(code).toContain('await expect(page.locator("#done").first()).toBeVisible();');
+    compiles(code);
+  });
+
+  it('finds like the runner: quotes dropped, bare tags as a last try, fields first for a key press', () => {
+    const code = stepsToPlaywright(
+      [
+        { action: 'click', selector: '"Sign in"' },
+        { action: 'press', selector: 'Search', value: 'Enter' },
+      ],
+      't',
+    );
+    expect(code).toContain('find(page, "Sign in", "control")');
+    expect(code).toContain('find(page, "Search", "press")');
+    expect(code).toContain('page.locator(words)'); // bare tag fallback, e.g. h1
+    expect(code).toContain('if (n > 1) break;'); // ambiguity never falls back to a weaker match
+    compiles(code);
+  });
 });

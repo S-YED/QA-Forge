@@ -33,7 +33,7 @@ const PAGES: Record<string, string> = {
     <label>Country <select id="country"><option value="in">India</option><option value="us">USA</option></select></label>
     <button onclick="setTimeout(() => { const m = document.getElementById('msg'); m.textContent = 'Welcome ' + document.getElementById('email').value; m.hidden = false }, 200)">Sign in</button>
     <p id="msg" hidden></p>
-    <button>Delete</button><button>Delete</button>
+    <button>Delete</button><button>Delete</button><a href="/next">Delete</a>
     <span data-testid="badge">New</span>`,
   '/leak': `<!doctype html><h1>Leak</h1><img src="http://localhost:{PORT}/secret-img">`,
   '/ws': `<!doctype html><p id="ws">open</p><script>
@@ -285,10 +285,12 @@ describe('targets in plain words', () => {
         s(11, 'assert_visible', { selector: 'Delete' }),
         // the "Sign in" button was clicked, not the "Sign in" link: we are still on /form
         s(12, 'assert_url', { value: '/form' }),
+        // a key press finds a field that has only a placeholder
+        s(13, 'press', { selector: 'Search products', value: 'End' }),
       ],
     });
     expect(result.error_message).toBeUndefined();
-    expect(result.steps.map((r) => r.status)).toEqual(Array(12).fill('passed'));
+    expect(result.steps.map((r) => r.status)).toEqual(Array(13).fill('passed'));
   }, 60_000);
 
   it('says plainly when nothing matches', async () => {
@@ -315,10 +317,12 @@ describe('targets in plain words', () => {
   });
 
   it('tells selectors from plain words', () => {
-    for (const sel of ['#go', '.dup', '[data-testid="x"]', '//button', 'button[type=submit]', 'input#email', 'div > a', 'li:nth-child(2)', 'text=Go', 'role=button[name="Go"]', 'css=button']) {
+    for (const sel of ['#go', '.dup', '[data-testid="x"]', '//button', 'button[type=submit]', 'input#email', 'div > a', 'li:nth-child(2)', 'text=Go', 'role=button[name="Go"]', 'css=button',
+      'form button[type=submit]', 'nav a', 'table tr:nth-child(2)', 'button:has-text("Go")', '#a >> text=Go', '[name="q"]']) {
       expect(looksLikeSelector(sel), sel).toBe(true);
     }
-    for (const words of ['Sign in', 'Email', 'Continue to payment', 'login-submit', 'Order #123', '"Sign in"', 'button']) {
+    for (const words of ['Sign in', 'Email', 'Continue to payment', 'login-submit', 'Order #123', '"Sign in"', 'button',
+      'Search...', 'Loading...', 'e.g. ada@example.com', 'Mr. Smith', '#1 Deals', '[Beta] Sign in', 'Main menu']) {
       expect(looksLikeSelector(words), words).toBe(false);
     }
   });

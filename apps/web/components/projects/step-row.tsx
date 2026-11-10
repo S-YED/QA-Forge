@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import { CircleHelp, X } from 'lucide-react';
 import {
   STEP_ACTIONS,
@@ -97,14 +98,17 @@ export function StepRow({ index, step, errors = {}, onChange, onRemove }: StepRo
   const info = step.action ? STEP_ACTION_FIELDS[step.action] : null;
   const showTarget = !!info && (info.selector || OPTIONAL_TARGET.includes(step.action as StepAction));
 
-  // Writing the sentence fills the structured fields it can read; they stay editable.
+  // Writing the sentence fills the structured fields it can read; they stay editable. Fields that were saved or typed
+  // by hand are kept (only fields this row filled from the sentence follow it), so fixing a typo never replaces a selector.
+  const filled = useRef<string | null>(null);
   const onSentence = (instruction: string) => {
-    const parsed = parseStepSentence(instruction);
-    onChange(
-      parsed
-        ? { instruction, action: parsed.action, selector: parsed.selector ?? '', value: parsed.value ?? '' }
-        : { ...step, instruction },
-    );
+    const fields = JSON.stringify([step.action, step.selector, step.value]);
+    const fromSentence = (!step.action && !step.selector && !step.value) || fields === filled.current;
+    const parsed = fromSentence ? parseStepSentence(instruction) : null;
+    if (!parsed) return onChange({ ...step, instruction });
+    const next = { instruction, action: parsed.action, selector: parsed.selector ?? '', value: parsed.value ?? '' };
+    filled.current = JSON.stringify([next.action, next.selector, next.value]);
+    onChange(next);
   };
 
   const preview =

@@ -1,5 +1,5 @@
 import type { Locator, Page } from 'playwright';
-import { looksLikeSelector, type StepAction } from '@qaforge/shared-types';
+import { looksLikeSelector, unquote, type StepAction } from '@qaforge/shared-types';
 
 /**
  * A step's target is either a selector (CSS, XPath or a Playwright engine such as `role=` / `text=`) or the
@@ -7,7 +7,7 @@ import { looksLikeSelector, type StepAction } from '@qaforge/shared-types';
  * Plain words are resolved here, deterministically, with Playwright's user-facing locators. The exported script
  * (shared-types `stepsToPlaywright`) mirrors this order; keep them in step.
  */
-export { looksLikeSelector };
+export { looksLikeSelector, unquote };
 
 type Candidate = (page: Page, text: string, exact: boolean) => Locator;
 type Role = Parameters<Page['getByRole']>[0];
@@ -37,17 +37,15 @@ function candidatesFor(action: StepAction): { kinds: Candidate[]; noun: string }
       return { kinds: [byLabel, byPlaceholder, ...eachRole(FIELD_ROLES)], noun: 'a field labelled' };
     case 'click':
     case 'hover':
-    case 'press':
       return { kinds: [...eachRole(CLICKABLE_ROLES), byLabel, byText], noun: 'a button, link or control called' };
+    case 'press': // usually a key in a field (Enter in Search), sometimes on a control
+      return {
+        kinds: [byLabel, byPlaceholder, ...eachRole(FIELD_ROLES), ...eachRole(CLICKABLE_ROLES), byText],
+        noun: 'a field or control called',
+      };
     default:
       return { kinds: [anyRole(NAMED_ROLES), byText, byLabel, byPlaceholder], noun: 'anything showing' };
   }
-}
-
-/** Strip one pair of surrounding quotes, so `"Sign in"` and `Sign in` mean the same. */
-export function unquote(target: string): string {
-  const t = target.trim();
-  return /^(["']).+\1$/.test(t) || /^“.+”$/.test(t) ? t.slice(1, -1).trim() : t;
 }
 
 /**
@@ -78,7 +76,10 @@ export async function locateTarget(page: Page, target: string, action: StepActio
       const n = await loc.count();
       if (n === 1) return loc;
       if (n > 1 && anyMatchWill) return loc.first();
-      if (n > 1 && !ambiguousCount) ambiguousCount = n;
+      if (n > 1) {
+        ambiguousCount = n; // several match the best guess: never fall back to a weaker candidate that matches one
+        break;
+      }
     }
     const now = Date.now();
     ambiguousSince = ambiguousCount ? ambiguousSince || now : 0;

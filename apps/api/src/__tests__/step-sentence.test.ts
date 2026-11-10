@@ -50,6 +50,18 @@ describe('describeStep', () => {
     }
   });
 
+  it('reads back values and elements that contain the joining words (in, into, from, contains)', () => {
+    for (const parts of [
+      { action: 'fill', value: 'Sign in now', selector: 'Email' },
+      { action: 'fill', value: 'log into my account', selector: 'Notes' },
+      { action: 'select', value: 'Made in India', selector: 'Origin' },
+      { action: 'select', value: 'from 9 to 5', selector: 'Hours' },
+      { action: 'assert_text', selector: 'Total contains tax', value: '$5' },
+    ] as const) {
+      expect(parseStepSentence(describeStep(parts)), describeStep(parts)).toEqual(parts);
+    }
+  });
+
   it('every action has a plain-language label and an example the parser understands', () => {
     for (const action of STEP_ACTIONS) {
       const f = STEP_ACTION_FIELDS[action];
