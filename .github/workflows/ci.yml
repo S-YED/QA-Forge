@@ -65,6 +65,23 @@ jobs:
         run: pnpm audit --prod --audit-level high
         continue-on-error: true
 
+  # The production API image (what Railway deploys) must keep building, with its browser inside.
+  docker-image:
+    name: API Docker image
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: docker build -t qaforge-api .
+
+      - name: Chromium headless shell is present and launchable
+        run: |
+          docker run --rm --entrypoint node -w /app/packages/playwright-runner qaforge-api \
+            -e "require('playwright').chromium.launch().then(async b => { console.log('chromium', b.version()); await b.close(); })"
+
   # The stranger flow for real: local Supabase in Docker, the API, the web app, the demo shop and
   # Chromium. No AI keys: generation uses the labelled local demo mode (AI_LOCAL_DEMO).
   integration-e2e:

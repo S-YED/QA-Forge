@@ -90,21 +90,20 @@ The API does not need a database connection string. You only need one for `psql`
 
 ### 2.2 Configure Build & Start Commands
 
-| Setting | Value |
-|---|---|
-| Build Command | *leave blank - configured by `nixpacks.toml`* |
-| Start Command | *leave blank - configured by `railway.json`* (`node apps/api/dist/index.js`) |
+Leave the Build Command and Start Command fields blank. `railway.json` tells Railway to build the repo-root `Dockerfile`, which:
 
-> **Build config lives in `nixpacks.toml` + `railway.json` at the repo root, so leave the Railway build/start fields blank.** Railway sets `NODE_ENV=production`, which makes pnpm skip `devDependencies` - and `typescript` (`tsc`) is a devDependency the build needs. `nixpacks.toml` overrides the install phase to run a single `NODE_ENV=development pnpm install --frozen-lockfile`, so dev deps are present for the `tsc` build steps. Doing it as one install (instead of a second install in the build phase) avoids pnpm's prod-to-dev "remove and reinstall node_modules from scratch" purge, which is interactive and wipes `node_modules` mid-build. Runtime is unaffected: the start command runs precompiled JS under production `NODE_ENV`.
+1. installs the API and the workspace packages it depends on (`pnpm install --filter "@qaforge/api..."`, dev dependencies included, so `tsc` is available) and builds them in dependency order;
+2. installs only Chromium's headless shell with its system libraries (`playwright install --with-deps --only-shell chromium`), the browser headless test runs launch;
+3. runs `node apps/api/dist/index.js` as the unprivileged `node` user, with `NODE_ENV=production`.
 
-**What `nixpacks.toml` does:**
+`.dockerignore` is an allowlist: only the API, the shared packages and the workspace manifests enter the image, never `.env` files or the web app. The same image runs on any Docker host:
 
-1. **install** (dev mode, one pass): `corepack enable` then `CI=1 NODE_ENV=development pnpm install --frozen-lockfile` - installs all deps incl. devDependencies (`typescript`), resolving every `workspace:*` reference.
-2. **build**: `pnpm --filter '@qaforge/api...' build` - the trailing `...` selects `@qaforge/api` **plus every workspace package it depends on** (`shared-types`, `ai-engine`, `playwright-runner`) and builds them in topological order, so each package's `dist/*.d.ts` exists before the API's `tsc` resolves its imports. Building only `shared-types` + `api` fails with `Cannot find module '@qaforge/ai-engine'`.
+```bash
+docker build -t qaforge-api .
+docker run --env-file apps/api/.env -p 4000:4000 qaforge-api
+```
 
-**Start command:** Because there is no Root Directory set, the working directory is the repo root, so the start command must include the relative path `apps/api/dist/index.js`.
-
-> **Tip:** If `@qaforge/shared-types` does not have a `build` script (i.e., it is consumed as raw TypeScript), you can drop that filter step and use: `pnpm install --frozen-lockfile && pnpm --filter @qaforge/api build`.
+Set **Replicas to 1** in the service settings (see "Run exactly one API instance" below).
 
 ### 2.3 Set Environment Variables
 
@@ -124,7 +123,7 @@ ENCRYPTION_KEY=<generate fresh 64-char hex — see command below>
 
 > **Leave `ALLOW_PRIVATE_HOSTS` and `AI_LOCAL_DEMO` unset in production.** The first lets test runs reach private and loopback addresses (an SSRF hole on a server); the second serves fixed example tests instead of AI. Both are for local development only.
 
-> **Chromium:** `nixpacks.toml` installs Playwright's Chromium with its system libraries during the build (`playwright install --with-deps chromium`) into `node_modules` (`PLAYWRIGHT_BROWSERS_PATH=0`), so test runs work on Railway. Not yet confirmed on a live Railway build; if runs fail with a launch error, check the build log for that step.
+> **Chromium:** the Docker image contains Chromium's headless shell and its system libraries. Verified locally on 10 Nov: the image (1.21 GB) ran with `NODE_ENV=production` against Supabase, a run against the live Vercel site passed with signed screenshots, and a private target was refused by the SSRF guard.
 
 > **Important:** Generate a **fresh** `ENCRYPTION_KEY` for production — do not reuse your local development key. Any keys encrypted with the local key will not be decryptable with a different production key.
 
@@ -205,7 +204,7 @@ This ensures Supabase Auth redirects users to your production frontend after ema
 - [ ] `supabase db push` completed without errors (all 25 migrations applied)
 - [ ] Admin audit query shows only expected admins
 - [ ] Railway service has 1 replica; `ALLOW_PRIVATE_HOSTS` and `AI_LOCAL_DEMO` unset
-- [ ] A test run against a public site passes and its screenshots load (Chromium works on Railway)
+- [ ] A test run passes with screenshots (Chromium works on Railway): project base URL `https://<your-vercel-app>/`, case steps **navigate** `/login` then **assert visible** `input[type="email"]`. (Don't use example.com: it has no `h1` any more and asks not to be used for testing.)
 - [ ] pgvector extension enabled in Supabase Cloud
 - [ ] `supabase/seed-prod.sql` run against the cloud DB (demo account + sample data)
 - [ ] Railway API health check returns HTTP 200 with `{"status":"ok"}`

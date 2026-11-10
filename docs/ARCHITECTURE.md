@@ -57,5 +57,5 @@ Events and their known flaws: [EXECUTION_FLOW.md](EXECUTION_FLOW.md).
 - Single-instance is the supported December topology. Multi-instance fan-out of socket events exists through the
   Redis adapter, but execution ownership is not coordinated across instances.
 
-## Deployment (from `railway.json`, `nixpacks.toml`, memory notes)
-Supabase Cloud (ap-southeast-2) + Railway API are deployed; Vercel web is pending. Local: Supabase CLI + Docker.
+## Deployment (from `Dockerfile`, `railway.json`)
+API: the repo-root `Dockerfile` (Node 20 + Chromium headless shell), deployed on Railway with one replica. Web: Vercel (`apps/web`). Database, auth and storage: Supabase Cloud (ap-southeast-2). Local: Supabase CLI + Docker. Steps in `artifacts/01-Production-Deployment-Guide.md`.
