@@ -4,7 +4,14 @@ import { execFileSync } from 'node:child_process';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { assertAllowedTarget, runTest as runUnguarded, type RunTestOptions, type StepResult } from '../src/index.js';
+import {
+  assertAllowedTarget,
+  looksLikeSelector,
+  readableError,
+  runTest as runUnguarded,
+  type RunTestOptions,
+  type StepResult,
+} from '../src/index.js';
 
 // The fixture lives on 127.0.0.1, which the SSRF guard blocks unless allowed explicitly.
 const runTest = (o: RunTestOptions) => runUnguarded({ allowedPrivateHosts: ['127.0.0.1'], ...o });
@@ -17,6 +24,17 @@ const PAGES: Record<string, string> = {
     <p id="out"></p><span class="dup">a</span><span class="dup">b</span>
     <a id="next" href="/next">Next</a>`,
   '/next': `<!doctype html><title>Next</title><h1>Next page</h1>`,
+  '/form': `<!doctype html><title>Form</title>
+    <nav><a href="/next">Sign in</a></nav>
+    <h2>Account</h2>
+    <label>Email <input id="email"></label>
+    <label for="pw">Password</label><input id="pw" type="password">
+    <input id="q" placeholder="Search products">
+    <label>Country <select id="country"><option value="in">India</option><option value="us">USA</option></select></label>
+    <button onclick="setTimeout(() => { const m = document.getElementById('msg'); m.textContent = 'Welcome ' + document.getElementById('email').value; m.hidden = false }, 200)">Sign in</button>
+    <p id="msg" hidden></p>
+    <button>Delete</button><button>Delete</button>
+    <span data-testid="badge">New</span>`,
   '/leak': `<!doctype html><h1>Leak</h1><img src="http://localhost:{PORT}/secret-img">`,
   '/ws': `<!doctype html><p id="ws">open</p><script>
     const s = new WebSocket('ws://localhost:{PORT}/secret-ws');
@@ -246,6 +264,64 @@ describe('SSRF guard', () => {
     expect(hits.some((h) => h.includes('/hop'))).toBe(true); // the guard let the allowed hop through...
     expect(hits.filter((h) => h.startsWith('localhost'))).toEqual([]); // ...but nothing reached the other host
   }, 60_000);
+});
+
+describe('targets in plain words', () => {
+  it('finds fields by label or placeholder, buttons by their text, and checks by visible text or test id', async () => {
+    const result = await runTest({
+      baseUrl,
+      steps: [
+        s(1, 'navigate', { value: '/form' }),
+        s(2, 'assert_visible', { selector: 'Account' }),
+        s(3, 'fill', { selector: 'Email', value: 'ada@example.com' }),
+        s(4, 'fill', { selector: 'Password', value: 's3cret' }),
+        s(5, 'fill', { selector: 'Search products', value: 'shoes' }),
+        s(6, 'select', { selector: 'Country', value: 'us' }),
+        s(7, 'click', { selector: '"Sign in"' }),
+        s(8, 'assert_visible', { selector: 'Welcome ada@example.com' }),
+        s(9, 'assert_text', { selector: 'Welcome', value: 'ada@example.com' }),
+        s(10, 'assert_visible', { selector: 'badge' }),
+        // a check only needs something matching to be shown, even when several match
+        s(11, 'assert_visible', { selector: 'Delete' }),
+        // the "Sign in" button was clicked, not the "Sign in" link: we are still on /form
+        s(12, 'assert_url', { value: '/form' }),
+      ],
+    });
+    expect(result.error_message).toBeUndefined();
+    expect(result.steps.map((r) => r.status)).toEqual(Array(12).fill('passed'));
+  }, 60_000);
+
+  it('says plainly when nothing matches', async () => {
+    const result = await runTest({
+      baseUrl,
+      stepTimeoutMs: 1_000,
+      steps: [s(1, 'navigate', { value: '/form' }), s(2, 'click', { selector: 'Log out' })],
+    });
+    expect(result.status).toBe('failed');
+    expect(result.steps[1].error_message).toBe('Couldn\'t find a button, link or control called "Log out" on /form');
+  }, 30_000);
+
+  it('refuses to guess when several elements match', async () => {
+    const started = Date.now();
+    const result = await runTest({ baseUrl, steps: [s(1, 'navigate', { value: '/form' }), s(2, 'click', { selector: 'Delete' })] });
+    expect(result.steps[1].error_message).toBe('2 elements match "Delete" on /form; add more words or use a selector');
+    expect(Date.now() - started).toBeLessThan(10_000); // fails early, not after the 15 s step timeout
+  }, 30_000);
+
+  it('keeps the readable part of a Playwright error', () => {
+    const err = new Error('locator.click: Timeout 500ms exceeded.\nCall log:\n  - waiting for locator(\'#x\')');
+    expect(readableError(err)).toBe('locator.click: Timeout 500ms exceeded.');
+    expect(readableError(new Error('browserType.launch: closed Browser logs: <launching> chrome.exe --flags'))).toBe('browserType.launch: closed');
+  });
+
+  it('tells selectors from plain words', () => {
+    for (const sel of ['#go', '.dup', '[data-testid="x"]', '//button', 'button[type=submit]', 'input#email', 'div > a', 'li:nth-child(2)', 'text=Go', 'role=button[name="Go"]', 'css=button']) {
+      expect(looksLikeSelector(sel), sel).toBe(true);
+    }
+    for (const words of ['Sign in', 'Email', 'Continue to payment', 'login-submit', 'Order #123', '"Sign in"', 'button']) {
+      expect(looksLikeSelector(words), words).toBe(false);
+    }
+  });
 });
 
 // Runs after every test above: passed, failed, timed out, unreachable, refused, persistence error and cancelled runs.

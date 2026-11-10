@@ -8,7 +8,6 @@ import {
   Trash2,
   Sparkles,
   Play,
-  X,
   FileText,
   ListChecks,
   Pencil,
@@ -17,15 +16,17 @@ import { apiClient } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { useDemoMode } from '@/lib/hooks/use-demo-mode';
 import { toast } from 'sonner';
-import {
-  STEP_ACTIONS,
-  STEP_ACTION_FIELDS,
-  type GeneratedTestCase,
-  type StepAction,
-  type TestSuite,
-  type TestCase,
-} from '@qaforge/shared-types';
+import { type GeneratedTestCase, type StepAction, type TestSuite, type TestCase } from '@qaforge/shared-types';
 import { DraftSteps } from '@/components/projects/draft-steps';
+import {
+  StepRow,
+  isBlankStep,
+  newDraftStep,
+  stepErrors,
+  toSavedStep,
+  type DraftStep,
+  type StepErrors,
+} from '@/components/projects/step-row';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SeverityBadge } from '@/components/shared/status-badge';
@@ -49,15 +50,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-
-interface DraftStep {
-  action: StepAction;
-  instruction: string;
-  selector: string;
-  value: string;
-}
-
-const newDraftStep = (): DraftStep => ({ action: 'click', instruction: '', selector: '', value: '' });
 
 interface SuiteWithCount extends TestSuite {
   test_cases: [{ count: number }];
@@ -98,6 +90,8 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
   const [casePriority, setCasePriority] = useState<'critical' | 'high' | 'medium' | 'low'>('medium');
   const [caseType, setCaseType] = useState<string>('functional');
   const [caseSteps, setCaseSteps] = useState<DraftStep[]>([newDraftStep()]);
+  // Per-step field errors, shown next to the fields after a save attempt (null = not checked yet).
+  const [caseStepErrors, setCaseStepErrors] = useState<StepErrors[] | null>(null);
   // Set when the case dialog edits an existing case instead of creating one (UI-2).
   const [editingCaseId, setEditingCaseId] = useState<string | null>(null);
 
@@ -109,6 +103,7 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
     setCasePriority('medium');
     setCaseType('functional');
     setCaseSteps([newDraftStep()]);
+    setCaseStepErrors(null);
   };
 
   const openNewCase = (suiteId: string) => {
@@ -129,8 +124,8 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
     setCaseSteps(
       steps.length
         ? steps.map((s) => ({
-            // Legacy rows without an action open as "click" so the editor can fix them.
-            action: ((s.action as StepAction) ?? 'click') as StepAction,
+            // Legacy rows without an action open with none chosen, so the editor asks instead of guessing.
+            action: (s.action as StepAction | undefined) ?? '',
             instruction: s.instruction ?? '',
             selector: s.selector ?? '',
             value: s.value ?? '',
@@ -197,22 +192,27 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
 
   const handleCreateTestCase = async () => {
     if (!caseTitle.trim() || !selectedSuiteForNewCase) return;
-    setCreatingCase(true);
 
+    // Check every step here first (same schema as the API) and show what's missing next to the field.
+    const steps = caseSteps.filter((s) => !isBlankStep(s));
+    if (!steps.length) {
+      toast.error('Add at least one step');
+      return;
+    }
+    const errors = caseSteps.map((s) => (isBlankStep(s) ? {} : stepErrors(s)));
+    setCaseStepErrors(errors);
+    const invalid = errors.filter((e) => Object.keys(e).length).length;
+    if (invalid) {
+      toast.error(`${invalid} step${invalid === 1 ? ' needs' : 's need'} a fix`, {
+        description: 'The missing parts are marked in red below each step.',
+      });
+      return;
+    }
+
+    setCreatingCase(true);
     try {
       // Fields the action doesn't use are dropped; the API validates the rest (shared schema).
-      const formattedSteps = caseSteps
-        .filter((s) => s.instruction.trim() || s.selector.trim() || s.value)
-        .map((step, idx) => {
-          const needs = STEP_ACTION_FIELDS[step.action];
-          return {
-            step_number: idx + 1,
-            action: step.action,
-            instruction: step.instruction.trim(),
-            selector: needs.selector ? step.selector.trim() : undefined,
-            value: needs.value ? step.value : undefined,
-          };
-        });
+      const formattedSteps = steps.map((s, idx) => toSavedStep(s, idx + 1));
 
       const casesPath = `/api/projects/${projectId}/test-suites/${selectedSuiteForNewCase}/test-cases`;
       const body = {
@@ -611,13 +611,12 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
           if (!o) setShowCreateCaseModal(false);
         }}
       >
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{editingCaseId ? 'Edit test case' : 'Create test case'}</DialogTitle>
             <DialogDescription>
-              {editingCaseId
-                ? 'Each step needs an action plus the selector and value that action uses.'
-                : 'Add a manual case. You can optimize it into structured, selector-rich steps with AI later.'}
+              Write each step the way you would tell a colleague, such as Click &quot;Sign in&quot;. Elements are found
+              by the words on the page, so no selectors are needed.
             </DialogDescription>
           </DialogHeader>
 
@@ -698,75 +697,24 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
             {/* Dynamic steps */}
             <div className="space-y-2">
               <Label>Steps</Label>
+              <p className="text-xs text-muted-foreground">
+                Examples: Open /login · Type &quot;ada@example.com&quot; into Email · Click &quot;Sign in&quot; · Check page
+                address contains /dashboard · Check &quot;Welcome&quot; is shown
+              </p>
               <div className="space-y-2">
-                {caseSteps.map((step, idx) => {
-                  const needs = STEP_ACTION_FIELDS[step.action];
-                  const update = (patch: Partial<DraftStep>) =>
-                    setCaseSteps(caseSteps.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
-                  return (
-                    <div key={idx} className="space-y-2 rounded-md border border-border p-2">
-                      <div className="flex items-center gap-2">
-                        <span className="w-4 shrink-0 select-none font-mono text-xs text-muted-foreground">
-                          {idx + 1}.
-                        </span>
-                        <Select
-                          value={step.action}
-                          onValueChange={(v) => update({ action: v as StepAction })}
-                        >
-                          <SelectTrigger className="w-40 shrink-0 font-mono text-xs" aria-label={`Step ${idx + 1} action`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {STEP_ACTIONS.map((a) => (
-                              <SelectItem key={a} value={a} className="font-mono text-xs">
-                                {a}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          value={step.instruction}
-                          onChange={(e) => update({ instruction: e.target.value })}
-                          placeholder="Description, e.g. Click the Sign in button"
-                          aria-label={`Step ${idx + 1} description`}
-                        />
-                        {caseSteps.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-9 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                            onClick={() => setCaseSteps(caseSteps.filter((_, i) => i !== idx))}
-                            aria-label={`Remove step ${idx + 1}`}
-                          >
-                            <X className="size-4" />
-                          </Button>
-                        )}
-                      </div>
-                      {(needs.selector || needs.value) && (
-                        <div className="flex gap-2 pl-6">
-                          {needs.selector && (
-                            <Input
-                              value={step.selector}
-                              onChange={(e) => update({ selector: e.target.value })}
-                              placeholder='Selector, e.g. [data-testid="login-submit"]'
-                              aria-label={`Step ${idx + 1} selector`}
-                              className="font-mono text-xs"
-                            />
-                          )}
-                          {needs.value && (
-                            <Input
-                              value={step.value}
-                              onChange={(e) => update({ value: e.target.value })}
-                              placeholder={needs.valueHint ?? 'Value'}
-                              aria-label={`Step ${idx + 1} value`}
-                            />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {caseSteps.map((step, idx) => (
+                  <StepRow
+                    key={idx}
+                    index={idx}
+                    step={step}
+                    // Once a save was attempted, errors follow edits live so a fix clears its message.
+                    errors={caseStepErrors ? (isBlankStep(step) ? {} : stepErrors(step)) : undefined}
+                    onChange={(next) => setCaseSteps(caseSteps.map((s, i) => (i === idx ? next : s)))}
+                    onRemove={
+                      caseSteps.length > 1 ? () => setCaseSteps(caseSteps.filter((_, i) => i !== idx)) : undefined
+                    }
+                  />
+                ))}
               </div>
               <Button
                 type="button"

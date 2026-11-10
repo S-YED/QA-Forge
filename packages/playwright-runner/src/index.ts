@@ -1,8 +1,10 @@
-import type { Browser, BrowserContext, Page, Response } from 'playwright';
+import type { Browser, BrowserContext, Locator, Page, Response } from 'playwright';
 import { TestCaseStepsSchema, TestStepStatus, type TestCaseStep } from '@qaforge/shared-types';
+import { locateTarget } from './locate.js';
 import { BLOCKED_HEADER, assertAllowedTarget, launchGuardedBrowser } from './target-guard.js';
 
 export { assertAllowedTarget, launchGuardedBrowser } from './target-guard.js';
+export { looksLikeSelector } from './locate.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -64,6 +66,12 @@ async function resolveTarget(value: string, baseUrl: string, allowedPrivateHosts
   return url;
 }
 
+/** Playwright errors append a call log and browser output after the message; people need the message. */
+export function readableError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.split(/\s*(?:Call log:|Browser logs:)/)[0].replace(/\s+/g, ' ').trim().slice(0, 400);
+}
+
 /** A navigation that ended on the guard proxy's block page (e.g. via a redirect) is an error, not a page. */
 function throwIfBlocked(response: Response | null) {
   const reason = response?.headers()[BLOCKED_HEADER];
@@ -86,9 +94,11 @@ async function executeStep(
   timeoutMs: number,
   allowedPrivateHosts: readonly string[],
 ): Promise<void> {
-  // Interactions use strict locators (an ambiguous selector fails instead of hitting the wrong element);
-  // waits and assertions accept the first match.
-  const loc = () => page.locator(step.selector!);
+  // A target in plain words ("Sign in", "Email") is found the way a person would find it (locate.ts); a selector is
+  // used as written. Interactions stay strict (an ambiguous selector fails instead of hitting the wrong element);
+  // waits and assertions accept the first match of a selector.
+  let found: Locator | undefined;
+  const loc = async () => (found ??= await locateTarget(page, step.selector!, step.action, timeoutMs));
   const value = step.value!;
 
   switch (step.action) {
@@ -96,27 +106,27 @@ async function executeStep(
       throwIfBlocked(await page.goto(await resolveTarget(value, baseUrl, allowedPrivateHosts), { waitUntil: 'domcontentloaded' }));
       return;
     case 'click':
-      await loc().click();
+      await (await loc()).click();
       return;
     case 'fill':
-      await loc().fill(value);
+      await (await loc()).fill(value);
       return;
     case 'select':
-      await loc().selectOption(value);
+      await (await loc()).selectOption(value);
       return;
     case 'hover':
-      await loc().hover();
+      await (await loc()).hover();
       return;
     case 'press':
-      if (step.selector) await loc().press(value);
+      if (step.selector) await (await loc()).press(value);
       else await page.keyboard.press(value);
       return;
     case 'wait_for':
     case 'assert_visible':
-      await loc().first().waitFor({ state: 'visible' });
+      await (await loc()).first().waitFor({ state: 'visible' });
       return;
     case 'assert_text': {
-      const el = loc().first();
+      const el = (await loc()).first();
       await el.waitFor({ state: 'visible' });
       await waitUntil(
         page,
@@ -135,7 +145,7 @@ async function executeStep(
       );
       return;
     case 'scroll':
-      if (step.selector) await loc().first().scrollIntoViewIfNeeded();
+      if (step.selector) await (await loc()).first().scrollIntoViewIfNeeded();
       else await page.mouse.wheel(0, 600);
       return;
     default: {
@@ -187,7 +197,7 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
   try {
     await assertAllowedTarget(baseUrl, allowedPrivateHosts);
   } catch (err) {
-    return finish('error', `Base URL not allowed: ${err instanceof Error ? err.message : String(err)}`);
+    return finish('error', `Base URL not allowed: ${readableError(err)}`);
   }
 
   let browser: Browser | undefined;
@@ -212,7 +222,7 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
     try {
       browser = await launchGuardedBrowser(browserName, allowedPrivateHosts);
     } catch (err) {
-      return finish('error', `Browser failed to launch: ${err instanceof Error ? err.message : String(err)}`);
+      return finish('error', `Browser failed to launch: ${readableError(err)}`);
     }
     context = await browser.newContext({ viewport });
     context.setDefaultTimeout(stepTimeoutMs);
@@ -222,7 +232,7 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
     try {
       throwIfBlocked(await page.goto(baseUrl, { waitUntil: 'domcontentloaded' }));
     } catch (err) {
-      return finish('error', `Could not open base URL ${baseUrl}: ${err instanceof Error ? err.message : String(err)}`);
+      return finish('error', `Could not open base URL ${baseUrl}: ${readableError(err)}`);
     }
 
     let failure: string | undefined;
@@ -241,7 +251,7 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
         await executeStep(page, step, baseUrl, stepTimeoutMs, allowedPrivateHosts);
       } catch (err) {
         if (signal?.aborted) return finish('error', 'Run cancelled');
-        error = err instanceof Error ? err.message : String(err);
+        error = readableError(err);
       }
 
       const screenshot = await page.screenshot({ type: 'png' }).catch(() => undefined);
@@ -263,7 +273,7 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
     return allPassed ? finish('passed') : finish('error', 'Not every step was executed');
   } catch (err) {
     // Callback (persistence) failures and unexpected browser errors end the run as an error, never a pass.
-    return finish('error', signal?.aborted ? 'Run cancelled' : err instanceof Error ? err.message : String(err));
+    return finish('error', signal?.aborted ? 'Run cancelled' : readableError(err));
   } finally {
     signal?.removeEventListener('abort', onAbort);
     await context?.close().catch(() => {});

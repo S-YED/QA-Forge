@@ -38,8 +38,9 @@ export interface GenerateTestCasesResponse {
 /** Prompt text describing the step shape, built from the shared contract so they can't drift. */
 const STEP_FORMAT = `array of { step_number, action, instruction, selector?, value?, expected? } where
   action is one of: ${STEP_ACTIONS.join(', ')}
-  instruction is a short human-readable description of the step
-  selector is a Playwright selector (prefer [data-testid="..."], then CSS)
+  instruction is the step as a short sentence, e.g. ${STEP_ACTIONS.map((a) => STEP_ACTION_FIELDS[a].example).slice(0, 4).join(' / ')}
+  selector names the element by the words a user sees on it: button or link text ("Sign in"), a field's label
+    ("Email") or placeholder, or a heading. Only use CSS like [data-testid="..."] when the description gives it.
   required fields per action:
 ${STEP_ACTIONS.map((a) => {
   const f = STEP_ACTION_FIELDS[a];
@@ -77,7 +78,7 @@ RULES:
 2. Always include a mix of positive (happy path), negative (error handling), and edge case tests.
 3. Each test case must have clear, actionable steps written in natural language.
 4. Every step must use exactly one action from the allowed list and include that action's required fields.
-5. Use CSS selectors where possible in the selector field (e.g., button[type="submit"], #email-input, .login-form).
+5. You cannot see the page, so never invent CSS ids or classes. Name elements by their visible text or label (e.g. selector "Sign in", "Email", "Password").
 6. Prioritize critical user-facing flows as "high" or "critical" priority.
 7. Include accessibility test cases when relevant.
 
@@ -445,8 +446,8 @@ function buildOptimizeSystemPrompt(): string {
 
 RULES:
 1. Retain the core intent of the original test case, but make the title and description more professional.
-2. Review the steps and optimize them. Expand vague instructions (e.g. "log in") into specific, detailed actions (e.g. "Fill #email-input with test user and click submit").
-3. Suggest appropriate CSS selectors for interactive elements in the selector field (e.g. input[type="email"], button[type="submit"]).
+2. Review the steps and optimize them. Expand vague instructions (e.g. "log in") into specific actions (e.g. Type "user@example.com" into "Email", then Click "Sign in").
+3. Name elements by the words a user sees (button text, field label or placeholder). Keep a selector the user already wrote; never invent CSS ids or classes.
 4. Ensure the expected_result is clear and concrete.
 5. Provide tags and assign a realistic priority.
 6. Return only the optimized test case object.

@@ -84,16 +84,15 @@ test('a manual case from the step editor stays live through a refresh mid-run', 
   await page.getByRole('button', { name: 'Add case' }).click();
   await page.getByLabel('Title').fill('E2E slow case');
 
+  // Step 1 through the action picker, step 2 as a sentence the editor reads.
   await page.getByLabel('Step 1 action').click();
-  await page.getByRole('option', { name: 'navigate', exact: true }).click();
+  await page.getByRole('option', { name: 'Open page', exact: true }).click();
   await page.getByLabel('Step 1 description').fill('Open the login page');
   await page.getByLabel('Step 1 value').fill('/login');
 
   await page.getByRole('button', { name: 'Add step' }).click();
-  await page.getByLabel('Step 2 action').click();
-  await page.getByRole('option', { name: 'wait_for', exact: true }).click();
-  await page.getByLabel('Step 2 description').fill('Wait for a promo banner that never appears');
-  await page.getByLabel('Step 2 selector').fill('[data-testid="promo-banner"]');
+  await page.getByLabel('Step 2 description').fill('Wait until "Spring sale" is shown');
+  await expect(page.getByLabel('Step 2 element')).toHaveValue('Spring sale');
   await page.getByRole('button', { name: 'Create case' }).click();
   await expect(page.getByText('Test case created')).toBeVisible();
 
@@ -104,5 +103,39 @@ test('a manual case from the step editor stays live through a refresh mid-run', 
   await page.reload(); // mid-run: the page must reconnect live and recover the saved step
   await expect(page.getByText('Live', { exact: true })).toBeVisible();
   await expect(page.getByText('Open the login page')).toBeVisible();
-  await expect(page.getByText(/Timeout 15000ms exceeded/).first()).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/Couldn't find anything showing "Spring sale" on \/login/).first()).toBeVisible({ timeout: 60_000 });
+});
+
+test('a case written in plain sentences, with no selectors, passes', async ({ page }) => {
+  await openSuite(page);
+  await page.getByRole('button', { name: 'Add case' }).click();
+  await page.getByLabel('Title').fill('E2E plain sentences');
+  const sentences = [
+    'Open /login',
+    'Type "demo@qaforge.dev" into Email',
+    'Type "Demo1234!" into Password',
+    'Click "Log in"',
+    'Check page address contains /dashboard',
+    'Check "Welcome back, demo@qaforge.dev" is shown',
+  ];
+  for (const [i, sentence] of sentences.entries()) {
+    if (i) await page.getByRole('button', { name: 'Add step' }).click();
+    await page.getByLabel(`Step ${i + 1} description`).fill(sentence);
+  }
+  await page.getByRole('button', { name: 'Create case' }).click();
+  await expect(page.getByText('Test case created')).toBeVisible();
+
+  await runCase(page, 'E2E plain sentences');
+  await expect(page.getByText('All steps passed')).toBeVisible({ timeout: 90_000 });
+});
+
+test('a step with a missing part is marked in the editor instead of failing later', async ({ page }) => {
+  await openSuite(page);
+  await page.getByRole('button', { name: 'Add case' }).click();
+  await page.getByLabel('Title').fill('E2E incomplete');
+  await page.getByLabel('Step 1 action').click();
+  await page.getByRole('option', { name: 'Click', exact: true }).click();
+  await page.getByRole('button', { name: 'Create case' }).click();
+  await expect(page.getByText('"Click" needs an element: the text you see on it, its label, or a selector')).toBeVisible();
+  await expect(page.getByText('Test case created')).toHaveCount(0);
 });
