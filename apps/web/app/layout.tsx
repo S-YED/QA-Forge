@@ -1,25 +1,28 @@
 import type { Metadata, Viewport } from 'next';
-import { Hanken_Grotesk, JetBrains_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
+// Fonts are committed (variable woff2, latin, SIL OFL) instead of fetched from Google at build time:
+// next/font/google crashed CI and could crash Vercel builds whenever Google's CSS came back unexpected.
+
 // UI + display. One well-tuned grotesk carries headings, labels, body and data -
 // weight/size contrast does the work a display/body pair would.
-const sans = Hanken_Grotesk({
-  subsets: ['latin'],
+const sans = localFont({
+  src: './fonts/hanken-grotesk-latin.woff2',
   variable: '--font-sans',
-  weight: ['400', '500', '600', '700', '800'],
+  weight: '400 800',
   display: 'swap',
 });
 
 // Code / console / step timings / selectors. The live execution console is the
 // hero surface, so its monospace is pinned, never a system fallback.
-const mono = JetBrains_Mono({
-  subsets: ['latin'],
+const mono = localFont({
+  src: './fonts/jetbrains-mono-latin.woff2',
   variable: '--font-mono',
-  weight: ['400', '500', '600', '700'],
+  weight: '400 700',
   display: 'swap',
 });
 

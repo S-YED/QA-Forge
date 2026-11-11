@@ -59,6 +59,8 @@ app.get('/api/health', (_req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     version: '2.0.0-mvp',
+    // Which commit is live (Railway sets this for GitHub deploys); null when run locally.
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
   });
 });
 
