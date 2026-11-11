@@ -59,11 +59,10 @@ jobs:
       - name: Test
         run: pnpm test
 
-      # Surface production vulnerabilities without failing the build on the
-      # transitive Next.js 14 advisories tracked for a separate 14→15 upgrade.
+      # A high or critical advisory in a production dependency fails the build.
+      # Patch it (bump, or a pnpm override in the root package.json); don't silence it.
       - name: Audit (production deps)
         run: pnpm audit --prod --audit-level high
-        continue-on-error: true
 
   # The production API image (what Railway deploys) must keep building, with its browser inside.
   docker-image:

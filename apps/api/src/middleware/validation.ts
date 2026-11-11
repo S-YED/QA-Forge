@@ -37,7 +37,7 @@ export function validate(schema: ZodSchema, target: ValidationTarget = 'body') {
     // Replace raw input with the parsed, typed, coerced value, merging for params/query to preserve nested route parameters.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (target === 'params' || target === 'query') {
-      (req as any)[target] = { ...((req as any)[target] ?? {}), ...result.data };
+      (req as any)[target] = { ...((req as any)[target] ?? {}), ...(result.data as Record<string, unknown>) };
     } else {
       (req as any)[target] = result.data;
     }

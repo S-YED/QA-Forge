@@ -12,7 +12,7 @@ import logger from '../utils/logger.js';
 
 const router: IRouter = Router();
 
-const uuidParamsSchema = z.object({ id: z.string().uuid() });
+const uuidParamsSchema = z.object({ id: z.guid() });
 
 // ── GET / ──────────────────────────────────────────────────────────────────────
 

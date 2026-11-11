@@ -103,7 +103,7 @@ router.post('/generate', validate(generateSchema), async (req, res, next) => {
 
 const approveSchema = z
   .object({
-    suite_id: z.string().uuid().optional(),
+    suite_id: z.guid().optional(),
     suite_name: z.string().trim().min(1).max(200).optional(),
     /** false for local demo cases, which are not AI output */
     ai_generated: z.boolean().default(true),
@@ -178,8 +178,8 @@ router.post('/approve', validate(approveSchema), async (req, res, next) => {
 // ── POST /projects/:projectId/ai/optimize/:caseId → draft, nothing saved ──────
 
 const optimizeParamsSchema = z.object({
-  projectId: z.string().uuid(),
-  caseId: z.string().uuid(),
+  projectId: z.guid(),
+  caseId: z.guid(),
 });
 
 router.post('/optimize/:caseId', validate(optimizeParamsSchema, 'params'), async (req, res, next) => {

@@ -10,7 +10,7 @@ import { signBugScreenshots } from '../utils/artifacts.js';
 
 const router: IRouter = Router({ mergeParams: true });
 
-const uuidParamsSchema = z.object({ id: z.string().uuid() });
+const uuidParamsSchema = z.object({ id: z.guid() });
 
 // ── GET /projects/:projectId/bugs ─────────────────────────────────────────────
 
@@ -109,7 +109,7 @@ router.get(
 // ── POST /projects/:projectId/bugs ────────────────────────────────────────────
 
 const createBugSchema = z.object({
-  test_run_id: z.string().uuid().optional(),
+  test_run_id: z.guid().optional(),
   title: z.string().min(1).max(500),
   description: z.string().max(5000).optional(),
   steps_to_reproduce: z.string().max(5000).optional(),
@@ -177,7 +177,7 @@ const updateBugSchema = z.object({
   description: z.string().max(5000).optional().nullable(),
   severity: z.enum(['critical', 'high', 'medium', 'low']).optional(),
   status: z.enum(['open', 'in_progress', 'resolved', 'closed', 'wont_fix']).optional(),
-  assigned_to: z.string().uuid().optional().nullable(),
+  assigned_to: z.guid().optional().nullable(),
 });
 
 router.put(

@@ -12,7 +12,7 @@ import logger from '../utils/logger.js';
 
 const router: IRouter = Router({ mergeParams: true });
 
-const uuidParamsSchema = z.object({ id: z.string().uuid() });
+const uuidParamsSchema = z.object({ id: z.guid() });
 
 // ── GET /projects/:projectId/test-runs ────────────────────────────────────────
 
@@ -108,7 +108,7 @@ router.get(
 
 const createRunSchema = z.object({
   // A run always executes a saved (reviewed) test case; run-time AI generation was removed (EXE-1).
-  test_case_id: z.string().uuid(),
+  test_case_id: z.guid(),
   mode: z.enum(['ai_driven', 'manual_recording', 'replay']),
   browser: z.enum(['chromium', 'firefox', 'webkit']).optional().default('chromium'),
 });

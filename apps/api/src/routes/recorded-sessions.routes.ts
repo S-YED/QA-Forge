@@ -10,7 +10,7 @@ import { executeTestOrchestration } from '../services/run-executor.js';
 // Router handles requests nested under /projects/:projectId/recorded-sessions
 const router: IRouter = Router({ mergeParams: true });
 
-const uuidParamsSchema = z.object({ id: z.string().uuid() });
+const uuidParamsSchema = z.object({ id: z.guid() });
 
 // ── GET / ──
 // Lists all recorded sessions for the project

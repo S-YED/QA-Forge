@@ -98,11 +98,12 @@ test('a manual case from the step editor stays live through a refresh mid-run', 
 
   await runCase(page, 'E2E slow case');
   await expect(page.getByText('Live', { exact: true })).toBeVisible();
-  await expect(page.getByText('Open the login page')).toBeVisible({ timeout: 20_000 });
+  // exact: the step row only; once step 1 has passed, the log line "Step 1: Open the login page [passed]" matches too
+  await expect(page.getByText('Open the login page', { exact: true })).toBeVisible({ timeout: 20_000 });
 
   await page.reload(); // mid-run: the page must reconnect live and recover the saved step
   await expect(page.getByText('Live', { exact: true })).toBeVisible();
-  await expect(page.getByText('Open the login page')).toBeVisible();
+  await expect(page.getByText('Open the login page', { exact: true })).toBeVisible();
   await expect(page.getByText(/Couldn't find anything showing "Spring sale" on \/login/).first()).toBeVisible({ timeout: 60_000 });
 });
 
