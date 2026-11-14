@@ -124,4 +124,6 @@ jobs:
         with:
           name: e2e-results
           path: .e2e-results
+          # The folder name starts with a dot; without this the upload silently keeps nothing.
+          include-hidden-files: true
           retention-days: 7

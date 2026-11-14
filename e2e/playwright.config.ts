@@ -15,7 +15,8 @@ export default defineConfig({
   reporter: [['list']],
   use: { baseURL: WEB, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   webServer: [
-    { command: 'pnpm --filter @qaforge/api dev', url: 'http://localhost:4000/api/health', reuseExistingServer: true, timeout: 120_000, cwd: '..' },
+    // The API log is shown: when a run does not end as a test expects, its `run:complete` line says why.
+    { command: 'pnpm --filter @qaforge/api dev', url: 'http://localhost:4000/api/health', reuseExistingServer: true, timeout: 120_000, cwd: '..', stdout: 'pipe', stderr: 'pipe' },
     {
       command: 'pnpm --filter @qaforge/web dev',
       url: `${WEB}/login`,
