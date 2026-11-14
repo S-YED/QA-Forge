@@ -8,8 +8,17 @@ import app from './app.js';
 import { createSocketServer } from './websocket/socket-server.js';
 import { env } from './config/env.js';
 import logger from './utils/logger.js';
+import { reapInterruptedRuns, shutdownRuns } from './services/run-executor.js';
 
 const server = http.createServer(app);
+
+// EXE-2: runs left pending/running by a previous process can never finish; mark them before serving.
+try {
+  const reaped = await reapInterruptedRuns();
+  if (reaped) logger.warn({ event: 'run:reaped_on_boot', count: reaped });
+} catch (err) {
+  logger.error({ event: 'run:reap_failed', error: err instanceof Error ? err.message : String(err) });
+}
 
 server.listen(env.PORT, () => {
   logger.info(`🚀 QAForge API running on http://localhost:${env.PORT}`);
@@ -19,5 +28,15 @@ server.listen(env.PORT, () => {
 const io = createSocketServer(server);
 app.set('io', io);
 logger.info('🔌 Socket.io server attached');
+
+// EXE-2: on deploy/stop, cancel in-flight runs so they end as `error` instead of staying `running`.
+const shutdown = async (signal: string) => {
+  logger.info({ event: 'api:shutdown', signal });
+  io.close(); // also stops the HTTP server accepting new connections
+  await shutdownRuns();
+  process.exit(0);
+};
+process.once('SIGTERM', () => void shutdown('SIGTERM'));
+process.once('SIGINT', () => void shutdown('SIGINT'));
 
 export { io };

@@ -27,13 +27,13 @@ CREATE INDEX IF NOT EXISTS idx_test_steps_run_step
 
 ALTER TABLE public.test_steps ENABLE ROW LEVEL SECURITY;
 
--- Run-child pattern: test_steps → test_runs → user_id
+-- Run-child pattern: test_steps → test_runs → user_id (or admin check)
 CREATE POLICY "test_steps_select_policy"
     ON public.test_steps
     FOR SELECT
     USING (
         test_run_id IN (
-            SELECT id FROM public.test_runs WHERE user_id = auth.uid()
+            SELECT id FROM public.test_runs WHERE user_id = auth.uid() OR public.is_admin()
         )
     );
 
@@ -42,7 +42,7 @@ CREATE POLICY "test_steps_insert_policy"
     FOR INSERT
     WITH CHECK (
         test_run_id IN (
-            SELECT id FROM public.test_runs WHERE user_id = auth.uid()
+            SELECT id FROM public.test_runs WHERE user_id = auth.uid() OR public.is_admin()
         )
     );
 
@@ -51,12 +51,12 @@ CREATE POLICY "test_steps_update_policy"
     FOR UPDATE
     USING (
         test_run_id IN (
-            SELECT id FROM public.test_runs WHERE user_id = auth.uid()
+            SELECT id FROM public.test_runs WHERE user_id = auth.uid() OR public.is_admin()
         )
     )
     WITH CHECK (
         test_run_id IN (
-            SELECT id FROM public.test_runs WHERE user_id = auth.uid()
+            SELECT id FROM public.test_runs WHERE user_id = auth.uid() OR public.is_admin()
         )
     );
 
@@ -65,6 +65,6 @@ CREATE POLICY "test_steps_delete_policy"
     FOR DELETE
     USING (
         test_run_id IN (
-            SELECT id FROM public.test_runs WHERE user_id = auth.uid()
+            SELECT id FROM public.test_runs WHERE user_id = auth.uid() OR public.is_admin()
         )
     );

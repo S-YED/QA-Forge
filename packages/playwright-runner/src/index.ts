@@ -1,32 +1,45 @@
-import { chromium, firefox, webkit, type Browser, type Page, type BrowserType } from 'playwright';
-import type { TestCaseStep, TestStepStatus } from '@qaforge/shared-types';
+import type { Browser, BrowserContext, Locator, Page, Response } from 'playwright';
+import { TestCaseStepsSchema, TestStepStatus, type TestCaseStep } from '@qaforge/shared-types';
+import { locateTarget } from './locate.js';
+import { BLOCKED_HEADER, assertAllowedTarget, launchGuardedBrowser } from './target-guard.js';
+
+export { assertAllowedTarget, launchGuardedBrowser } from './target-guard.js';
+export { looksLikeSelector } from './locate.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type BrowserName = 'chromium' | 'firefox' | 'webkit';
 
+/** passed: every step ran and passed. failed: a step failed. error: the run itself broke (invalid steps, browser, target unreachable, cancelled, callback threw). */
+export type RunStatus = 'passed' | 'failed' | 'error';
+
 export interface RunTestOptions {
   /** The base URL of the application under test */
   baseUrl: string;
-  /** The ordered steps to execute */
-  steps: TestCaseStep[];
-  /** Which browser to use */
+  /** The ordered steps to execute. Validated against the shared contract before any browser launches. */
+  steps: unknown[];
   browser?: BrowserName;
-  /** Viewport dimensions */
   viewport?: { width: number; height: number };
-  /** Timeout in ms for each step action */
+  /** Timeout for each action/assertion (Playwright default timeout) */
   stepTimeoutMs?: number;
-  /** Called when a step starts execution */
-  onStepStart?: (stepNumber: number, action: string) => void;
-  /** Called when a step completes (pass or fail) */
-  onStepComplete?: (result: StepResult) => void;
-  /** Called with a screenshot buffer after each step */
-  onScreenshot?: (stepNumber: number, screenshotBuffer: Buffer) => void;
+  /** Timeout for page navigations */
+  navigationTimeoutMs?: number;
+  /** Hostnames allowed even though they resolve to private/loopback addresses (`*` = all). Default: none. */
+  allowedPrivateHosts?: readonly string[];
+  /** Aborting closes the browser and ends the run with status "error" */
+  signal?: AbortSignal;
+  /** Called when a step starts; awaited */
+  onStepStart?: (stepNumber: number, instruction: string) => void | Promise<void>;
+  /** Called when a step finishes (passed, failed or skipped); awaited. Throwing ends the run with "error". */
+  onStepComplete?: (result: StepResult) => void | Promise<void>;
+  /** Called with a screenshot after each executed step; awaited */
+  onScreenshot?: (stepNumber: number, screenshotBuffer: Buffer) => void | Promise<void>;
 }
 
 export interface StepResult {
   step_number: number;
-  action: string;
+  action: TestCaseStep['action'];
+  instruction: string;
   selector?: string;
   value?: string;
   status: TestStepStatus;
@@ -36,275 +49,236 @@ export interface StepResult {
 }
 
 export interface RunResult {
+  status: RunStatus;
+  /** Convenience: status === 'passed' */
+  passed: boolean;
   steps: StepResult[];
   total_duration_ms: number;
-  passed: boolean;
   error_message?: string;
 }
 
-// ── Keyword-to-Playwright Mapping ────────────────────────────────────────────
+// ── Step execution ────────────────────────────────────────────────────────────
 
-/**
- * Hybrid approach: keyword mapping first, AI fallback later (MVP-2 scope).
- *
- * Parses a natural-language instruction and maps it to a Playwright action.
- * Supports common patterns like:
- *   - "Click <selector>"
- *   - "Fill/Type <selector> with <value>"
- *   - "Navigate/Go to <url>"
- *   - "Assert/Verify/Check <selector> contains/has text <text>"
- *   - "Wait for <selector>"
- *   - "Select <value> from <selector>"
- *   - "Hover over <selector>"
- *   - "Press <key>"
- */
-async function executeStep(page: Page, step: TestCaseStep): Promise<void> {
-  const instruction = step.instruction.toLowerCase().trim();
-  const selector = step.selector;
-  const value = step.value;
+/** Resolve a navigate target against the base URL and check it is allowed. */
+async function resolveTarget(value: string, baseUrl: string, allowedPrivateHosts: readonly string[]): Promise<string> {
+  const url = new URL(value, baseUrl).toString();
+  await assertAllowedTarget(url, allowedPrivateHosts);
+  return url;
+}
 
-  // ── Navigate ──
-  if (/^(navigate|go|open|visit|browse)\s+(to\s+)?/i.test(instruction)) {
-    const url = value || instruction.replace(/^(navigate|go|open|visit|browse)\s+(to\s+)?/i, '').trim();
-    await page.goto(url.startsWith('http') ? url : `${page.url().replace(/\/$/, '')}/${url.replace(/^\//, '')}`);
-    return;
-  }
+/** Playwright errors append a call log and browser output after the message; people need the message. */
+export function readableError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.split(/\s*(?:Call log:|Browser logs:)/)[0].replace(/\s+/g, ' ').trim().slice(0, 400);
+}
 
-  // ── Click ──
-  if (/^(click|tap|press)\s+/i.test(instruction) || instruction.includes('click')) {
-    if (selector) {
-      await page.click(selector);
-    } else {
-      // Try to find the element by text content
-      const text = instruction.replace(/^(click|tap|press)\s+(on\s+)?(the\s+)?/i, '').replace(/\s*button$/i, '').trim();
-      await page.click(`text="${text}"`);
-    }
-    return;
-  }
+/** A navigation that ended on the guard proxy's block page (e.g. via a redirect) is an error, not a page. */
+function throwIfBlocked(response: Response | null) {
+  const reason = response?.headers()[BLOCKED_HEADER];
+  if (reason) throw new Error(`Blocked: ${reason}`);
+}
 
-  // ── Fill / Type ──
-  if (/^(fill|type|enter|input)\s+/i.test(instruction) || instruction.includes('type') || instruction.includes('fill')) {
-    if (selector && value) {
-      await page.fill(selector, value);
-    } else if (selector && !value) {
-      // Try to extract value from instruction
-      const matchWith = instruction.match(/(?:with|value)\s+["']?(.+?)["']?\s*$/i);
-      const extractedValue = matchWith ? matchWith[1] : '';
-      await page.fill(selector, extractedValue);
-    }
-    return;
-  }
-
-  // ── Select dropdown ──
-  if (/^select\s+/i.test(instruction)) {
-    if (selector && value) {
-      await page.selectOption(selector, value);
-    }
-    return;
-  }
-
-  // ── Hover ──
-  if (/^hover\s+/i.test(instruction) || instruction.includes('hover')) {
-    if (selector) {
-      await page.hover(selector);
-    }
-    return;
-  }
-
-  // ── Wait ──
-  if (/^wait\s+/i.test(instruction) || instruction.includes('wait for')) {
-    if (selector) {
-      await page.waitForSelector(selector);
-    } else {
-      // Wait a default amount
-      await page.waitForTimeout(1000);
-    }
-    return;
-  }
-
-  // ── Press key ──
-  if (/^press\s+/i.test(instruction)) {
-    const key = instruction.replace(/^press\s+/i, '').trim();
-    await page.keyboard.press(key);
-    return;
-  }
-
-  // ── Assert / Verify ──
-  if (/^(assert|verify|check|expect|confirm|ensure)\s+/i.test(instruction)) {
-    if (selector) {
-      const expectedText = step.expected || value || '';
-      if (expectedText) {
-        const element = page.locator(selector);
-        const text = await element.textContent();
-        if (!text?.includes(expectedText)) {
-          throw new Error(`Assertion failed: expected "${selector}" to contain "${expectedText}" but got "${text}"`);
-        }
-      } else {
-        // Just verify element exists and is visible
-        await page.waitForSelector(selector, { state: 'visible' });
-      }
-    }
-    return;
-  }
-
-  // ── Scroll ──
-  if (/^scroll\s+/i.test(instruction) || instruction.includes('scroll')) {
-    if (selector) {
-      await page.locator(selector).scrollIntoViewIfNeeded();
-    } else {
-      await page.evaluate(() => window.scrollBy(0, 300));
-    }
-    return;
-  }
-
-  // ── Fallback: try clicking by text or selector ──
-  if (selector) {
-    await page.click(selector);
-  } else {
-    // Last resort: attempt to interpret the instruction as a click on text
-    const text = instruction.replace(/^(the\s+)?/i, '').trim();
-    await page.click(`text="${text}"`);
+/** Poll until `check` is true or the timeout passes (assertions that may settle after an action). */
+async function waitUntil(page: Page, timeoutMs: number, check: () => Promise<boolean>, failure: () => Promise<string>) {
+  const deadline = Date.now() + timeoutMs;
+  while (!(await check())) {
+    if (Date.now() > deadline) throw new Error(await failure());
+    await page.waitForTimeout(100);
   }
 }
 
-// ── Browser Factory ──────────────────────────────────────────────────────────
+async function executeStep(
+  page: Page,
+  step: TestCaseStep,
+  baseUrl: string,
+  timeoutMs: number,
+  allowedPrivateHosts: readonly string[],
+): Promise<void> {
+  // A target in plain words ("Sign in", "Email") is found the way a person would find it (locate.ts); a selector is
+  // used as written. Interactions stay strict (an ambiguous selector fails instead of hitting the wrong element);
+  // waits and assertions accept the first match of a selector.
+  let found: Locator | undefined;
+  const loc = async () => (found ??= await locateTarget(page, step.selector!, step.action, timeoutMs));
+  const value = step.value!;
 
-function getBrowserType(name: BrowserName): BrowserType {
-  switch (name) {
-    case 'chromium': return chromium;
-    case 'firefox': return firefox;
-    case 'webkit': return webkit;
-    default: return chromium;
+  switch (step.action) {
+    case 'navigate':
+      throwIfBlocked(await page.goto(await resolveTarget(value, baseUrl, allowedPrivateHosts), { waitUntil: 'domcontentloaded' }));
+      return;
+    case 'click':
+      await (await loc()).click();
+      return;
+    case 'fill':
+      await (await loc()).fill(value);
+      return;
+    case 'select':
+      await (await loc()).selectOption(value);
+      return;
+    case 'hover':
+      await (await loc()).hover();
+      return;
+    case 'press':
+      if (step.selector) await (await loc()).press(value);
+      else await page.keyboard.press(value);
+      return;
+    case 'wait_for':
+    case 'assert_visible':
+      await (await loc()).first().waitFor({ state: 'visible' });
+      return;
+    case 'assert_text': {
+      const el = (await loc()).first();
+      await el.waitFor({ state: 'visible' });
+      await waitUntil(
+        page,
+        timeoutMs,
+        async () => ((await el.textContent()) ?? '').includes(value),
+        async () => `Expected ${step.selector} to contain "${value}" but got "${((await el.textContent()) ?? '').trim().slice(0, 200)}"`,
+      );
+      return;
+    }
+    case 'assert_url':
+      await waitUntil(
+        page,
+        timeoutMs,
+        async () => page.url().includes(value),
+        async () => `Expected URL to contain "${value}" but it was ${page.url()}`,
+      );
+      return;
+    case 'scroll':
+      if (step.selector) await (await loc()).first().scrollIntoViewIfNeeded();
+      else await page.mouse.wheel(0, 600);
+      return;
+    default: {
+      // Unreachable after schema validation; kept so a new action can't be silently ignored.
+      const never: never = step.action;
+      throw new Error(`Unsupported action: ${String(never)}`);
+    }
   }
 }
 
 // ── Main Runner ──────────────────────────────────────────────────────────────
 
 /**
- * Execute a sequence of test steps against a live browser.
- *
- * Each step is executed sequentially. A screenshot is taken after each step.
- * If a step fails, the remaining steps are marked as "skipped" and the run
- * terminates.
+ * Execute validated steps in a real browser. Steps run in order; after the
+ * first failure the rest are reported as skipped. A run only passes when
+ * every step ran and passed.
  */
 export async function runTest(options: RunTestOptions): Promise<RunResult> {
   const {
     baseUrl,
-    steps,
     browser: browserName = 'chromium',
     viewport = { width: 1280, height: 720 },
-    stepTimeoutMs = 15000,
+    stepTimeoutMs = 15_000,
+    navigationTimeoutMs = 30_000,
+    allowedPrivateHosts = [],
+    signal,
     onStepStart,
     onStepComplete,
     onScreenshot,
   } = options;
 
-  const results: StepResult[] = [];
   const overallStart = Date.now();
-  let overallError: string | undefined;
-  let browser: Browser | null = null;
+  const results: StepResult[] = [];
+  const finish = (status: RunStatus, error_message?: string): RunResult => ({
+    status,
+    passed: status === 'passed',
+    steps: results,
+    total_duration_ms: Date.now() - overallStart,
+    error_message,
+  });
+
+  const parsed = TestCaseStepsSchema.safeParse(options.steps);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.slice(0, 5).map((i) => `steps.${i.path.join('.')}: ${i.message}`);
+    return finish('error', `Invalid test steps (fix the test case before running): ${issues.join('; ')}`);
+  }
+  const steps = parsed.data;
 
   try {
-    const browserType = getBrowserType(browserName);
-    browser = await browserType.launch({ headless: true });
-    const context = await browser.newContext({ viewport });
+    await assertAllowedTarget(baseUrl, allowedPrivateHosts);
+  } catch (err) {
+    return finish('error', `Base URL not allowed: ${readableError(err)}`);
+  }
+
+  let browser: Browser | undefined;
+  let context: BrowserContext | undefined;
+  const onAbort = () => void browser?.close().catch(() => {});
+  signal?.addEventListener('abort', onAbort);
+
+  const toResult = (step: TestCaseStep, status: TestStepStatus, extra: Partial<StepResult> = {}): StepResult => ({
+    step_number: step.step_number,
+    action: step.action,
+    instruction: step.instruction,
+    selector: step.selector,
+    value: step.value,
+    status,
+    duration_ms: 0,
+    ...extra,
+  });
+
+  try {
+    if (signal?.aborted) return finish('error', 'Run cancelled');
+
+    try {
+      browser = await launchGuardedBrowser(browserName, allowedPrivateHosts);
+    } catch (err) {
+      return finish('error', `Browser failed to launch: ${readableError(err)}`);
+    }
+    context = await browser.newContext({ viewport });
+    context.setDefaultTimeout(stepTimeoutMs);
+    context.setDefaultNavigationTimeout(navigationTimeoutMs);
     const page = await context.newPage();
 
-    // Navigate to base URL first
-    await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+    try {
+      throwIfBlocked(await page.goto(baseUrl, { waitUntil: 'domcontentloaded' }));
+    } catch (err) {
+      return finish('error', `Could not open base URL ${baseUrl}: ${readableError(err)}`);
+    }
 
-    let failedAt = -1;
-
-    for (let i = 0; i < steps.length; i++) {
-      const step = steps[i];
-
-      // If a previous step failed, skip all remaining
-      if (failedAt >= 0) {
-        const skipResult: StepResult = {
-          step_number: step.step_number,
-          action: step.instruction,
-          selector: step.selector,
-          value: step.value,
-          status: 'skipped' as TestStepStatus,
-          duration_ms: 0,
-        };
-        results.push(skipResult);
-        onStepComplete?.(skipResult);
+    let failure: string | undefined;
+    for (const step of steps) {
+      if (failure) {
+        const skipped = toResult(step, TestStepStatus.SKIPPED);
+        results.push(skipped);
+        await onStepComplete?.(skipped);
         continue;
       }
 
-      onStepStart?.(step.step_number, step.instruction);
+      await onStepStart?.(step.step_number, step.instruction);
       const stepStart = Date.now();
-
+      let error: string | undefined;
       try {
-        // Set step-level timeout
-        await Promise.race([
-          executeStep(page, step),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(`Step timed out after ${stepTimeoutMs}ms`)), stepTimeoutMs)
-          ),
-        ]);
-
-        // Take screenshot after the step
-        const screenshotBuffer = await page.screenshot({ type: 'png' });
-        onScreenshot?.(step.step_number, screenshotBuffer);
-
-        const result: StepResult = {
-          step_number: step.step_number,
-          action: step.instruction,
-          selector: step.selector,
-          value: step.value,
-          status: 'passed' as TestStepStatus,
-          duration_ms: Date.now() - stepStart,
-          screenshot_buffer: screenshotBuffer,
-        };
-        results.push(result);
-        onStepComplete?.(result);
-
+        await executeStep(page, step, baseUrl, stepTimeoutMs, allowedPrivateHosts);
       } catch (err) {
-        failedAt = i;
-        const errorMsg = err instanceof Error ? err.message : String(err);
-
-        // Take screenshot of the failure state
-        let screenshotBuffer: Buffer | undefined;
-        try {
-          screenshotBuffer = await page.screenshot({ type: 'png' });
-          onScreenshot?.(step.step_number, screenshotBuffer);
-        } catch {
-          // Screenshot capture itself might fail
-        }
-
-        const result: StepResult = {
-          step_number: step.step_number,
-          action: step.instruction,
-          selector: step.selector,
-          value: step.value,
-          status: 'failed' as TestStepStatus,
-          error_message: errorMsg,
-          duration_ms: Date.now() - stepStart,
-          screenshot_buffer: screenshotBuffer,
-        };
-        results.push(result);
-        onStepComplete?.(result);
-        overallError = `Step ${step.step_number} failed: ${errorMsg}`;
+        if (signal?.aborted) return finish('error', 'Run cancelled');
+        error = readableError(err);
       }
+
+      const screenshot = await page.screenshot({ type: 'png' }).catch(() => undefined);
+      if (screenshot) await onScreenshot?.(step.step_number, screenshot);
+
+      const result = toResult(step, error ? TestStepStatus.FAILED : TestStepStatus.PASSED, {
+        error_message: error,
+        duration_ms: Date.now() - stepStart,
+        screenshot_buffer: screenshot,
+      });
+      results.push(result);
+      await onStepComplete?.(result);
+      if (error) failure = `Step ${step.step_number} failed: ${error}`;
     }
+
+    if (failure) return finish('failed', failure);
+    // ponytail: belt and braces — never report passed unless every step ran and passed.
+    const allPassed = results.length === steps.length && results.every((r) => r.status === TestStepStatus.PASSED);
+    return allPassed ? finish('passed') : finish('error', 'Not every step was executed');
   } catch (err) {
-    overallError = err instanceof Error ? err.message : String(err);
+    // Callback (persistence) failures and unexpected browser errors end the run as an error, never a pass.
+    return finish('error', signal?.aborted ? 'Run cancelled' : readableError(err));
   } finally {
-    if (browser) {
-      await browser.close().catch(() => {/* ignore close errors */});
-    }
+    signal?.removeEventListener('abort', onAbort);
+    await context?.close().catch(() => {});
+    await browser?.close().catch(() => {});
   }
-
-  const passed = results.every(r => r.status === 'passed');
-
-  return {
-    steps: results,
-    total_duration_ms: Date.now() - overallStart,
-    passed,
-    error_message: overallError,
-  };
 }
 
 export type { TestCaseStep } from '@qaforge/shared-types';

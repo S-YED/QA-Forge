@@ -13,7 +13,21 @@
       "dependsOn": ["^lint"]
     },
     "type-check": {
-      "dependsOn": ["^type-check"]
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "passThroughEnv": [
+        "NODE_ENV",
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "ENCRYPTION_KEY",
+        "REDIS_URL",
+        "ALLOW_PRIVATE_HOSTS",
+        "AI_LOCAL_DEMO",
+        "AI_TIMEOUT_MS"
+      ]
     }
   }
 }

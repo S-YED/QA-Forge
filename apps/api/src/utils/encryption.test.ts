@@ -1,28 +1,34 @@
-import { encrypt, decrypt } from './encryption.js';
+import { describe, it, expect } from 'vitest';
+import { encrypt, decrypt, EncryptionError } from './encryption.js';
 
-const original = 'sk-test-secretkey1234567890abcdef';
-const ciphertext = encrypt(original);
-const decrypted = decrypt(ciphertext);
+// AES-256-GCM key encryption used to protect per-user AI provider API keys at rest.
+// Uses the ENCRYPTION_KEY loaded from apps/api/.env via dotenv (see config/env.ts).
 
-console.assert(decrypted === original, 'Round-trip failed');
-console.assert(ciphertext !== original, 'Encrypt returned plaintext');
-console.assert(ciphertext.split(':').length === 3, 'Format not iv:tag:ciphertext');
-console.log('✅ Encryption round-trip passed');
-console.log('  Format:', ciphertext.substring(0, 40) + '...');
+describe('encryption (AES-256-GCM)', () => {
+  const original = 'sk-test-secretkey1234567890abcdef';
 
-const ct1 = encrypt(original);
-const ct2 = encrypt(original);
-console.assert(ct1 !== ct2, 'Same plaintext produced identical ciphertext — IV is not random');
-console.log('✅ IV randomness confirmed');
+  it('round-trips plaintext through encrypt → decrypt', () => {
+    const ciphertext = encrypt(original);
+    expect(decrypt(ciphertext)).toBe(original);
+  });
 
-const ct = encrypt(original);
-const parts = ct.split(':');
-parts[2] = parts[2].slice(0, -2) + 'ff'; // corrupt last byte of ciphertext
-const tampered = parts.join(':');
-try {
-  decrypt(tampered);
-  console.error('❌ Tampered ciphertext decrypted without error — auth tag not verified');
-  process.exit(1);
-} catch (e) {
-  console.log('✅ Tampered ciphertext correctly threw:', (e as Error).message);
-}
+  it('never returns plaintext and uses the iv:tag:ciphertext format', () => {
+    const ciphertext = encrypt(original);
+    expect(ciphertext).not.toBe(original);
+    expect(ciphertext.split(':')).toHaveLength(3);
+  });
+
+  it('uses a random IV — the same plaintext encrypts to different ciphertext', () => {
+    expect(encrypt(original)).not.toBe(encrypt(original));
+  });
+
+  it('rejects tampered ciphertext (GCM auth tag is verified)', () => {
+    const parts = encrypt(original).split(':');
+    parts[2] = parts[2].slice(0, -2) + 'ff'; // corrupt the last ciphertext byte
+    expect(() => decrypt(parts.join(':'))).toThrow(EncryptionError);
+  });
+
+  it('rejects malformed input rather than leaking a raw crypto error', () => {
+    expect(() => decrypt('not-a-valid-encrypted-value')).toThrow(EncryptionError);
+  });
+});

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from 'express';
 import { z } from 'zod';
-import { validate } from '../middleware/validation.js';
+import { httpUrl, validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
 
@@ -8,7 +8,7 @@ import { supabase } from '../config/supabase.js';
 
 const router: IRouter = Router();
 
-const uuidParamsSchema = z.object({ id: z.string().uuid() });
+const uuidParamsSchema = z.object({ id: z.guid() });
 
 // ── GET / ──────────────────────────────────────────────────────────────────────
 
@@ -33,7 +33,7 @@ router.get('/', async (req, res, next) => {
 const createProjectSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(1000).optional(),
-  base_url: z.string().url().optional(),
+  base_url: httpUrl().optional(),
 });
 
 router.post('/', validate(createProjectSchema), async (req, res, next) => {
@@ -104,7 +104,7 @@ router.get(
 const updateProjectSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(1000).optional().nullable(),
-  base_url: z.string().url().optional().nullable(),
+  base_url: httpUrl().optional().nullable(),
 });
 
 router.put(

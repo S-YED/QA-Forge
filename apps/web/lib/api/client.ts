@@ -19,19 +19,43 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   return headers;
 }
 
+/**
+ * Flatten the API's validation details (a Zod `format()` tree) into readable lines,
+ * e.g. { steps: { 2: { value: { _errors: ['Required'] } } } } → "Step 3 value: Required".
+ */
+function fieldErrors(details: unknown, path: string[] = []): string[] {
+  if (!details || typeof details !== 'object') return [];
+  const node = details as Record<string, unknown>;
+  const own = Array.isArray(node._errors) && node._errors.length && path.length
+    ? [`${path.join(' ').replace(/^steps (\d+)/, (_, n) => `Step ${Number(n) + 1}`)}: ${node._errors[0]}`]
+    : [];
+  return own.concat(
+    ...Object.entries(node)
+      .filter(([k]) => k !== '_errors')
+      .map(([k, v]) => fieldErrors(v, [...path, k])),
+  );
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
   if (response.status === 401) {
     const supabase = createClient();
     await supabase.auth.signOut();
     window.location.href = '/login';
-    throw new Error('Unauthorized — session expired');
+    throw new Error('Unauthorized - session expired');
   }
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({
-      message: response.statusText,
-    }));
-    throw new Error(errorBody.message ?? `Request failed: ${response.status}`);
+    const errorBody = await response.json().catch(() => null);
+    // The API wraps errors as { error: { code, message, details } } (see
+    // apps/api error-handler + 404 handler). Prefer that nested message, then
+    // a top-level message, then a generic fallback.
+    const message =
+      errorBody?.error?.message ??
+      errorBody?.message ??
+      response.statusText ??
+      `Request failed: ${response.status}`;
+    const fields = fieldErrors(errorBody?.error?.details);
+    throw new Error(fields.length ? `${message}: ${fields.slice(0, 3).join('; ')}` : message);
   }
 
   // Handle 204 No Content

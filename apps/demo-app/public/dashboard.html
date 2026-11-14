@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard · Acme Shop</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js"></script>
+  <script>if (!session.user) location.replace('/login?next=/dashboard');</script>
+</head>
+<body>
+  <header><strong><a href="/" data-testid="brand">Acme Shop</a></strong><nav></nav></header>
+  <main>
+    <h1 data-testid="dashboard-welcome"></h1>
+    <div class="stats">
+      <div class="card"><b data-testid="stat-orders">2</b>Open orders</div>
+      <div class="card"><b data-testid="stat-saved">3</b>Saved items</div>
+      <div class="card"><b data-testid="stat-points">120</b>Reward points</div>
+    </div>
+  </main>
+  <script>$('dashboard-welcome').textContent = `Welcome back, ${session.user}`;</script>
+</body>
+</html>

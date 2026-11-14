@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Register · Acme Shop</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js"></script>
+</head>
+<body>
+  <header><strong><a href="/" data-testid="brand">Acme Shop</a></strong><nav></nav></header>
+  <main>
+    <h1>Create an account</h1>
+    <form data-testid="register-form" novalidate>
+      <label>Full name <input name="name" data-testid="register-name" autocomplete="name"></label>
+      <p class="error" data-testid="register-error-name"></p>
+      <label>Email <input type="email" name="email" data-testid="register-email" autocomplete="email"></label>
+      <p class="error" data-testid="register-error-email"></p>
+      <label>Password <input type="password" name="password" data-testid="register-password" autocomplete="new-password"></label>
+      <p class="error" data-testid="register-error-password"></p>
+      <label>Confirm password <input type="password" name="confirm" data-testid="register-confirm" autocomplete="new-password"></label>
+      <p class="error" data-testid="register-error-confirm"></p>
+      <button type="submit" data-testid="register-submit">Create account</button>
+    </form>
+    <p class="card success" data-testid="register-success" hidden></p>
+  </main>
+  <script>
+    $('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = $('register-name').value.trim();
+      const email = $('register-email').value.trim().toLowerCase();
+      const password = $('register-password').value;
+      const confirm = $('register-confirm').value;
+      const errors = {
+        name: name ? '' : 'Full name is required',
+        email: !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+          ? 'Enter a valid email address'
+          : email === DEMO_USER.email ? 'This email is already registered' : '',
+        password: password.length >= 8 && /\d/.test(password) ? '' : 'Password must be at least 8 characters and include a number',
+        confirm: confirm === password ? '' : 'Passwords do not match',
+      };
+      for (const [field, message] of Object.entries(errors)) $(`register-error-${field}`).textContent = message;
+      if (Object.values(errors).some(Boolean)) return;
+      $('register-submit').disabled = true;
+      await wait(300); // simulated network call
+      $('register-form').hidden = true;
+      $('register-success').hidden = false;
+      $('register-success').textContent = `Account created for ${email}`;
+    });
+  </script>
+</body>
+</html>

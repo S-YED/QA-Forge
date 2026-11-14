@@ -1,8 +1,22 @@
 'use client';
 
 import { useState } from 'react';
+import { TriangleAlert } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
-import type { CreateProjectRequest, } from '@qaforge/shared-types';
+import type { CreateProjectRequest } from '@qaforge/shared-types';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/shared/spinner';
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -10,18 +24,12 @@ interface CreateProjectModalProps {
   onCreated: () => void;
 }
 
-export function CreateProjectModal({
-  open,
-  onClose,
-  onCreated,
-}: CreateProjectModalProps) {
+export function CreateProjectModal({ open, onClose, onCreated }: CreateProjectModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (!open) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,115 +56,79 @@ export function CreateProjectModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div className="relative z-10 w-full max-w-md rounded-lg border bg-card p-6 shadow-lg">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Create New Project</h2>
-          <button
-            onClick={onClose}
-            className="rounded-sm p-1 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M18 6 6 18" />
-              <path d="m6 6 12 12" />
-            </svg>
-          </button>
-        </div>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create project</DialogTitle>
+          <DialogDescription>
+            Set up a new app to generate and run tests against.
+          </DialogDescription>
+        </DialogHeader>
 
         {error && (
-          <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/8 px-3 py-2.5 text-sm text-destructive"
+          >
+            <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+            <span>{error}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <label
-              htmlFor="project-name"
-              className="text-sm font-medium leading-none"
-            >
+          <div className="space-y-1.5">
+            <Label htmlFor="project-name">
               Name <span className="text-destructive">*</span>
-            </label>
-            <input
+            </Label>
+            <Input
               id="project-name"
-              type="text"
               required
+              autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="My Project"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              placeholder="My project"
             />
           </div>
 
-          <div className="space-y-2">
-            <label
-              htmlFor="project-description"
-              className="text-sm font-medium leading-none"
-            >
-              Description
-            </label>
-            <textarea
+          <div className="space-y-1.5">
+            <Label htmlFor="project-description">Description</Label>
+            <Textarea
               id="project-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="A brief description of your project"
               rows={3}
-              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+              className="resize-none"
             />
           </div>
 
-          <div className="space-y-2">
-            <label
-              htmlFor="project-url"
-              className="text-sm font-medium leading-none"
-            >
-              Base URL
-            </label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="project-url">Base URL</Label>
+            <Input
               id="project-url"
               type="url"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
               placeholder="https://example.com"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent"
-            >
+          <DialogFooter className="pt-2">
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || !name.trim()}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none"
-            >
-              {loading ? 'Creating...' : 'Create Project'}
-            </button>
-          </div>
+            </Button>
+            <Button type="submit" disabled={loading || !name.trim()}>
+              {loading && <Spinner className="text-primary-foreground" />}
+              {loading ? 'Creating…' : 'Create project'}
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

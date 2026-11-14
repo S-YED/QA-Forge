@@ -3,19 +3,20 @@ import { z } from 'zod';
 import { validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
+import { signBugScreenshots } from '../utils/artifacts.js';
 
 // All routes nested under /projects/:projectId/bugs
 // Pre-protected by `authenticate` applied in app.ts.
 
 const router: IRouter = Router({ mergeParams: true });
 
-const uuidParamsSchema = z.object({ id: z.string().uuid() });
+const uuidParamsSchema = z.object({ id: z.guid() });
 
 // ── GET /projects/:projectId/bugs ─────────────────────────────────────────────
 
 router.get('/', async (req, res, next) => {
   try {
-    const projectId = req.params.projectId;
+    const { projectId } = req.params as any;
 
     // Verify project ownership
     const { data: project } = await supabase
@@ -56,7 +57,7 @@ router.get('/', async (req, res, next) => {
     if (error) return next(error);
 
     res.status(200).json({
-      bugs: bugs ?? [],
+      bugs: await signBugScreenshots(bugs ?? []),
       count: count ?? 0,
       page,
       per_page: perPage,
@@ -73,11 +74,12 @@ router.get(
   validate(uuidParamsSchema, 'params'),
   async (req, res, next) => {
     try {
+      const { projectId } = req.params as any;
       // Verify project ownership
       const { data: project } = await supabase
         .from('projects')
         .select('id')
-        .eq('id', req.params.projectId)
+        .eq('id', projectId)
         .eq('user_id', req.user.id)
         .single();
 
@@ -89,14 +91,15 @@ router.get(
         .from('bugs')
         .select('*')
         .eq('id', req.params.id)
-        .eq('project_id', req.params.projectId)
+        .eq('project_id', projectId)
         .single();
 
       if (error || !bug) {
         return next(new AppError('NOT_FOUND', 404, 'Bug not found'));
       }
 
-      res.status(200).json({ bug });
+      const [signedBug] = await signBugScreenshots([bug]);
+      res.status(200).json({ bug: signedBug });
     } catch (err) {
       next(err);
     }
@@ -106,7 +109,7 @@ router.get(
 // ── POST /projects/:projectId/bugs ────────────────────────────────────────────
 
 const createBugSchema = z.object({
-  test_run_id: z.string().uuid().optional(),
+  test_run_id: z.guid().optional(),
   title: z.string().min(1).max(500),
   description: z.string().max(5000).optional(),
   steps_to_reproduce: z.string().max(5000).optional(),
@@ -120,7 +123,7 @@ const createBugSchema = z.object({
 
 router.post('/', validate(createBugSchema), async (req, res, next) => {
   try {
-    const projectId = req.params.projectId;
+    const { projectId } = req.params as any;
 
     // Verify project ownership
     const { data: project } = await supabase
@@ -174,7 +177,7 @@ const updateBugSchema = z.object({
   description: z.string().max(5000).optional().nullable(),
   severity: z.enum(['critical', 'high', 'medium', 'low']).optional(),
   status: z.enum(['open', 'in_progress', 'resolved', 'closed', 'wont_fix']).optional(),
-  assigned_to: z.string().uuid().optional().nullable(),
+  assigned_to: z.guid().optional().nullable(),
 });
 
 router.put(
@@ -183,11 +186,12 @@ router.put(
   validate(updateBugSchema),
   async (req, res, next) => {
     try {
+      const { projectId } = req.params as any;
       // Verify project ownership
       const { data: project } = await supabase
         .from('projects')
         .select('id')
-        .eq('id', req.params.projectId)
+        .eq('id', projectId)
         .eq('user_id', req.user.id)
         .single();
 
@@ -202,7 +206,7 @@ router.put(
           updated_at: new Date().toISOString(),
         })
         .eq('id', req.params.id)
-        .eq('project_id', req.params.projectId)
+        .eq('project_id', projectId)
         .select()
         .single();
 
@@ -210,7 +214,8 @@ router.put(
         return next(new AppError('NOT_FOUND', 404, 'Bug not found'));
       }
 
-      res.status(200).json({ bug });
+      const [signedBug] = await signBugScreenshots([bug]);
+      res.status(200).json({ bug: signedBug });
     } catch (err) {
       next(err);
     }

@@ -39,6 +39,7 @@ export enum ApiKeyProvider {
   OPENAI = 'openai',
   ANTHROPIC = 'anthropic',
   GEMINI = 'gemini',
+  OPENROUTER = 'openrouter',
 }
 
 export enum UserRole {

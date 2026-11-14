@@ -33,7 +33,7 @@ CREATE INDEX IF NOT EXISTS idx_test_cases_priority
 
 ALTER TABLE public.test_cases ENABLE ROW LEVEL SECURITY;
 
--- Two-level join: test_cases → test_suites → projects → user_id
+-- Two-level join: test_cases → test_suites → projects → user_id (or admin check)
 CREATE POLICY "test_cases_select_policy"
     ON public.test_cases
     FOR SELECT
@@ -41,7 +41,7 @@ CREATE POLICY "test_cases_select_policy"
         suite_id IN (
             SELECT id FROM public.test_suites
             WHERE project_id IN (
-                SELECT id FROM public.projects WHERE user_id = auth.uid()
+                SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
             )
         )
     );
@@ -53,7 +53,7 @@ CREATE POLICY "test_cases_insert_policy"
         suite_id IN (
             SELECT id FROM public.test_suites
             WHERE project_id IN (
-                SELECT id FROM public.projects WHERE user_id = auth.uid()
+                SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
             )
         )
     );
@@ -65,7 +65,7 @@ CREATE POLICY "test_cases_update_policy"
         suite_id IN (
             SELECT id FROM public.test_suites
             WHERE project_id IN (
-                SELECT id FROM public.projects WHERE user_id = auth.uid()
+                SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
             )
         )
     )
@@ -73,7 +73,7 @@ CREATE POLICY "test_cases_update_policy"
         suite_id IN (
             SELECT id FROM public.test_suites
             WHERE project_id IN (
-                SELECT id FROM public.projects WHERE user_id = auth.uid()
+                SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
             )
         )
     );
@@ -85,7 +85,7 @@ CREATE POLICY "test_cases_delete_policy"
         suite_id IN (
             SELECT id FROM public.test_suites
             WHERE project_id IN (
-                SELECT id FROM public.projects WHERE user_id = auth.uid()
+                SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
             )
         )
     );

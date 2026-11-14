@@ -40,17 +40,20 @@ CREATE INDEX IF NOT EXISTS idx_bugs_severity
 CREATE INDEX IF NOT EXISTS idx_bugs_test_run_id
     ON public.bugs(test_run_id);
 
+CREATE INDEX IF NOT EXISTS idx_bugs_assigned_to
+    ON public.bugs(assigned_to);
+
 -- ─── Row Level Security ────────────────────────────────────────────────────────
 
 ALTER TABLE public.bugs ENABLE ROW LEVEL SECURITY;
 
--- Project-child pattern: bugs → projects → user_id
+-- Project-child pattern: bugs → projects → user_id (or admin check)
 CREATE POLICY "bugs_select_policy"
     ON public.bugs
     FOR SELECT
     USING (
         project_id IN (
-            SELECT id FROM public.projects WHERE user_id = auth.uid()
+            SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
         )
     );
 
@@ -59,7 +62,7 @@ CREATE POLICY "bugs_insert_policy"
     FOR INSERT
     WITH CHECK (
         project_id IN (
-            SELECT id FROM public.projects WHERE user_id = auth.uid()
+            SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
         )
     );
 
@@ -68,12 +71,12 @@ CREATE POLICY "bugs_update_policy"
     FOR UPDATE
     USING (
         project_id IN (
-            SELECT id FROM public.projects WHERE user_id = auth.uid()
+            SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
         )
     )
     WITH CHECK (
         project_id IN (
-            SELECT id FROM public.projects WHERE user_id = auth.uid()
+            SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
         )
     );
 
@@ -82,6 +85,6 @@ CREATE POLICY "bugs_delete_policy"
     FOR DELETE
     USING (
         project_id IN (
-            SELECT id FROM public.projects WHERE user_id = auth.uid()
+            SELECT id FROM public.projects WHERE user_id = auth.uid() OR public.is_admin()
         )
     );

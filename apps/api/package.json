@@ -8,26 +8,36 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint src",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
-    "@qaforge/shared-types": "workspace:*",
     "@qaforge/ai-engine": "workspace:*",
     "@qaforge/playwright-runner": "workspace:*",
+    "@qaforge/shared-types": "workspace:*",
+    "@socket.io/redis-adapter": "^8.3.0",
     "@supabase/supabase-js": "^2.47.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.0",
-    "express": "^4.21.0",
+    "express": "^4.22.3",
     "express-rate-limit": "^7.5.0",
-    "socket.io": "^4.8.0",
+    "helmet": "^8.2.0",
+    "ioredis": "^5.4.2",
+    "playwright": "^1.49.0",
+    "rate-limit-redis": "^4.2.0",
+    "socket.io": "^4.8.4",
     "winston": "^3.17.0",
-    "zod": "^3.23.0"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/cors": "^2.8.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
+    "socket.io-client": "^4.8.4",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.8"
   }
 }

@@ -1,9 +1,12 @@
 import { Server } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
 import http from 'node:http';
 import { supabase } from '../config/supabase.js';
 import { env } from '../config/env.js';
 import logger from '../utils/logger.js';
+import { getRedisPubSub } from '../config/redis.js';
 import { registerTestHandlers } from './handlers/test.handler.js';
+import { registerRecordingHandlers } from './handlers/recording.handler.js';
 
 /**
  * Attach a Socket.io server to an existing HTTP server.
@@ -21,6 +24,17 @@ export function createSocketServer(httpServer: http.Server): Server {
     },
     transports: ['websocket', 'polling'],
   });
+
+  // ── Multi-instance fan-out ──────────────────────────────────────────────────
+  // With >1 API instance, a client may be connected to instance A while the
+  // run that emits its events executes on instance B. The Redis adapter
+  // broadcasts room emits across instances so `io.to(room).emit(...)` reaches
+  // the client regardless of which instance it landed on. No-op without Redis.
+  const pubsub = getRedisPubSub();
+  if (pubsub) {
+    io.adapter(createAdapter(pubsub.pubClient, pubsub.subClient));
+    logger.info({ event: 'socket:redis_adapter_enabled' });
+  }
 
   // ── Auth middleware ─────────────────────────────────────────────────────────
 
@@ -61,11 +75,8 @@ export function createSocketServer(httpServer: http.Server): Server {
     // ── MVP-2: test execution handlers ────────────────────────────────────
     registerTestHandlers(io, socket);
 
-    // ── MVP-3 stub: browser recording ─────────────────────────────────────
-    socket.on('recording:start', (payload) => {
-      logger.debug({ event: 'recording:start', payload });
-      // TODO: MVP-3 — dispatch to recording session handler
-    });
+    // ── MVP-3: browser recording handlers ─────────────────────────────────
+    registerRecordingHandlers(io, socket);
 
     // ── Disconnect ────────────────────────────────────────────────────────
     // Socket.io automatically removes the socket from all rooms on disconnect,

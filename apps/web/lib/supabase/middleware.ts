@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server';
  * Creates a Supabase client for use in Next.js middleware.
  *
  * Returns an object whose `response` property is accessed via a getter so
- * callers always receive the **final** response — including any `Set-Cookie`
+ * callers always receive the **final** response - including any `Set-Cookie`
  * headers written during a token refresh inside `setAll`.
  */
 export function createMiddlewareClient(request: NextRequest) {
@@ -15,7 +15,7 @@ export function createMiddlewareClient(request: NextRequest) {
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
       cookies: {
         getAll() {

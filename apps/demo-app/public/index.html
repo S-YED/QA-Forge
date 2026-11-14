@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acme Shop</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js"></script>
+</head>
+<body>
+  <header><strong><a href="/" data-testid="brand">Acme Shop</a></strong><nav></nav></header>
+  <main>
+    <h1 data-testid="home-title">Acme Shop</h1>
+    <p>A small demo shop that QA Forge tests run against. Nothing here is real, and nothing leaves this browser.</p>
+    <div class="card">
+      <p>Demo account: <code>demo@qaforge.dev</code> with password <code>Demo1234!</code></p>
+      <div class="row">
+        <a href="/login" data-testid="home-login">Log in</a>
+        <a href="/register" data-testid="home-register">Create an account</a>
+        <a href="/items" data-testid="home-items">Shopping list</a>
+        <a href="/checkout" data-testid="home-checkout">Checkout</a>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

@@ -8,14 +8,14 @@ import { supabase } from '../config/supabase.js';
 
 const router: IRouter = Router({ mergeParams: true });
 
-const uuidParamsSchema = z.object({ id: z.string().uuid() });
+const uuidParamsSchema = z.object({ id: z.guid() });
 
 // ── GET /projects/:projectId/test-suites ───────────────────────────────────────
 // Returns all suites for a project in flat array. Client can rebuild tree from parent_suite_id.
 
 router.get('/', async (req, res, next) => {
   try {
-    const projectId = req.params.projectId;
+    const { projectId } = req.params as any;
 
     // Verify project ownership
     const { data: project, error: pError } = await supabase
@@ -103,7 +103,7 @@ router.get(
 const createSuiteSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(1000).optional(),
-  parent_suite_id: z.string().uuid().optional().nullable(),
+  parent_suite_id: z.guid().optional().nullable(),
 });
 
 router.post('/', validate(createSuiteSchema), async (req, res, next) => {
@@ -171,7 +171,7 @@ router.post('/', validate(createSuiteSchema), async (req, res, next) => {
 const updateSuiteSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(1000).optional().nullable(),
-  parent_suite_id: z.string().uuid().optional().nullable(),
+  parent_suite_id: z.guid().optional().nullable(),
 });
 
 router.put(

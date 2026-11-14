@@ -1,8 +1,12 @@
 import type { Request, Response, NextFunction } from 'express';
-import type { ZodSchema } from 'zod';
+import { z, type ZodSchema } from 'zod';
 import { AppError } from './error-handler.js';
 
 type ValidationTarget = 'body' | 'query' | 'params';
+
+/** A URL the browser may open: http(s) only (address checks happen at run time, SEC-3). */
+export const httpUrl = () =>
+  z.string().url().refine((u) => /^https?:\/\//i.test(u), 'Must be an http:// or https:// URL');
 
 /**
  * Zod validation middleware factory.
@@ -30,9 +34,13 @@ export function validate(schema: ZodSchema, target: ValidationTarget = 'body') {
       return;
     }
 
-    // Replace raw input with the parsed, typed, coerced value
+    // Replace raw input with the parsed, typed, coerced value, merging for params/query to preserve nested route parameters.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (req as any)[target] = result.data;
+    if (target === 'params' || target === 'query') {
+      (req as any)[target] = { ...((req as any)[target] ?? {}), ...(result.data as Record<string, unknown>) };
+    } else {
+      (req as any)[target] = result.data;
+    }
     next();
   };
 }

@@ -3,21 +3,15 @@ import { z } from 'zod';
 import { validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
+import { TestCaseStepsSchema } from '@qaforge/shared-types';
 
 // All routes nested under /projects/:projectId/test-suites/:suiteId/test-cases
 // Pre-protected by `authenticate` applied in app.ts.
 
 const router: IRouter = Router({ mergeParams: true });
 
-const uuidParamsSchema = z.object({ id: z.string().uuid() });
+const uuidParamsSchema = z.object({ id: z.guid() });
 
-const stepSchema = z.object({
-  step_number: z.number().int().min(1),
-  instruction: z.string().min(1),
-  selector: z.string().optional(),
-  value: z.string().optional(),
-  expected: z.string().optional(),
-});
 
 // ── Ownership helper ─────────────────────────────────────────────────────────
 
@@ -45,7 +39,7 @@ async function verifyOwnership(projectId: string, suiteId: string, userId: strin
 
 router.get('/', async (req, res, next) => {
   try {
-    const { projectId, suiteId } = req.params;
+    const { projectId, suiteId } = req.params as any;
 
     if (!(await verifyOwnership(projectId, suiteId, req.user.id))) {
       return next(new AppError('NOT_FOUND', 404, 'Suite not found'));
@@ -72,7 +66,7 @@ router.get(
   validate(uuidParamsSchema, 'params'),
   async (req, res, next) => {
     try {
-      const { projectId, suiteId } = req.params;
+      const { projectId, suiteId } = req.params as any;
 
       if (!(await verifyOwnership(projectId, suiteId, req.user.id))) {
         return next(new AppError('NOT_FOUND', 404, 'Suite not found'));
@@ -101,7 +95,7 @@ router.get(
 const createTestCaseSchema = z.object({
   title: z.string().min(1).max(500),
   description: z.string().max(2000).optional(),
-  steps: z.array(stepSchema).min(1),
+  steps: TestCaseStepsSchema,
   expected_result: z.string().max(1000).optional(),
   priority: z.enum(['critical', 'high', 'medium', 'low']).optional().default('medium'),
   type: z.enum(['functional', 'regression', 'smoke', 'edge_case', 'accessibility', 'negative']).optional().default('functional'),
@@ -110,7 +104,7 @@ const createTestCaseSchema = z.object({
 
 router.post('/', validate(createTestCaseSchema), async (req, res, next) => {
   try {
-    const { projectId, suiteId } = req.params;
+    const { projectId, suiteId } = req.params as any;
 
     if (!(await verifyOwnership(projectId, suiteId, req.user.id))) {
       return next(new AppError('NOT_FOUND', 404, 'Suite not found'));
@@ -152,7 +146,7 @@ router.post('/', validate(createTestCaseSchema), async (req, res, next) => {
 const updateTestCaseSchema = z.object({
   title: z.string().min(1).max(500).optional(),
   description: z.string().max(2000).optional().nullable(),
-  steps: z.array(stepSchema).min(1).optional(),
+  steps: TestCaseStepsSchema.optional(),
   expected_result: z.string().max(1000).optional().nullable(),
   priority: z.enum(['critical', 'high', 'medium', 'low']).optional(),
   type: z.enum(['functional', 'regression', 'smoke', 'edge_case', 'accessibility', 'negative']).optional(),
@@ -165,7 +159,7 @@ router.put(
   validate(updateTestCaseSchema),
   async (req, res, next) => {
     try {
-      const { projectId, suiteId } = req.params;
+      const { projectId, suiteId } = req.params as any;
 
       if (!(await verifyOwnership(projectId, suiteId, req.user.id))) {
         return next(new AppError('NOT_FOUND', 404, 'Suite not found'));
@@ -200,7 +194,7 @@ router.delete(
   validate(uuidParamsSchema, 'params'),
   async (req, res, next) => {
     try {
-      const { projectId, suiteId } = req.params;
+      const { projectId, suiteId } = req.params as any;
 
       if (!(await verifyOwnership(projectId, suiteId, req.user.id))) {
         return next(new AppError('NOT_FOUND', 404, 'Suite not found'));

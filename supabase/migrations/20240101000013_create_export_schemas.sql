@@ -16,28 +16,36 @@ CREATE TABLE IF NOT EXISTS public.export_schemas (
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ─── Indexes ──────────────────────────────────────────────────────────────────
+
+CREATE INDEX IF NOT EXISTS idx_export_schemas_user_id
+    ON public.export_schemas(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_export_schemas_project_id
+    ON public.export_schemas(project_id);
+
 -- ─── Row Level Security ────────────────────────────────────────────────────────
 
 ALTER TABLE public.export_schemas ENABLE ROW LEVEL SECURITY;
 
--- Direct ownership via user_id
+-- Direct ownership via user_id (or admin check)
 CREATE POLICY "export_schemas_select_policy"
     ON public.export_schemas
     FOR SELECT
-    USING (user_id = auth.uid());
+    USING (user_id = auth.uid() OR public.is_admin());
 
 CREATE POLICY "export_schemas_insert_policy"
     ON public.export_schemas
     FOR INSERT
-    WITH CHECK (user_id = auth.uid());
+    WITH CHECK (user_id = auth.uid() OR public.is_admin());
 
 CREATE POLICY "export_schemas_update_policy"
     ON public.export_schemas
     FOR UPDATE
-    USING (user_id = auth.uid())
-    WITH CHECK (user_id = auth.uid());
+    USING (user_id = auth.uid() OR public.is_admin())
+    WITH CHECK (user_id = auth.uid() OR public.is_admin());
 
 CREATE POLICY "export_schemas_delete_policy"
     ON public.export_schemas
     FOR DELETE
-    USING (user_id = auth.uid());
+    USING (user_id = auth.uid() OR public.is_admin());

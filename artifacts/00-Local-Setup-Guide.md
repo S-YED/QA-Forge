@@ -1,178 +1,110 @@
-# QAForge — Local Setup Guide
+# QA Forge: Local Setup Guide
 
-A complete step-by-step guide for running QAForge on your local machine.
-
----
+The short version is in the [README](../README.md): `pnpm bootstrap`, then `pnpm dev`. This guide explains what
+bootstrap does, how to do each step by hand, and how to fix the usual problems.
 
 ## Prerequisites
 
-Install the following tools before proceeding:
+| Tool | Version | Check |
+|---|---|---|
+| Node.js | 20 or newer | `node --version` |
+| pnpm | 9.15.4 (pinned in `package.json`; `corepack enable` provides it) | `pnpm --version` |
+| Docker Desktop or Docker Engine | running | `docker info` |
 
-| Tool | Version | Install Command | Verify |
-|---|---|---|---|
-| Docker Desktop | Latest | [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop) | `docker --version` |
-| Node.js | ≥ 18 | [nodejs.org](https://nodejs.org) | `node --version` |
-| pnpm | ≥ 8 | `npm install -g pnpm` | `pnpm --version` |
-| Supabase CLI | Latest | `npm install -g supabase` | `supabase --version` |
+The Supabase CLI and Playwright are dev dependencies of the repo, so `pnpm install` brings them. No global installs.
 
-> **Docker Desktop must be running** before you start Supabase. All Supabase local services run inside Docker containers.
+## What `pnpm bootstrap` does
 
----
+Each step is safe to repeat. Run it again any time; it never overwrites a value you set and never resets the database.
 
-## Step 1 — Start Supabase Locally
+1. Checks Node, pnpm and that the Docker engine answers.
+2. `pnpm install`.
+3. Builds the shared packages (`packages/*`); the apps import their built output.
+4. `pnpm exec supabase start`. The first start downloads the images, applies all migrations and loads `supabase/seed.sql`.
+5. `pnpm exec supabase migration up`, which applies migrations added since your last start without touching your data.
+6. Writes only the missing values in `apps/api/.env` and `apps/web/.env.local`, creating them from the
+   `.env.example` next to each when absent:
+   - API: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` from `supabase status`, and a new
+     random `ENCRYPTION_KEY` only when the current one is empty.
+   - Web: `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+7. Installs Playwright's Chromium.
+8. Runs the same checks as `pnpm check-setup`.
 
-```bash
-supabase start
-supabase db reset
-supabase status
-```
-
-**What each command does:**
-
-- `supabase start` — Pulls and starts all Supabase Docker containers (PostgreSQL on port 54322, API on port 54321, Studio on port 54323, Inbucket email on port 54324).
-- `supabase db reset` — Drops and recreates the local database, applies all 17 migration files in `supabase/migrations/` in order, then runs `supabase/seed.sql` to populate demo data. Run this any time you want a clean slate.
-- `supabase status` — Prints the connection details you need for your `.env` files:
-
-```
-API URL: http://127.0.0.1:54321
-anon key: eyJ...
-service_role key: eyJ...
-DB URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
-Studio URL: http://127.0.0.1:54323
-```
-
-Copy these values — you will paste them into the next two steps.
-
----
-
-## Step 2 — Create `apps/api/.env`
-
-This file does **not** exist yet. You must create it manually.
-
-Create the file at `apps/api/.env` with the following content:
-
-```
-PORT=4000
-NODE_ENV=development
-CORS_ORIGIN=http://localhost:3000
-SUPABASE_URL=<paste API URL from supabase status>
-SUPABASE_SERVICE_ROLE_KEY=<paste service_role key from supabase status>
-DATABASE_URL=<paste DB URL from supabase status>
-ENCRYPTION_KEY=<generate with command below>
-JWT_SECRET=<any random string of 32+ characters>
-REDIS_URL=
-```
-
-**Variable explanations:**
-
-| Variable | Description |
-|---|---|
-| `PORT` | The port the Express server listens on. Default: `4000`. |
-| `NODE_ENV` | Sets development mode — enables pretty Winston logs and non-redacted error messages. |
-| `CORS_ORIGIN` | Allows the Next.js frontend at `http://localhost:3000` to call the API. Supports comma-separated values for multiple origins. |
-| `SUPABASE_URL` | The local Supabase API endpoint. Paste the API URL from `supabase status` — typically `http://127.0.0.1:54321`. |
-| `SUPABASE_SERVICE_ROLE_KEY` | The service role key that bypasses Row-Level Security. **Backend-only — never expose this to the frontend or commit it to version control.** |
-| `DATABASE_URL` | Direct PostgreSQL connection string. Paste the DB URL from `supabase status` — typically `postgresql://postgres:postgres@127.0.0.1:54322/postgres`. |
-| `ENCRYPTION_KEY` | A 64-character hex string (32 bytes) used for AES-256-GCM encryption of stored API keys. Must be exactly 64 hex characters — Zod enforces `.length(64)` at startup. |
-| `JWT_SECRET` | Used for internal token validation. Any random string of 32 or more characters. |
-| `REDIS_URL` | Intentionally blank. BullMQ job queues are a post-MVP feature. The Redis client is a no-op stub in MVP. |
-
-**Generate your `ENCRYPTION_KEY`:**
+## Doing it by hand
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-This outputs a 64-character hex string. Paste it as the value of `ENCRYPTION_KEY`.
-
----
-
-## Step 3 — Fill `apps/web/.env.local`
-
-This file already exists at `apps/web/.env.local` but its values are empty. Fill in the three variables:
-
-```
-NEXT_PUBLIC_SUPABASE_URL=<paste API URL from supabase status>
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<paste anon key from supabase status>
-NEXT_PUBLIC_API_URL=http://localhost:4000
-```
-
-**Variable explanations:**
-
-| Variable | Description |
-|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | The Supabase endpoint used by the browser client (`createBrowserClient`). Paste the API URL from `supabase status`. |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | The public anon key. Safe to expose in the browser — Row-Level Security enforces data isolation at the database layer. |
-| `NEXT_PUBLIC_API_URL` | The base URL of the Express API. The typed `apiClient` in `lib/api/client.ts` prepends this to all requests. |
-
----
-
-## Step 4 — Install Dependencies
-
-From the workspace root:
-
-```bash
+corepack enable
 pnpm install
+pnpm turbo run build --filter=./packages/*
+pnpm db:start                     # supabase start
+pnpm exec supabase status         # prints the URL and keys you need below
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env.local
+pnpm --filter @qaforge/playwright-runner exec playwright install chromium
 ```
 
-pnpm resolves all workspace packages (`apps/web`, `apps/api`, `packages/shared-types`, `packages/ai-engine`, `packages/playwright-runner`, `packages/export-engine`, `packages/integrations`) in a single pass with strict hoisting control.
+Fill in the two env files:
 
----
+| File | Variable | Value |
+|---|---|---|
+| `apps/api/.env` | `SUPABASE_URL` | Project URL from `supabase status` (`http://127.0.0.1:54321`) |
+| | `SUPABASE_ANON_KEY` | Publishable (anon) key |
+| | `SUPABASE_SERVICE_ROLE_KEY` | Secret (service_role) key. Backend only, never in the web app or in git |
+| | `ENCRYPTION_KEY` | 64 hex characters: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Keep it: changing it makes stored AI keys unreadable |
+| `apps/web/.env.local` | `NEXT_PUBLIC_SUPABASE_URL` | Same Project URL |
+| | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Publishable (anon) key. Never the secret key: this file reaches the browser |
 
-## Step 5 — Run Both Apps
+The example files already hold working local defaults for everything else, including `ALLOW_PRIVATE_HOSTS=*` (so runs
+can reach the demo shop on 127.0.0.1) and `AI_LOCAL_DEMO=true` (example tests without an AI key). Both must be off in
+production. Every variable is described in [`docs/ENVIRONMENT.md`](../docs/ENVIRONMENT.md).
+
+Then check and start:
 
 ```bash
+pnpm check-setup
 pnpm dev
 ```
 
-Turborepo starts both apps concurrently:
-
-- `apps/api` — Express server with `tsx watch src/index.ts` (hot-reload on file changes) → **port 4000**
-- `apps/web` — Next.js App Router with `next dev` → **port 3000**
-
----
-
-## Access URLs
+## Ports and accounts
 
 | Service | URL |
 |---|---|
-| Frontend (Next.js) | http://localhost:3000 |
-| Backend API (Express) | http://localhost:4000 |
-| API Health Check | http://localhost:4000/api/health |
-| Supabase Studio | http://localhost:54323 |
+| Web app | http://localhost:3000 |
+| API | http://localhost:4000 (health: `/api/health`) |
+| Demo shop | http://127.0.0.1:4100 |
+| Supabase API | http://127.0.0.1:54321 |
+| Postgres | `postgresql://postgres:postgres@127.0.0.1:54322/postgres` |
+| Supabase Studio | http://127.0.0.1:54323 |
+| Mailpit (local email) | http://127.0.0.1:54324 |
 
-The health check returns:
-```json
-{ "status": "ok", "timestamp": "...", "version": "1.0.0-mvp" }
+Seeded accounts, password `Password123!` for all: `alice@qaforge.dev` (admin; admins bypass row-level security),
+`bob@qaforge.dev` (tester) and `demo@qaforge.dev` (read-only, used by `/demo`).
+
+If the web app runs on another port (for example `PORT=3005 pnpm --filter @qaforge/web dev`), add that origin to
+`CORS_ORIGIN` in `apps/api/.env` (comma-separated) and restart the API.
+
+## Running the tests
+
+```bash
+pnpm test                                        # unit tests
+pnpm --filter @qaforge/api test:integration      # against local Supabase
+pnpm test:e2e                                    # browser end to end; starts API, web and demo shop if not running
 ```
 
----
-
-## Seed Data
-
-`supabase db reset` automatically runs `supabase/seed.sql` after applying all migrations. The seed creates fully reproducible demo data with fixed UUIDs:
-
-| Entity | Details |
-|---|---|
-| Users | `alice@qaforge.dev` (role: admin) and `bob@qaforge.dev` (role: tester) — password: `Password123!` |
-| Projects | "E-Commerce Platform" (`https://shop.example.com`) and "Admin Dashboard" (`https://admin.example.com`) — both owned by Alice |
-| Test Suites | "Authentication" (root suite) and "Login Flows" (child of Authentication) |
-| Test Cases | 3 cases: "Successful login with valid credentials" (critical), "Login fails with incorrect password" (high), "Password reset email is sent" (medium, AI-generated) |
-| Test Runs | 2 runs: one `passed` (chromium, ai_driven, 4230ms) and one `failed` (firefox, ai_driven, 1850ms) |
-| Recorded Session | "Checkout Flow Recording" (chromium, completed, 18450ms) |
-
-Log in at http://localhost:3000/login with either seed account to explore the platform.
-
----
+`pnpm test:e2e` expects the web app on port 3000. If yours is elsewhere, set `E2E_WEB_URL`, for example
+`E2E_WEB_URL=http://localhost:3005 pnpm test:e2e`. Failure traces land in `.e2e-results/`.
 
 ## Troubleshooting
 
-| Problem | Solution |
+| Problem | Fix |
 |---|---|
-| `supabase start` fails immediately | Docker Desktop is not running. Start it first and wait for it to fully initialize. |
-| Port conflicts on 54321/54322/54323 | Check `supabase/config.toml` — the `[api]`, `[db]`, and `[studio]` sections define the ports. Change them if needed. |
-| `ENCRYPTION_KEY` validation error on API startup | The key must be exactly 64 hex characters (32 bytes). Regenerate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. |
-| `pnpm: command not found` | Run `npm install -g pnpm` then restart your terminal. |
-| `supabase: command not found` | Run `npm install -g supabase` then restart your terminal. |
-| API returns 401 on all requests | The `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` in `apps/api/.env` is wrong. Re-run `supabase status` and paste the correct values. |
-| Frontend shows blank page | Check that `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `apps/web/.env.local` are filled in. |
+| `check-setup` says Docker is "not answering (timed out)" | Docker is hung, common on Windows with WSL. Quit Docker Desktop, run `wsl --shutdown` (or reboot), reopen Docker Desktop |
+| Test runs fail to reach `127.0.0.1` on Windows | Same WSL state; restart WSL as above |
+| API exits at startup listing variables | It names each bad variable. Usually an empty Supabase key or an `ENCRYPTION_KEY` that is not 64 hex characters |
+| `Base URL not allowed` on a run | The target resolves to a private address. Locally set `ALLOW_PRIVATE_HOSTS=*` (or the host name) in `apps/api/.env` |
+| AI generate says no API key | Add a key in Settings, API Keys, or set `AI_LOCAL_DEMO=true` for the labelled example tests |
+| Browser shows CORS errors | The web app's origin is missing from `CORS_ORIGIN` |
+| Port conflicts on 5432x | Change the ports in `supabase/config.toml` and rerun `pnpm bootstrap` |
+| You want a clean database | `pnpm db:reset` (wipes local data, reapplies migrations and the seed) |
+| Windows: tests fail to start with `ERR_PACKAGE_IMPORT_NOT_DEFINED` (`#module-evaluator`) | The clone path is too deep: pnpm's nested paths pass Windows' 260-character limit. Clone to a short path such as `C:\dev\qa-forge`, or enable long paths (`LongPathsEnabled=1`, needs admin) |
+| `pnpm build` fails while `pnpm dev` is running | Stop the web dev server first; both write `apps/web/.next` |

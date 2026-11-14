@@ -1,5 +1,6 @@
 import { ApiKeyProvider, TestRunMode, BugSeverity, BugStatus } from './enums.js';
-import { Profile, ApiKey, TestCaseStep } from './database.js';
+import { Profile, ApiKey } from './database.js';
+import type { TestCaseStep } from './steps.js';
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -81,9 +82,8 @@ export interface UpdateTestCaseRequest {
 export interface CreateTestRunRequest {
   project_id: string;
   mode: TestRunMode;
-  test_case_id?: string;
-  nl_input?: string;
-  base_url?: string;
+  /** Runs always execute a saved test case (EXE-1) */
+  test_case_id: string;
   browser?: 'chromium' | 'firefox' | 'webkit';
 }
 

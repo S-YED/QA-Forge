@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Log in · Acme Shop</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js"></script>
+</head>
+<body>
+  <header><strong><a href="/" data-testid="brand">Acme Shop</a></strong><nav></nav></header>
+  <main>
+    <h1>Log in</h1>
+    <form data-testid="login-form" novalidate>
+      <label>Email <input type="email" name="email" data-testid="login-email" autocomplete="username"></label>
+      <label>Password <input type="password" name="password" data-testid="login-password" autocomplete="current-password"></label>
+      <p class="error" data-testid="login-error" role="alert"></p>
+      <button type="submit" data-testid="login-submit">Log in</button>
+      <p>No account? <a href="/register" data-testid="login-register-link">Register</a></p>
+    </form>
+  </main>
+  <script>
+    $('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = $('login-email').value.trim();
+      const password = $('login-password').value;
+      const error = $('login-error');
+      error.textContent = '';
+      if (!email) return void (error.textContent = 'Email is required');
+      if (!password) return void (error.textContent = 'Password is required');
+      $('login-submit').disabled = true;
+      await wait(300); // simulated network call
+      $('login-submit').disabled = false;
+      if (email.toLowerCase() !== DEMO_USER.email || password !== DEMO_USER.password) {
+        return void (error.textContent = 'Invalid email or password');
+      }
+      session.login(DEMO_USER.email);
+      const next = new URLSearchParams(location.search).get('next');
+      location.href = next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
+    });
+  </script>
+</body>
+</html>
