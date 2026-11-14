@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
-import { executeTestOrchestration } from '../services/run-executor.js';
+import { STOPPED, executeTestOrchestration, stopRun } from '../services/run-executor.js';
 import { signArtifacts } from '../utils/artifacts.js';
 import { demoRunLimiter } from '../middleware/rate-limiter.js';
 import logger from '../utils/logger.js';
@@ -186,6 +186,38 @@ router.post('/', demoRunLimiter, validate(createRunSchema), async (req, res, nex
     });
 
     res.status(201).json({ test_run: run });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /projects/:projectId/test-runs/:id/cancel ───────────────────────────
+// F1: the owner stops a pending or running test. The executor closes the browser and records why.
+
+router.post('/:id/cancel', validate(uuidParamsSchema, 'params'), async (req, res, next) => {
+  try {
+    const { data: run } = await supabase
+      .from('test_runs')
+      .select('id, status')
+      .eq('id', req.params.id)
+      .eq('project_id', req.params.projectId)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
+    if (!run) return next(new AppError('NOT_FOUND', 404, 'Test run not found'));
+    if (!['pending', 'running'].includes(run.status)) {
+      return next(new AppError('CONFLICT', 409, 'This run has already finished'));
+    }
+
+    if (!stopRun(run.id)) {
+      // Not executing in this process (never started, or left behind): close it here, only if still open.
+      const { error } = await supabase
+        .from('test_runs')
+        .update({ status: 'error', error_message: STOPPED, completed_at: new Date().toISOString() })
+        .eq('id', run.id)
+        .in('status', ['pending', 'running']);
+      if (error) return next(error);
+    }
+    res.status(202).json({ stopping: true });
   } catch (err) {
     next(err);
   }

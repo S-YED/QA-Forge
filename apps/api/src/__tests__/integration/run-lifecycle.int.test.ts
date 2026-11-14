@@ -228,3 +228,50 @@ describe('EXE-2 no permanently stuck runs', () => {
     expect(run.error_message).toMatch(/^Interrupted/);
   }, 60_000);
 });
+
+describe('F1 stop a running test', () => {
+  it('the owner stops it within seconds; it records why and files no bug; nobody else can', async () => {
+    const caseId = await createCase([
+      { step_number: 1, action: 'assert_visible', instruction: 'Heading', selector: 'h1' },
+      { step_number: 2, action: 'wait_for', instruction: 'Never appears', selector: '#never' },
+    ]);
+    const created = await api(`/projects/${projectId}/test-runs`, token, 'POST', { test_case_id: caseId, mode: 'ai_driven' });
+    const runId = ((await created.json()) as { test_run: { id: string } }).test_run.id;
+    const cancelPath = `/projects/${projectId}/test-runs/${runId}/cancel`;
+
+    // Wait until step 1 is saved, i.e. the browser is busy on step 2's 15 s wait.
+    for (let i = 0; i < 100; i++) {
+      const { count } = await supabase.from('test_steps').select('id', { count: 'exact', head: true }).eq('test_run_id', runId);
+      if (count) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+
+    const alice = await signIn(USERS.alice);
+    expect((await api(cancelPath, alice.token, 'POST', {})).status).toBe(404); // not her run
+
+    const started = Date.now();
+    expect((await api(cancelPath, token, 'POST', {})).status).toBe(202);
+    const detail = await waitForRun(runId);
+    expect(Date.now() - started).toBeLessThan(5_000); // not the 15 s the step would have waited
+    expect(detail.test_run.status).toBe('error');
+    expect(detail.test_run.error_message).toBe('Stopped by you before it finished.');
+    expect(detail.test_run.completed_at).not.toBeNull();
+    expect(detail.bugs).toEqual([]);
+
+    expect((await api(cancelPath, token, 'POST', {})).status).toBe(409); // already finished
+  }, 60_000);
+
+  it('closes a run that never started executing', async () => {
+    const caseId = await createCase([{ step_number: 1, action: 'assert_visible', instruction: 'Heading', selector: 'h1' }]);
+    const { data, error } = await supabase
+      .from('test_runs')
+      .insert({ project_id: projectId, user_id: userId, test_case_id: caseId, mode: 'ai_driven', status: 'pending' })
+      .select('id')
+      .single();
+    expect(error).toBeNull();
+    expect((await api(`/projects/${projectId}/test-runs/${data!.id}/cancel`, token, 'POST', {})).status).toBe(202);
+    const run = (await waitForRun(data!.id)).test_run;
+    expect(run.status).toBe('error');
+    expect(run.error_message).toBe('Stopped by you before it finished.');
+  }, 30_000);
+});

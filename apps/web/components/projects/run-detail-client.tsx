@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Download, RotateCcw, Bug, X } from 'lucide-react';
+import { ArrowLeft, Download, RotateCcw, Bug, Square, X } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
 import { toastError } from '@/lib/toast-error';
 import { createClient } from '@/lib/supabase/client';
@@ -61,6 +61,18 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
   const router = useRouter();
   const [run, setRun] = useState<RunDetailResponse['test_run'] | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [stopping, setStopping] = useState(false);
+
+  // F1: ask the API to stop the run. The live connection then reports the end like any other finish.
+  const stopRun = async () => {
+    setStopping(true);
+    try {
+      await apiClient.post(`/api/projects/${projectId}/test-runs/${runId}/cancel`, {});
+    } catch (err) {
+      toastError('Could not stop the run', err);
+      setStopping(false);
+    }
+  };
 
   // Export from the saved run, not the on-screen list: live events carry no element or value, and a replay
   // animation shows only part of the steps.
@@ -407,6 +419,13 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
+            {isRunActive(run.status) && (
+              <Button variant="outline" onClick={stopRun} disabled={stopping} aria-label="Stop this test run">
+                {stopping ? <Spinner /> : <Square />}
+                {stopping ? 'Stopping…' : 'Stop'}
+              </Button>
+            )}
+
             {canReplay && (
               <Button
                 variant="outline"

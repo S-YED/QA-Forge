@@ -8,8 +8,21 @@ import { acquireSlot, releaseSlot } from '../middleware/concurrency-limiter.js';
 
 const INTERRUPTED = 'Interrupted: the API stopped while this run was in progress. Start it again.';
 
-/** Runs executing in this process, so shutdown can cancel them and record why. */
+export const STOPPED = 'Stopped by you before it finished.';
+
+/** Runs executing in this process, so shutdown or the user can cancel them and record why. */
 const inFlight = new Map<string, { controller: AbortController; done: Promise<void> }>();
+
+/** Why a cancelled run ended: the user pressed Stop, or the API was shutting down. */
+const cancelReason = (signal: AbortSignal) => (signal.reason === STOPPED ? STOPPED : INTERRUPTED);
+
+/** Stop a run this process is executing (F1). False when it is not running here. */
+export function stopRun(testRunId: string): boolean {
+  const run = inFlight.get(testRunId);
+  if (!run) return false;
+  run.controller.abort(STOPPED);
+  return true;
+}
 
 /**
  * Boot-time recovery: a run left `pending`/`running` by a previous process can never finish.
@@ -189,7 +202,7 @@ export async function executeTestOrchestration(
     });
 
     // ── Bug for genuine failures (after every step is persisted) ─────────────
-    let errorMessage = controller.signal.aborted ? INTERRUPTED : (result.error_message ?? null);
+    let errorMessage = controller.signal.aborted ? cancelReason(controller.signal) : (result.error_message ?? null);
     if (result.status === 'failed') {
       const failedStep = result.steps.find((s) => s.status === 'failed');
       const shot = failedStep && screenshotPaths.get(failedStep.step_number);
@@ -225,7 +238,7 @@ export async function executeTestOrchestration(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error({ event: 'run:execution_error', testRunId: test_run_id, error: message });
-    await finalize('error', controller.signal.aborted ? INTERRUPTED : message);
+    await finalize('error', controller.signal.aborted ? cancelReason(controller.signal) : message);
   } finally {
     if (slotAcquired) await releaseSlot(userId).catch(() => {});
     inFlight.delete(test_run_id);

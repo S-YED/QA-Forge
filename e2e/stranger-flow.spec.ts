@@ -107,6 +107,16 @@ test('a manual case from the step editor stays live through a refresh mid-run', 
   await expect(page.getByText(/Couldn't find anything showing "Spring sale" on \/login/).first()).toBeVisible({ timeout: 60_000 });
 });
 
+test('a running test can be stopped', async ({ page }) => {
+  await runCase(page, 'E2E slow case'); // its second step waits 15 s for text that never shows
+  await expect(page.getByText('Open the login page', { exact: true })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: 'Stop this test run' }).click();
+  await expect(page.getByText('Stopped by you before it finished.').first()).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByRole('button', { name: 'Stop this test run' })).toBeHidden();
+  await page.reload(); // the stop is saved, not just shown
+  await expect(page.getByText('Stopped by you before it finished.').first()).toBeVisible();
+});
+
 test('a case written in plain sentences, with no selectors, passes', async ({ page }) => {
   await openSuite(page);
   await page.getByRole('button', { name: 'Add case' }).click();
