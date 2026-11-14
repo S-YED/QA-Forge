@@ -2,35 +2,19 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Plus,
-  ChevronRight,
-  Trash2,
-  Sparkles,
-  Play,
-  FileText,
-  ListChecks,
-  Pencil,
-} from 'lucide-react';
+import { Plus, ChevronRight, Trash2, FileText, Pencil } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { useDemoMode } from '@/lib/hooks/use-demo-mode';
 import { toast } from 'sonner';
 import { toastError } from '@/lib/toast-error';
-import { type GeneratedTestCase, type StepAction, type TestSuite, type TestCase } from '@qaforge/shared-types';
+import { type GeneratedTestCase, type TestSuite, type TestCase } from '@qaforge/shared-types';
+import { CaseDialog } from '@/components/projects/case-dialog';
+import { CaseList } from '@/components/projects/case-list';
 import { DraftSteps } from '@/components/projects/draft-steps';
-import {
-  StepRow,
-  isBlankStep,
-  newDraftStep,
-  stepErrors,
-  toSavedStep,
-  type DraftStep,
-  type StepErrors,
-} from '@/components/projects/step-row';
+import { SuiteDialog } from '@/components/projects/suite-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { SeverityBadge } from '@/components/shared/status-badge';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Spinner } from '@/components/shared/spinner';
 import {
@@ -41,16 +25,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 interface SuiteWithCount extends TestSuite {
   test_cases: [{ count: number }];
@@ -78,66 +52,21 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
   const [loadingDetail, setLoadingDetail] = useState(false);
   // The one action in flight, e.g. "run:<caseId>": its button shows a spinner and can't be pressed twice.
   const [busy, setBusy] = useState<string | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [newSuiteName, setNewSuiteName] = useState('');
-  // Set when the suite dialog renames an existing suite instead of creating one.
-  const [editingSuiteId, setEditingSuiteId] = useState<string | null>(null);
-  const [newSuiteDescription, setNewSuiteDescription] = useState('');
 
-  // Manual Test Case creation states
-  const [showCreateCaseModal, setShowCreateCaseModal] = useState(false);
-  const [selectedSuiteForNewCase, setSelectedSuiteForNewCase] = useState<string | null>(null);
-  const [creatingCase, setCreatingCase] = useState(false);
-  const [caseTitle, setCaseTitle] = useState('');
-  const [caseDescription, setCaseDescription] = useState('');
-  const [caseExpected, setCaseExpected] = useState('');
-  const [casePriority, setCasePriority] = useState<'critical' | 'high' | 'medium' | 'low'>('medium');
-  const [caseType, setCaseType] = useState<string>('functional');
-  const [caseSteps, setCaseSteps] = useState<DraftStep[]>([newDraftStep()]);
-  // Per-step field errors, shown next to the fields after a save attempt (null = not checked yet).
-  const [caseStepErrors, setCaseStepErrors] = useState<StepErrors[] | null>(null);
-  // Set when the case dialog edits an existing case instead of creating one (UI-2).
-  const [editingCaseId, setEditingCaseId] = useState<string | null>(null);
+  // Each dialog keeps its target after closing (so it can animate out); `nonce` remounts it with a clean form per open.
+  const [suiteDialog, setSuiteDialog] = useState<{ editing: TestSuite | null; nonce: number } | null>(null);
+  const [suiteDialogOpen, setSuiteDialogOpen] = useState(false);
+  const [caseDialog, setCaseDialog] = useState<{ suiteId: string; editing: TestCase | null; nonce: number } | null>(null);
+  const [caseDialogOpen, setCaseDialogOpen] = useState(false);
 
-  const resetCaseForm = () => {
-    setEditingCaseId(null);
-    setCaseTitle('');
-    setCaseDescription('');
-    setCaseExpected('');
-    setCasePriority('medium');
-    setCaseType('functional');
-    setCaseSteps([newDraftStep()]);
-    setCaseStepErrors(null);
+  const openSuiteDialog = (suite?: TestSuite) => {
+    setSuiteDialog((prev) => ({ editing: suite ?? null, nonce: (prev?.nonce ?? 0) + 1 }));
+    setSuiteDialogOpen(true);
   };
 
-  const openNewCase = (suiteId: string) => {
-    resetCaseForm();
-    setSelectedSuiteForNewCase(suiteId);
-    setShowCreateCaseModal(true);
-  };
-
-  const openEditCase = (tc: TestCase, suiteId: string) => {
-    setEditingCaseId(tc.id);
-    setSelectedSuiteForNewCase(suiteId);
-    setCaseTitle(tc.title);
-    setCaseDescription(tc.description ?? '');
-    setCaseExpected(tc.expected_result ?? '');
-    setCasePriority((tc.priority as 'critical' | 'high' | 'medium' | 'low') ?? 'medium');
-    setCaseType(tc.type ?? 'functional');
-    const steps = (tc.steps ?? []) as { action?: string; instruction?: string; selector?: string; value?: string }[];
-    setCaseSteps(
-      steps.length
-        ? steps.map((s) => ({
-            // Legacy rows without an action open with none chosen, so the editor asks instead of guessing.
-            action: (s.action as StepAction | undefined) ?? '',
-            instruction: s.instruction ?? '',
-            selector: s.selector ?? '',
-            value: s.value ?? '',
-          }))
-        : [newDraftStep()],
-    );
-    setShowCreateCaseModal(true);
+  const openCaseDialog = (suiteId: string, tc?: TestCase) => {
+    setCaseDialog((prev) => ({ suiteId, editing: tc ?? null, nonce: (prev?.nonce ?? 0) + 1 }));
+    setCaseDialogOpen(true);
   };
 
   // AI Optimization state
@@ -153,6 +82,9 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
   // Root-level suites (no parent)
   const rootSuites = suites.filter((s) => !s.parent_suite_id);
 
+  const loadSuite = (suiteId: string) =>
+    apiClient.get<SuiteDetailResponse>(`/api/projects/${projectId}/test-suites/${suiteId}`);
+
   const toggleSuite = async (suiteId: string) => {
     if (expandedSuiteId === suiteId) {
       setExpandedSuiteId(null);
@@ -164,107 +96,11 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
     setLoadingDetail(true);
 
     try {
-      const data = await apiClient.get<SuiteDetailResponse>(
-        `/api/projects/${projectId}/test-suites/${suiteId}`,
-      );
-      setSuiteDetail(data);
+      setSuiteDetail(await loadSuite(suiteId));
     } catch (err) {
       toastError('Could not load the test cases', err);
     } finally {
       setLoadingDetail(false);
-    }
-  };
-
-  const openSuiteDialog = (suite?: TestSuite) => {
-    setEditingSuiteId(suite?.id ?? null);
-    setNewSuiteName(suite?.name ?? '');
-    setNewSuiteDescription(suite?.description ?? '');
-    setShowCreateModal(true);
-  };
-
-  const handleCreateSuite = async () => {
-    if (!newSuiteName.trim()) return;
-    setCreating(true);
-
-    try {
-      if (editingSuiteId) {
-        await apiClient.put(`/api/projects/${projectId}/test-suites/${editingSuiteId}`, {
-          name: newSuiteName.trim(),
-          description: newSuiteDescription.trim() || null,
-        });
-        toast.success('Suite saved');
-      } else {
-        await apiClient.post(`/api/projects/${projectId}/test-suites`, {
-          name: newSuiteName.trim(),
-          description: newSuiteDescription.trim() || undefined,
-        });
-        toast.success('Suite created');
-      }
-      setNewSuiteName('');
-      setNewSuiteDescription('');
-      setShowCreateModal(false);
-      onRefresh();
-    } catch (err) {
-      toastError(editingSuiteId ? 'Could not save the suite' : 'Could not create the suite', err);
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleCreateTestCase = async () => {
-    if (!caseTitle.trim() || !selectedSuiteForNewCase) return;
-
-    // Check every step here first (same schema as the API) and show what's missing next to the field.
-    const steps = caseSteps.filter((s) => !isBlankStep(s));
-    if (!steps.length) {
-      toast.error('Add at least one step');
-      return;
-    }
-    const errors = caseSteps.map((s) => (isBlankStep(s) ? {} : stepErrors(s)));
-    setCaseStepErrors(errors);
-    const invalid = errors.filter((e) => Object.keys(e).length).length;
-    if (invalid) {
-      toast.error(`${invalid} step${invalid === 1 ? ' needs' : 's need'} a fix`, {
-        description: 'The missing parts are marked in red below each step.',
-      });
-      return;
-    }
-
-    setCreatingCase(true);
-    try {
-      // Fields the action doesn't use are dropped; the API validates the rest (shared schema).
-      const formattedSteps = steps.map((s, idx) => toSavedStep(s, idx + 1));
-
-      const casesPath = `/api/projects/${projectId}/test-suites/${selectedSuiteForNewCase}/test-cases`;
-      const body = {
-        title: caseTitle.trim(),
-        // null clears the field on edit; create leaves it out
-        description: caseDescription.trim() || (editingCaseId ? null : undefined),
-        expected_result: caseExpected.trim() || (editingCaseId ? null : undefined),
-        priority: casePriority,
-        type: caseType,
-        steps: formattedSteps,
-      };
-      if (editingCaseId) await apiClient.put(`${casesPath}/${editingCaseId}`, body);
-      else await apiClient.post(casesPath, body);
-      toast.success(editingCaseId ? 'Test case saved' : 'Test case created');
-
-      resetCaseForm();
-      setShowCreateCaseModal(false);
-
-      // Reload detail
-      const data = await apiClient.get<SuiteDetailResponse>(
-        `/api/projects/${projectId}/test-suites/${selectedSuiteForNewCase}`,
-      );
-      setSuiteDetail(data);
-      onRefresh();
-    } catch (err) {
-      // e.g. the step contract's field-level message ("steps.1.value: …")
-      toast.error('Could not save the test case', {
-        description: err instanceof Error ? err.message : 'Please try again.',
-      });
-    } finally {
-      setCreatingCase(false);
     }
   };
 
@@ -273,8 +109,7 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
     setBusy(`delete-case:${caseId}`);
     try {
       await apiClient.del(`/api/projects/${projectId}/test-suites/${suiteId}/test-cases/${caseId}`);
-      const data = await apiClient.get<SuiteDetailResponse>(`/api/projects/${projectId}/test-suites/${suiteId}`);
-      setSuiteDetail(data);
+      setSuiteDetail(await loadSuite(suiteId));
       onRefresh();
       toast.success('Test case deleted');
     } catch (err) {
@@ -330,10 +165,7 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
         `/api/projects/${projectId}/ai/optimize/${optimizeReview.caseId}/apply`,
         optimizeReview.draft,
       );
-      const data = await apiClient.get<SuiteDetailResponse>(
-        `/api/projects/${projectId}/test-suites/${optimizeReview.suiteId}`,
-      );
-      setSuiteDetail(data);
+      setSuiteDetail(await loadSuite(optimizeReview.suiteId));
       setOptimizeReview(null);
       toast.success('Optimized test case saved');
     } catch (err) {
@@ -495,7 +327,7 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
                         variant="ghost"
                         size="sm"
                         className="h-7 text-primary hover:bg-primary/10 hover:text-primary"
-                        onClick={() => openNewCase(suite.id)}
+                        onClick={() => openCaseDialog(suite.id)}
                       >
                         <Plus />
                         Add case
@@ -507,86 +339,15 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
                         <Spinner className="text-primary" />
                       </div>
                     ) : suiteDetail?.test_cases && suiteDetail.test_cases.length > 0 ? (
-                      <ul className="divide-y divide-border">
-                        {suiteDetail.test_cases.map((tc) => (
-                          <li
-                            key={tc.id}
-                            className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <p className="truncate text-sm font-semibold text-foreground">
-                                  {tc.title}
-                                </p>
-                                {tc.is_ai_generated && (
-                                  <Badge variant="default" className="shrink-0">
-                                    <Sparkles />
-                                    AI optimized
-                                  </Badge>
-                                )}
-                              </div>
-                              {tc.description && (
-                                <p className="mt-1 line-clamp-1 max-w-xl text-xs text-muted-foreground">
-                                  {tc.description}
-                                </p>
-                              )}
-                              <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <SeverityBadge severity={tc.priority} />
-                                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                                  <ListChecks className="size-3.5" />
-                                  {tc.steps?.length ?? 0} steps
-                                </span>
-                                {tc.tags?.map((tag) => (
-                                  <Badge key={tag} variant="secondary">
-                                    {tag}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-
-                            <div className="flex shrink-0 items-center gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openEditCase(tc, suite.id)}
-                                aria-label={`Edit ${tc.title}`}
-                                title="Edit steps"
-                              >
-                                <Pencil />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                onClick={() => handleDeleteCase(tc.id, suite.id)}
-                                disabled={busy === `delete-case:${tc.id}`}
-                                aria-label={`Delete ${tc.title}`}
-                                title="Delete test case"
-                              >
-                                {busy === `delete-case:${tc.id}` ? <Spinner /> : <Trash2 />}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleOptimizeTestCase(tc.id, suite.id)}
-                                disabled={optimizingCaseId === tc.id}
-                                title="Rewrite the steps more clearly with AI (you review before saving)"
-                              >
-                                {optimizingCaseId === tc.id ? <Spinner /> : <Sparkles />}
-                                Optimize
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => handleRunTestCase(tc.id)}
-                                disabled={busy?.startsWith('run:')}
-                              >
-                                {busy === `run:${tc.id}` ? <Spinner className="text-primary-foreground" /> : <Play />}
-                                {busy === `run:${tc.id}` ? 'Starting…' : 'Run'}
-                              </Button>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
+                      <CaseList
+                        cases={suiteDetail.test_cases}
+                        busy={busy}
+                        optimizingCaseId={optimizingCaseId}
+                        onEdit={(tc) => openCaseDialog(suite.id, tc)}
+                        onDelete={(caseId) => handleDeleteCase(caseId, suite.id)}
+                        onOptimize={(caseId) => handleOptimizeTestCase(caseId, suite.id)}
+                        onRun={handleRunTestCase}
+                      />
                     ) : (
                       <p className="px-4 py-8 text-center text-sm text-muted-foreground">
                         No test cases in this suite yet. Add one manually or use AI Generate.
@@ -600,197 +361,31 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
         </div>
       )}
 
-      {/* ── Create Suite Modal ─────────────────────────────────────────────── */}
-      <Dialog
-        open={showCreateModal}
-        onOpenChange={(o) => {
-          if (!o) setShowCreateModal(false);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingSuiteId ? 'Rename test suite' : 'Create test suite'}</DialogTitle>
-            <DialogDescription>Organize your test cases into logical suites.</DialogDescription>
-          </DialogHeader>
+      {suiteDialog && (
+        <SuiteDialog
+          key={suiteDialog.nonce}
+          projectId={projectId}
+          editing={suiteDialog.editing}
+          open={suiteDialogOpen}
+          onClose={() => setSuiteDialogOpen(false)}
+          onSaved={onRefresh}
+        />
+      )}
 
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="suite-name">
-                Suite name <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="suite-name"
-                value={newSuiteName}
-                onChange={(e) => setNewSuiteName(e.target.value)}
-                placeholder="e.g. Authentication tests"
-                autoFocus
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="suite-description">Description</Label>
-              <Textarea
-                id="suite-description"
-                value={newSuiteDescription}
-                onChange={(e) => setNewSuiteDescription(e.target.value)}
-                placeholder="Optional description…"
-                rows={3}
-                className="resize-none"
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={handleCreateSuite} disabled={creating || !newSuiteName.trim()}>
-              {creating && <Spinner className="text-primary-foreground" />}
-              {creating ? 'Saving…' : editingSuiteId ? 'Save changes' : 'Create suite'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Create Test Case Modal ─────────────────────────────────────────── */}
-      <Dialog
-        open={showCreateCaseModal}
-        onOpenChange={(o) => {
-          if (!o) setShowCreateCaseModal(false);
-        }}
-      >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{editingCaseId ? 'Edit test case' : 'Create test case'}</DialogTitle>
-            <DialogDescription>
-              Write each step the way you would tell a colleague, such as Click &quot;Sign in&quot;. Elements are found
-              by the words on the page, so no selectors are needed.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="case-title">
-                Title <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="case-title"
-                value={caseTitle}
-                onChange={(e) => setCaseTitle(e.target.value)}
-                placeholder="e.g. Successful login with valid password"
-                autoFocus
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="case-priority">Priority</Label>
-                <Select
-                  value={casePriority}
-                  onValueChange={(v) =>
-                    setCasePriority(v as 'critical' | 'high' | 'medium' | 'low')
-                  }
-                >
-                  <SelectTrigger id="case-priority">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="critical">Critical</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="case-type">Type</Label>
-                <Select value={caseType} onValueChange={setCaseType}>
-                  <SelectTrigger id="case-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="functional">Functional</SelectItem>
-                    <SelectItem value="smoke">Smoke</SelectItem>
-                    <SelectItem value="regression">Regression</SelectItem>
-                    <SelectItem value="edge_case">Edge case</SelectItem>
-                    <SelectItem value="accessibility">Accessibility</SelectItem>
-                    <SelectItem value="negative">Negative</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="case-description">Description</Label>
-              <Textarea
-                id="case-description"
-                value={caseDescription}
-                onChange={(e) => setCaseDescription(e.target.value)}
-                placeholder="What is the objective of this test case?"
-                rows={2}
-                className="resize-none"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="case-expected">Expected result</Label>
-              <Input
-                id="case-expected"
-                value={caseExpected}
-                onChange={(e) => setCaseExpected(e.target.value)}
-                placeholder="e.g. User lands on the projects dashboard"
-              />
-            </div>
-
-            {/* Dynamic steps */}
-            <div className="space-y-2">
-              <Label>Steps</Label>
-              <p className="text-xs text-muted-foreground">
-                Examples: Open /login · Type &quot;ada@example.com&quot; into Email · Click &quot;Sign in&quot; · Check page
-                address contains /dashboard · Check &quot;Welcome&quot; is shown
-              </p>
-              <div className="space-y-2">
-                {caseSteps.map((step, idx) => (
-                  <StepRow
-                    key={idx}
-                    index={idx}
-                    step={step}
-                    // Once a save was attempted, errors follow edits live so a fix clears its message.
-                    errors={caseStepErrors ? (isBlankStep(step) ? {} : stepErrors(step)) : undefined}
-                    onChange={(next) => setCaseSteps(caseSteps.map((s, i) => (i === idx ? next : s)))}
-                    onRemove={
-                      caseSteps.length > 1 ? () => setCaseSteps(caseSteps.filter((_, i) => i !== idx)) : undefined
-                    }
-                  />
-                ))}
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-primary hover:bg-primary/10 hover:text-primary"
-                onClick={() => setCaseSteps([...caseSteps, newDraftStep()])}
-              >
-                <Plus />
-                Add step
-              </Button>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setShowCreateCaseModal(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleCreateTestCase}
-              disabled={creatingCase || !caseTitle.trim()}
-            >
-              {creatingCase && <Spinner className="text-primary-foreground" />}
-              {creatingCase ? 'Saving…' : editingCaseId ? 'Save changes' : 'Create case'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {caseDialog && (
+        <CaseDialog
+          key={caseDialog.nonce}
+          projectId={projectId}
+          suiteId={caseDialog.suiteId}
+          editing={caseDialog.editing}
+          open={caseDialogOpen}
+          onClose={() => setCaseDialogOpen(false)}
+          onSaved={async () => {
+            setSuiteDetail(await loadSuite(caseDialog.suiteId));
+            onRefresh();
+          }}
+        />
+      )}
 
       {/* Review an AI-optimized case before it replaces the saved one (AI-2) */}
       <Dialog
