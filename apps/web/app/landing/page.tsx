@@ -103,7 +103,7 @@ function ConsolePreview() {
       <div className="space-y-1 p-4 font-mono text-xs leading-relaxed">
         {rows.map((r, i) => (
           <div key={i} className="flex gap-2.5">
-            <span className="select-none text-console-muted/70">10:24:0{i}</span>
+            <span className="select-none text-console-muted">10:24:0{i}</span>
             <span className={r.cls}>
               <span className="mr-1.5 opacity-90">{r.glyph}</span>
               {r.text}
@@ -111,7 +111,7 @@ function ConsolePreview() {
           </div>
         ))}
         <div className="flex gap-2.5 pt-1 text-console-success">
-          <span className="select-none text-console-muted/70">10:24:07</span>
+          <span className="select-none text-console-muted">10:24:07</span>
           <span className="font-semibold">All steps passed ✓ (1.5s)</span>
         </div>
       </div>

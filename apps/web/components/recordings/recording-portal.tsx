@@ -467,7 +467,7 @@ export function RecordingPortal({ projectId, sessionId }: RecordingPortalProps) 
                       {liveMessage}
                     </p>
                   </div>
-                  <div className="flex justify-between border-t border-console-border pt-2 text-[0.625rem] text-console-muted/70">
+                  <div className="flex justify-between border-t border-console-border pt-2 text-[0.625rem] text-console-muted">
                     <span>target: {session.browser}</span>
                     <span>1280×720</span>
                   </div>

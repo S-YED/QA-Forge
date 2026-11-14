@@ -80,7 +80,7 @@ export function TestRunsTab({ projectId, runs, totalCount, onRefresh, onLoadMore
                         `Run ${run.id.slice(0, 8)}`}
                     </p>
                     <p className="mt-0.5 text-xs capitalize text-muted-foreground">
-                      {run.mode.replace('_', ' ')} · {run.browser || 'chromium'}
+                      {run.mode === 'replay' ? 'Replay' : 'Run'} · {run.browser || 'chromium'}
                     </p>
                   </div>
                 </div>

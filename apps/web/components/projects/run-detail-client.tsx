@@ -188,7 +188,7 @@ function LiveTerminal({ lines, mode }: { lines: TerminalLine[]; mode: ViewMode }
         ) : (
           lines.map((line, i) => (
             <div key={i} className="flex gap-2.5 py-px">
-              <span className="shrink-0 select-none text-console-muted/70">{line.timestamp}</span>
+              <span className="shrink-0 select-none text-console-muted">{line.timestamp}</span>
               <span className={cn('min-w-0 break-words', lineColors[line.type])}>
                 <span className="mr-1.5 select-none opacity-90">{lineGlyph[line.type]}</span>
                 {line.message}

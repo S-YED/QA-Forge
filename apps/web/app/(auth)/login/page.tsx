@@ -49,6 +49,7 @@ export default function LoginPage({ searchParams }: { searchParams: Promise<{ vi
                   inputBorderFocus: 'oklch(var(--ring))',
                   inputBorderHover: 'oklch(var(--border))',
                   inputText: 'oklch(var(--foreground))',
+                  inputLabelText: 'oklch(var(--muted-foreground))',
                   inputPlaceholder: 'oklch(var(--muted-foreground))',
                   dividerBackground: 'oklch(var(--border))',
                   defaultButtonBackground: 'oklch(var(--secondary))',
