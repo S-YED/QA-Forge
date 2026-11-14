@@ -239,6 +239,16 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
     socketRef.current = socket;
     let connectedBefore = false;
 
+    // The run's final line, said once: its `test:complete` event and the catch-up reload can both report the end.
+    let announced = false;
+    const announceEnd = (status: string, ms?: number | null, reason?: string | null) => {
+      if (announced) return;
+      announced = true;
+      const took = ms != null ? ` (${(ms / 1000).toFixed(1)}s)` : '';
+      if (status === 'passed') addTerminalLine(`All steps passed ✓${took}`, 'success');
+      else addTerminalLine(`Test ${status}${reason ? `: ${reason}` : ''}${took}`, 'error');
+    };
+
     // Stop watching and take the final state from the database, not from the last event.
     const settle = async () => {
       socket.disconnect();
@@ -267,7 +277,10 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
       if (!data) return;
       setSteps((prev) => mergeSavedSteps(prev, data.steps));
       if (!isRunActive(data.test_run.status)) {
-        addTerminalLine(`Run already finished: ${data.test_run.status}`, 'system');
+        // The run ended between the first load and this join, so its `test:complete` event may never
+        // arrive. Say the same final line a watched run gets, not a different one.
+        announceEnd(data.test_run.status, data.test_run.duration_ms, data.test_run.error_message);
+        setCanReplay(data.steps.length > 0);
         socket.disconnect();
         setMode(null);
       }
@@ -324,14 +337,7 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
               }
             : prev,
         );
-        if (data.status === 'passed') {
-          addTerminalLine(`All steps passed ✓ (${(data.duration_ms / 1000).toFixed(1)}s)`, 'success');
-        } else {
-          addTerminalLine(
-            `Test ${data.status}${data.error_message ? `: ${data.error_message}` : ''} (${(data.duration_ms / 1000).toFixed(1)}s)`,
-            'error',
-          );
-        }
+        announceEnd(data.status, data.duration_ms, data.error_message);
         void settle();
       },
     );

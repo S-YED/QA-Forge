@@ -138,6 +138,22 @@ test('a case written in plain sentences, with no selectors, passes', async ({ pa
 
   await runCase(page, 'E2E plain sentences');
   await expect(page.getByText('All steps passed')).toBeVisible({ timeout: 90_000 });
+
+  // A fast run can finish between the page's first load and its live connection. Force that: the first
+  // load says "running"; the page must catch up and still end with the normal final line.
+  let first = true;
+  await page.route(/\/api\/projects\/[^/]+\/test-runs\/[0-9a-f-]{36}$/, async (route) => {
+    if (!first || route.request().method() !== 'GET') return route.continue();
+    first = false;
+    const response = await route.fetch();
+    const body = await response.json();
+    body.test_run = { ...body.test_run, status: 'running', completed_at: null };
+    await route.fulfill({ response, json: body });
+  });
+  await page.reload();
+  await expect(page.getByText(/All steps passed/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Passed', { exact: true }).first()).toBeVisible();
+  await page.unroute(/\/api\/projects\/[^/]+\/test-runs\/[0-9a-f-]{36}$/);
 });
 
 test('a step with a missing part is marked in the editor instead of failing later', async ({ page }) => {
