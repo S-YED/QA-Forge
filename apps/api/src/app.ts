@@ -18,6 +18,10 @@ import recordedSessionsRouter from './routes/recorded-sessions.routes.js';
 
 const app: Express = express();
 
+// Behind a proxy every request arrives from the proxy's address. Trusting exactly the known number of hops makes
+// `req.ip` the real client, so rate limits are per visitor instead of one bucket shared by everyone.
+if (env.TRUST_PROXY_HOPS) app.set('trust proxy', env.TRUST_PROXY_HOPS);
+
 // ── 0. Security headers (helmet) ───────────────────────────────────────────────
 // The API serves JSON only and is consumed cross-origin by the web app, so the
 // HTML-oriented CSP is disabled and Cross-Origin-Resource-Policy is relaxed to

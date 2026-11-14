@@ -23,7 +23,8 @@ function makeStore(prefix: string): Store | undefined {
 
 export const defaultLimiter = rateLimit({
   windowMs: 60_000,   // 1 minute
-  max: 100,
+  // One page of the web app makes 5 to 10 calls and a live run reloads, so 100 was reachable by one busy user.
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
   store: makeStore('rl:default:'),
