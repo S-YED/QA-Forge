@@ -21,7 +21,6 @@ Supabase (Postgres 17 + RLS, Auth, Storage)    LLM HTTP APIs         headless Ch
 | `packages/shared-types` | TS interfaces + enums (no runtime validation yet; see CON-1) | Live |
 | `packages/ai-engine` | Prompt + fetch calls to OpenAI / Anthropic / Gemini / OpenRouter; JSON extraction | Live |
 | `packages/playwright-runner` | `runTest()`: executes steps, reports per-step results + screenshots | Live, needs rewrite (RUN-1) |
-| `packages/export-engine`, `packages/integrations` | One-line stubs, not imported anywhere | Deferred |
 
 ## API surface (`apps/api/src/app.ts`)
 Global middleware: helmet → JSON body (10 MB) → CORS allow-list (`CORS_ORIGIN`) → default rate limiter.

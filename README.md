@@ -90,7 +90,6 @@ packages/
   shared-types/        Zod schemas shared by everything: test steps, generated cases, socket events
   ai-engine/           OpenAI, Anthropic, Gemini, OpenRouter clients + the labelled local demo provider
   playwright-runner/   Runs validated steps in Chromium, one explicit handler per action
-  export-engine/, integrations/   Placeholders, not used yet
 supabase/
   migrations/          25 migrations, row-level security on every table
   seed.sql             Local seed data (accounts above)
