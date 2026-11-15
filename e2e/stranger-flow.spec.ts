@@ -177,6 +177,30 @@ test('Export script downloads a test that finds elements by their words', async 
   expect(code).toContain('await expect.poll(() => page.url()).toContain("/dashboard");');
 });
 
+test('a whole suite runs case by case, shows the totals, and can be stopped', async ({ page }) => {
+  await page.goto(projectUrl);
+  await page.getByRole('button', { name: `Run suite ${suite}` }).click();
+  await expect(page).toHaveURL(/\/batches\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole('heading', { name: `Suite run: ${suite}` })).toBeVisible();
+  // The suite holds passing cases, the planted bug and the slow case, so it ends with both results.
+  await expect(page.getByText(/^Finished, \d+ cases?$/)).toBeVisible({ timeout: 180_000 });
+  await expect(page.getByText('Passed', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Failed', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Stop this suite run' })).toBeHidden();
+
+  // A row opens that case's run.
+  await page.getByRole('listitem').first().getByRole('link').click();
+  await expect(page).toHaveURL(/\/runs\//);
+
+  // Start it again and stop it: nothing is left waiting.
+  await page.goto(projectUrl);
+  await page.getByRole('button', { name: `Run suite ${suite}` }).click();
+  await expect(page).toHaveURL(/\/batches\//);
+  await page.getByRole('button', { name: 'Stop this suite run' }).click();
+  await expect(page.getByText(/^Finished, \d+ cases?$/)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Stopped by you before it finished.').first()).toBeVisible();
+});
+
 // Last: it renames the suite the tests above open by name.
 test('the project, a suite and a bug can be edited', async ({ page }) => {
   await page.goto(projectUrl);

@@ -39,14 +39,38 @@ export async function reapInterruptedRuns(): Promise<number> {
   return data?.length ?? 0;
 }
 
+/** True while shutdown is cancelling runs, so a suite run does not start its next case. */
+let draining = false;
+
 /** Graceful shutdown: cancel in-flight runs and wait (bounded) for them to record `error`. */
 export async function shutdownRuns(timeoutMs = 15_000): Promise<void> {
-  const runs = [...inFlight.values()];
-  runs.forEach((r) => r.controller.abort());
-  await Promise.race([
-    Promise.allSettled(runs.map((r) => r.done)),
-    new Promise((resolve) => setTimeout(resolve, timeoutMs).unref()),
-  ]);
+  draining = true;
+  try {
+    const runs = [...inFlight.values()];
+    runs.forEach((r) => r.controller.abort());
+    await Promise.race([
+      Promise.allSettled(runs.map((r) => r.done)),
+      new Promise((resolve) => setTimeout(resolve, timeoutMs).unref()),
+    ]);
+  } finally {
+    draining = false;
+  }
+}
+
+/**
+ * F3: run the cases of a suite run one after another, in the order given. Each run waits for a free
+ * slot instead of being refused, so a suite never fails with "too many concurrent runs".
+ * A run stopped or deleted meanwhile is skipped by the claim. Runs still pending when the API stops
+ * are marked interrupted by `reapInterruptedRuns` on the next start.
+ * ponytail: one case at a time per suite run; run two at once (the per-user cap) if suites feel slow.
+ */
+export async function executeBatch(io: Server | undefined, userId: string, projectId: string, runIds: string[]): Promise<void> {
+  for (const test_run_id of runIds) {
+    if (draining) return;
+    await executeTestOrchestration(io, userId, { test_run_id, project_id: projectId }, { queued: true }).catch((err) =>
+      logger.error({ event: 'run:batch_item_failed', testRunId: test_run_id, error: err instanceof Error ? err.message : String(err) }),
+    );
+  }
 }
 
 export interface ExecuteRunPayload {
@@ -68,6 +92,7 @@ export async function executeTestOrchestration(
   io: Server | undefined,
   userId: string,
   { test_run_id, project_id }: ExecuteRunPayload,
+  { queued = false }: { queued?: boolean } = {},
 ): Promise<void> {
   const room = io?.to(`test:${test_run_id}`);
   const startedMs = Date.now();
@@ -121,6 +146,18 @@ export async function executeTestOrchestration(
   let slotAcquired = false;
   try {
     slotAcquired = await acquireSlot(userId);
+    if (!slotAcquired && queued) {
+      // Part of a suite run: wait for one of the user's other runs to finish, unless stopped meanwhile.
+      room?.emit('test:status', { test_run_id, message: 'Waiting for another run to finish' });
+      while (!slotAcquired && !controller.signal.aborted) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        slotAcquired = await acquireSlot(userId);
+      }
+      if (controller.signal.aborted) {
+        await finalize('error', cancelReason(controller.signal));
+        return;
+      }
+    }
     if (!slotAcquired) {
       await finalize('error', 'Too many concurrent runs. Wait for a running test to finish, then try again.');
       return;
@@ -202,7 +239,10 @@ export async function executeTestOrchestration(
     });
 
     // ── Bug for genuine failures (after every step is persisted) ─────────────
-    let errorMessage = controller.signal.aborted ? cancelReason(controller.signal) : (result.error_message ?? null);
+    // The cancel reason applies only to a run that was cut short. One that finished in the instant a
+    // stop arrived keeps its real result, with no "stopped" note on a passed or failed run.
+    const cutShort = controller.signal.aborted && result.status === 'error';
+    let errorMessage = cutShort ? cancelReason(controller.signal) : (result.error_message ?? null);
     if (result.status === 'failed') {
       const failedStep = result.steps.find((s) => s.status === 'failed');
       const shot = failedStep && screenshotPaths.get(failedStep.step_number);

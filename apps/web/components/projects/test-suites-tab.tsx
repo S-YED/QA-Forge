@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, ChevronRight, Trash2, FileText, Pencil } from 'lucide-react';
+import { Plus, ChevronRight, Trash2, FileText, Pencil, Play } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { useDemoMode } from '@/lib/hooks/use-demo-mode';
@@ -195,6 +195,28 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
     }
   };
 
+  // F3: queue every case of the suite and open the suite run's page.
+  const handleRunSuite = async (suiteId: string) => {
+    if (isDemo) {
+      toast.info('Demo is read-only', {
+        description: 'Sign up to run whole suites against your own apps.',
+      });
+      return;
+    }
+    if (busy) return;
+    setBusy(`run-suite:${suiteId}`);
+    try {
+      const data = await apiClient.post<{ batch: { id: string } }>(`/api/projects/${projectId}/run-batches`, {
+        suite_id: suiteId,
+      });
+      // keep the spinner until the suite run page takes over
+      router.push(`/dashboard/projects/${projectId}/batches/${data.batch.id}`);
+    } catch (err) {
+      toastError('Could not start the suite run', err);
+      setBusy(null);
+    }
+  };
+
   const handleRunTestCase = async (testCaseId: string) => {
     // Demo is read-only: open the matching seeded run, which the run view
     // replays live (step by step, with screenshots and a verdict).
@@ -294,6 +316,18 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
                     <Badge variant="secondary">
                       {caseCount} {caseCount === 1 ? 'case' : 'cases'}
                     </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => handleRunSuite(suite.id)}
+                      disabled={caseCount === 0 || busy?.startsWith('run')}
+                      aria-label={`Run suite ${suite.name}`}
+                      title={caseCount === 0 ? 'Add a test case first' : 'Run every test case in this suite, one after another'}
+                    >
+                      {busy === `run-suite:${suite.id}` ? <Spinner /> : <Play />}
+                      <span className="hidden sm:inline">{busy === `run-suite:${suite.id}` ? 'Starting…' : 'Run suite'}</span>
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"

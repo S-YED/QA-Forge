@@ -8,7 +8,7 @@ import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { USERS, signIn, useApi } from './helpers.js';
 import { supabase } from '../../config/supabase.js';
-import { executeTestOrchestration, reapInterruptedRuns, shutdownRuns } from '../../services/run-executor.js';
+import { executeTestOrchestration, reapInterruptedRuns, shutdownRuns, stopRun } from '../../services/run-executor.js';
 
 const api = useApi();
 
@@ -274,4 +274,21 @@ describe('F1 stop a running test', () => {
     expect(run.status).toBe('error');
     expect(run.error_message).toBe('Stopped by you before it finished.');
   }, 30_000);
+
+  it('a stop that arrives as the last step finishes leaves a clean result, never "passed" with a stop note', async () => {
+    // Stop the moment the only step is saved: the run is done but the browser is still closing.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const caseId = await createCase([{ step_number: 1, action: 'assert_visible', instruction: 'Heading', selector: 'h1' }]);
+      const created = await api(`/projects/${projectId}/test-runs`, token, 'POST', { test_case_id: caseId, mode: 'ai_driven' });
+      const runId = ((await created.json()) as { test_run: { id: string } }).test_run.id;
+      for (let i = 0; i < 2000; i++) {
+        const { count } = await supabase.from('test_steps').select('id', { count: 'exact', head: true }).eq('test_run_id', runId);
+        if (count) break;
+      }
+      stopRun(runId); // in-process, so it lands inside the short window an HTTP call would miss
+      const run = (await waitForRun(runId)).test_run;
+      if (run.status === 'passed') expect(run.error_message).toBeNull();
+      else expect([run.status, run.error_message]).toEqual(['error', 'Stopped by you before it finished.']);
+    }
+  }, 60_000);
 });

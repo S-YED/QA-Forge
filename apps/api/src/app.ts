@@ -15,6 +15,7 @@ import testRunsRouter from './routes/test-runs.routes.js';
 import aiRouter from './routes/ai.routes.js';
 import bugsRouter from './routes/bugs.routes.js';
 import recordedSessionsRouter from './routes/recorded-sessions.routes.js';
+import runBatchesRouter from './routes/run-batches.routes.js';
 
 const app: Express = express();
 
@@ -87,6 +88,9 @@ app.use('/api/projects/:projectId/test-suites/:suiteId/test-cases', authenticate
 
 // ── 10. Test run routes (all protected, demo-guarded) ─────────────────────────
 app.use('/api/projects/:projectId/test-runs', authenticate, demoGuard, testRunsRouter);
+
+// Suite runs (F3): the runs of one suite, started together
+app.use('/api/projects/:projectId/run-batches', authenticate, demoGuard, runBatchesRouter);
 
 // ── 11. AI generation routes (all protected, demo-guarded, AI rate-limited) ───
 // aiLimiter (10/min) caps the expensive AI-generation endpoints per user.
