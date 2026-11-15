@@ -196,7 +196,8 @@ export function CaseDialog({ projectId, suiteId, editing, open, onClose, onSaved
             <Label>Steps</Label>
             <p className="text-xs text-muted-foreground">
               Examples: Open /login · Type &quot;ada@example.com&quot; into Email · Click &quot;Sign in&quot; · Check page
-              address contains /dashboard · Check &quot;Welcome&quot; is shown
+              address contains /dashboard · Check &quot;Welcome&quot; is shown. For a login or other saved value, add it
+              under Variables and write it as {'{{NAME}}'}, such as Type &quot;{'{{PASSWORD}}'}&quot; into Password.
             </p>
             <div className="space-y-2">
               {steps.map((step, idx) => (

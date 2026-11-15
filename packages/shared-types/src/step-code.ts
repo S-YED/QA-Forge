@@ -90,16 +90,29 @@ async function find(page: Page, words: string, kind: 'field' | 'control' | 'pres
  */
 export function stepsToPlaywright(steps: ExportStep[], title: string, baseUrl?: string): string {
   let needsFind = false;
+  // Project variables ({{NAME}}, F4) are read from the environment, so no value, secret or not, is written into the file.
+  const envNames = new Set<string>();
+  const lit = (text: string): string => {
+    if (!/\{\{\s*[A-Z][A-Z0-9_]{0,63}\s*\}\}/.test(text)) return s(text);
+    const parts = text.split(/\{\{\s*([A-Z][A-Z0-9_]{0,63})\s*\}\}/); // literal, NAME, literal, NAME, ...
+    return `\`${parts
+      .map((part, i) => {
+        if (i % 2 === 0) return part.replace(/[\\`]/g, '\\$&').replace(/\$\{/g, '\\${');
+        envNames.add(part);
+        return `\${process.env.${part} ?? ''}`;
+      })
+      .join('')}\``;
+  };
   const el = (step: ExportStep, kind: Kind) => {
     const target = (step.selector ?? '').trim();
-    if (looksLikeSelector(target)) return `page.locator(${s(target)})`;
+    if (looksLikeSelector(target)) return `page.locator(${lit(target)})`;
     needsFind = true;
-    return `(await find(page, ${s(unquote(target))}, ${s(kind)}))`;
+    return `(await find(page, ${lit(unquote(target))}, ${s(kind)}))`;
   };
 
   const body = steps.map(legacy).map((step) => {
     const action = step.action as StepAction;
-    const v = s(step.value ?? '');
+    const v = lit(step.value ?? '');
     const target = () => el(step, KIND[action] ?? 'any');
     const code = (() => {
       switch (action) {
@@ -127,6 +140,9 @@ export function stepsToPlaywright(steps: ExportStep[], title: string, baseUrl?: 
     '',
     `// Exported from QA Forge. Run with: npx playwright test`,
     `const BASE_URL = ${s(baseUrl || 'http://localhost:3000/')};`,
+    ...(envNames.size
+      ? ['', '// These steps use project variables. Set them in the environment before running:', `// ${[...envNames].join(', ')}`]
+      : []),
     ...(needsFind ? ['', FIND_HELPER] : []),
     '',
     `test(${s(title)}, async ({ page }) => {`,

@@ -1,10 +1,11 @@
 import type { Server } from 'socket.io';
-import { runTest, type BrowserName, type RunStatus, type StepResult } from '@qaforge/playwright-runner';
+import { runTest, type BrowserName, type RunStatus, type StepResult, type TestCaseStep } from '@qaforge/playwright-runner';
 import { env } from '../config/env.js';
 import { supabase } from '../config/supabase.js';
 import logger from '../utils/logger.js';
 import { ARTIFACT_BUCKET, screenshotPath, signArtifacts } from '../utils/artifacts.js';
 import { acquireSlot, releaseSlot } from '../middleware/concurrency-limiter.js';
+import { loadVariables, maskSecrets, resolveSteps, usesVariables } from './run-variables.js';
 
 const INTERRUPTED = 'Interrupted: the API stopped while this run was in progress. Start it again.';
 
@@ -97,8 +98,13 @@ export async function executeTestOrchestration(
   const room = io?.to(`test:${test_run_id}`);
   const startedMs = Date.now();
 
+  // F4: hides the project's secret values. Identity until the variables are loaded; from then on every
+  // message this run stores, sends to watchers or logs passes through it.
+  let mask = <T extends string | null | undefined>(text: T): T => text;
+
   /** Write the terminal state of a run this call has claimed, then notify observers. */
-  const finalize = async (status: RunStatus, error_message: string | null, extra: { duration_ms?: number } = {}) => {
+  const finalize = async (status: RunStatus, reason: string | null, extra: { duration_ms?: number } = {}) => {
+    const error_message = mask(reason);
     const { error } = await supabase
       .from('test_runs')
       .update({ status, error_message, completed_at: new Date().toISOString(), ...extra })
@@ -180,6 +186,20 @@ export async function executeTestOrchestration(
       return;
     }
 
+    // ── Project variables (F4) ───────────────────────────────────────────────
+    // {{NAME}} in a step's value or element is filled in here, just before the browser starts. The saved
+    // case, the step rows, bug reports, live events and logs keep the name; secret values are masked.
+    const savedSteps: TestCaseStep[] = Array.isArray(testCase.steps) ? testCase.steps : [];
+    const variables = usesVariables(savedSteps) ? await loadVariables(project_id) : [];
+    const resolved = resolveSteps(savedSteps, variables);
+    if (resolved.missing.length) {
+      const names = resolved.missing.join(', ');
+      await finalize('error', `${resolved.missing.length === 1 ? 'Variable' : 'Variables'} ${names} not set for this project. Add ${resolved.missing.length === 1 ? 'it' : 'them'} under Variables on the project page.`);
+      return;
+    }
+    mask = (text) => maskSecrets(text, resolved.secrets);
+    const asSaved = new Map(savedSteps.map((s) => [s.step_number, s]));
+
     // ── Execute ──────────────────────────────────────────────────────────────
     // Screenshots go to the private bucket; rows keep the path, readers get signed URLs (EXE-3).
     const screenshotPaths = new Map<number, string>();
@@ -201,10 +221,11 @@ export async function executeTestOrchestration(
         step_number: step.step_number,
         action: step.action,
         instruction: step.instruction,
-        selector: step.selector ?? null,
-        value: step.value ?? null,
+        // as saved in the case ({{NAME}} and all), never the filled-in value
+        selector: (asSaved.has(step.step_number) ? asSaved.get(step.step_number)!.selector : step.selector) ?? null,
+        value: (asSaved.has(step.step_number) ? asSaved.get(step.step_number)!.value : step.value) ?? null,
         status: step.status,
-        error_message: step.error_message ?? null,
+        error_message: mask(step.error_message) ?? null,
         duration_ms: step.duration_ms,
         screenshot_url,
         metadata: {},
@@ -221,14 +242,14 @@ export async function executeTestOrchestration(
         instruction: step.instruction,
         status: step.status,
         screenshot_url: signedShot ?? undefined,
-        error_message: step.error_message,
+        error_message: mask(step.error_message),
         duration_ms: step.duration_ms,
       });
     };
 
     const result = await runTest({
       baseUrl: project.base_url,
-      steps: Array.isArray(testCase.steps) ? testCase.steps : [],
+      steps: resolved.steps,
       browser: (claimed.browser as BrowserName) || 'chromium',
       allowedPrivateHosts: env.ALLOWED_PRIVATE_HOSTS,
       signal: controller.signal,
@@ -242,7 +263,7 @@ export async function executeTestOrchestration(
     // The cancel reason applies only to a run that was cut short. One that finished in the instant a
     // stop arrived keeps its real result, with no "stopped" note on a passed or failed run.
     const cutShort = controller.signal.aborted && result.status === 'error';
-    let errorMessage = cutShort ? cancelReason(controller.signal) : (result.error_message ?? null);
+    let errorMessage = cutShort ? cancelReason(controller.signal) : (mask(result.error_message) ?? null);
     if (result.status === 'failed') {
       const failedStep = result.steps.find((s) => s.status === 'failed');
       const shot = failedStep && screenshotPaths.get(failedStep.step_number);
@@ -256,7 +277,7 @@ export async function executeTestOrchestration(
             ? `Test failure at step ${failedStep.step_number}: ${failedStep.instruction.substring(0, 100)}`
             : `Test run ${test_run_id} failed`,
           description: errorMessage ?? 'Test run failed',
-          actual_behavior: failedStep?.error_message ?? errorMessage ?? 'Unknown failure',
+          actual_behavior: mask(failedStep?.error_message) ?? errorMessage ?? 'Unknown failure',
           severity: 'medium',
           status: 'open',
           screenshot_urls: shot ? [shot] : [],
@@ -277,7 +298,7 @@ export async function executeTestOrchestration(
     await finalize(result.status, errorMessage, { duration_ms: result.total_duration_ms });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    logger.error({ event: 'run:execution_error', testRunId: test_run_id, error: message });
+    logger.error({ event: 'run:execution_error', testRunId: test_run_id, error: mask(message) });
     await finalize('error', controller.signal.aborted ? cancelReason(controller.signal) : message);
   } finally {
     if (slotAcquired) await releaseSlot(userId).catch(() => {});

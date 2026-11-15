@@ -24,7 +24,12 @@ function watch(page: Page) {
 async function check(page: Page, name: string, problems: string[]) {
   await page.waitForLoadState('networkidle');
   await expect(page.locator('.animate-pulse').first()).toBeHidden({ timeout: 20_000 }).catch(() => {});
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  // The document, and the main content area too: it clips its overflow, so content wider than the screen
+  // does not widen the document but still gets pushed sideways when something in it takes focus.
+  const overflow = await page.evaluate(() => {
+    const main = document.querySelector('main');
+    return Math.max(document.documentElement.scrollWidth - window.innerWidth, main ? main.scrollWidth - main.clientWidth : 0);
+  });
   const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
   const serious = axe.violations
     .filter((v) => v.impact === 'serious' || v.impact === 'critical')
@@ -64,7 +69,7 @@ for (const [size, viewport] of Object.entries(VIEWPORTS)) {
       expect(href).toBeTruthy();
       await page.goto(href!);
       await check(page, 'project: suites', problems);
-      for (const tab of ['Runs', 'Bugs', 'Recordings']) {
+      for (const tab of ['Runs', 'Bugs', 'Recordings', 'Variables']) {
         await page.getByRole('tab', { name: new RegExp(tab) }).click();
         await check(page, `project: ${tab}`, problems);
       }

@@ -76,4 +76,23 @@ describe('stepsToPlaywright (Export script)', () => {
     expect(code).toContain('if (n > 1) break;'); // ambiguity never falls back to a weaker match
     compiles(code);
   });
+
+  it('reads project variables from the environment instead of writing their values into the file', () => {
+    const code = stepsToPlaywright(
+      [
+        { action: 'fill', selector: 'Password', value: '{{PASSWORD}}' },
+        { action: 'assert_visible', selector: 'Welcome back, {{EMAIL}}' },
+        { action: 'navigate', value: '/users/{{ USER_ID }}?tab=`x`&cost=${5}' },
+        { action: 'fill', selector: 'Notes', value: '{{not a variable}}' },
+      ],
+      't',
+    );
+    expect(code).toContain(".fill(`${process.env.PASSWORD ?? ''}`);");
+    expect(code).toContain("find(page, `Welcome back, ${process.env.EMAIL ?? ''}`, \"any\")");
+    // literal backticks and ${ in the step stay literal text in the generated template
+    expect(code).toContain("new URL(`/users/${process.env.USER_ID ?? ''}?tab=\\`x\\`&cost=\\${5}`, BASE_URL)");
+    expect(code).toContain('.fill("{{not a variable}}");');
+    expect(code).toContain('// PASSWORD, EMAIL, USER_ID');
+    compiles(code);
+  });
 });

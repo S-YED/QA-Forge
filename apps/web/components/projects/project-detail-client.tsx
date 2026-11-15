@@ -8,6 +8,7 @@ import { toastError } from '@/lib/toast-error';
 import { TestSuitesTab } from '@/components/projects/test-suites-tab';
 import { TestRunsTab } from '@/components/projects/test-runs-tab';
 import { TestRecordingsTab } from '@/components/projects/test-recordings-tab';
+import { ProjectVariablesTab, type ProjectVariable } from '@/components/projects/project-variables-tab';
 import { ProjectActions } from '@/components/projects/project-actions';
 import { TestBugsTab, type ProjectBug } from '@/components/projects/test-bugs-tab';
 import { AIGeneratePanel } from '@/components/projects/ai-generate-panel';
@@ -33,7 +34,7 @@ interface RunsResponse {
   per_page: number;
 }
 
-type TabId = 'suites' | 'runs' | 'bugs' | 'recordings';
+type TabId = 'suites' | 'runs' | 'bugs' | 'recordings' | 'variables';
 
 export function ProjectDetailClient({ projectId }: { projectId: string }) {
   const router = useRouter();
@@ -112,17 +113,31 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
     }
   }, [projectId]);
 
+  // F4: values steps use as {{NAME}}. `available` is false until the database has the variables table.
+  const [variables, setVariables] = useState<{ list: ProjectVariable[]; available: boolean }>({ list: [], available: true });
+  const fetchVariables = useCallback(async () => {
+    try {
+      const data = await apiClient.get<{ variables: ProjectVariable[]; available: boolean }>(
+        `/api/projects/${projectId}/variables`,
+      );
+      setVariables({ list: data.variables ?? [], available: data.available !== false });
+    } catch (err) {
+      toastError('Could not load variables', err);
+    }
+  }, [projectId]);
+
   useEffect(() => {
-    Promise.all([fetchProject(), fetchSuites(), fetchRuns(), fetchRecordings(), fetchBugs()]).finally(() =>
+    Promise.all([fetchProject(), fetchSuites(), fetchRuns(), fetchRecordings(), fetchBugs(), fetchVariables()]).finally(() =>
       setLoading(false),
     );
-  }, [fetchProject, fetchSuites, fetchRuns, fetchRecordings, fetchBugs]);
+  }, [fetchProject, fetchSuites, fetchRuns, fetchRecordings, fetchBugs, fetchVariables]);
 
   const tabs: { id: TabId; label: string; count: number }[] = [
     { id: 'suites', label: 'Suites', count: suites.length },
     { id: 'runs', label: 'Runs', count: runsCount },
     { id: 'bugs', label: 'Bugs', count: bugsCount },
     { id: 'recordings', label: 'Recordings', count: recordingsCount },
+    { id: 'variables', label: 'Variables', count: variables.list.length },
   ];
 
   if (loading) {
@@ -200,7 +215,8 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)} className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <TabsList>
+          {/* five tabs are wider than a phone: the row scrolls inside itself instead of pushing the page sideways */}
+          <TabsList className="max-w-full justify-start overflow-x-auto [&>*]:shrink-0">
             {tabs.map((tab) => (
               <TabsTrigger key={tab.id} value={tab.id}>
                 {tab.label}
@@ -238,6 +254,14 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
         </TabsContent>
         <TabsContent value="recordings">
           <TestRecordingsTab projectId={projectId} />
+        </TabsContent>
+        <TabsContent value="variables">
+          <ProjectVariablesTab
+            projectId={projectId}
+            variables={variables.list}
+            available={variables.available}
+            onRefresh={fetchVariables}
+          />
         </TabsContent>
       </Tabs>
 

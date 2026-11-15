@@ -201,6 +201,47 @@ test('a whole suite runs case by case, shows the totals, and can be stopped', as
   await expect(page.getByText('Stopped by you before it finished.').first()).toBeVisible();
 });
 
+test('a secret variable logs in without its value appearing in the run or the exported script', async ({ page }) => {
+  await page.goto(projectUrl);
+  await page.getByRole('tab', { name: /Variables/ }).click();
+  await page.getByRole('button', { name: 'Add variable' }).first().click();
+  await page.getByLabel('Name').fill('password'); // typed in lower case; the field makes it PASSWORD
+  await page.getByLabel('Value').fill('Demo1234!');
+  await page.getByRole('button', { name: 'Add variable' }).last().click();
+  await expect(page.getByText('Variable added')).toBeVisible();
+  await expect(page.getByText('PASSWORD', { exact: true })).toBeVisible();
+  await expect(page.getByText('Hidden', { exact: true })).toBeVisible();
+  await expect(page.getByText('Demo1234!')).toHaveCount(0);
+
+  await page.getByRole('tab', { name: /Suites/ }).click();
+  await page.getByText(suite, { exact: true }).first().click();
+  await page.getByRole('button', { name: 'Add case' }).click();
+  await page.getByLabel('Title').fill('E2E secret login');
+  const sentences = [
+    'Open /login',
+    'Type "demo@qaforge.dev" into Email',
+    'Type "{{PASSWORD}}" into Password',
+    'Click "Log in"',
+    'Check page address contains /dashboard',
+  ];
+  for (const [i, sentence] of sentences.entries()) {
+    if (i) await page.getByRole('button', { name: 'Add step' }).click();
+    await page.getByLabel(`Step ${i + 1} description`).fill(sentence);
+  }
+  await page.getByRole('button', { name: 'Create case' }).click();
+  await expect(page.getByText('Test case created')).toBeVisible();
+
+  await runCase(page, 'E2E secret login');
+  await expect(page.getByText('All steps passed')).toBeVisible({ timeout: 90_000 }); // the real password reached the shop
+  await expect(page.getByText('Type "{{PASSWORD}}" into Password', { exact: true })).toBeVisible();
+  expect(await page.content()).not.toContain('Demo1234!');
+
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Export/ }).click()]);
+  const code = await (await import('node:fs/promises')).readFile((await download.path())!, 'utf8');
+  expect(code).toContain("process.env.PASSWORD ?? ''");
+  expect(code).not.toContain('Demo1234!');
+});
+
 // Last: it renames the suite the tests above open by name.
 test('the project, a suite and a bug can be edited', async ({ page }) => {
   await page.goto(projectUrl);
