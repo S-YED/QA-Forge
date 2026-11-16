@@ -69,7 +69,7 @@ for (const [size, viewport] of Object.entries(VIEWPORTS)) {
       expect(href).toBeTruthy();
       await page.goto(href!);
       await check(page, 'project: suites', problems);
-      for (const tab of ['Runs', 'Bugs', 'Recordings', 'Variables', 'Automation']) {
+      for (const tab of ['Overview', 'Runs', 'Bugs', 'Recordings', 'Variables', 'Automation']) {
         await page.getByRole('tab', { name: new RegExp(tab) }).click();
         await check(page, `project: ${tab}`, problems);
       }

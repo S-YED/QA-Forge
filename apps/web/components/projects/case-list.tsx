@@ -4,11 +4,17 @@ import { ListChecks, Pencil, Play, Sparkles, Trash2 } from 'lucide-react';
 import { type TestCase } from '@qaforge/shared-types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { SeverityBadge } from '@/components/shared/status-badge';
+import Link from 'next/link';
+import { SeverityBadge, StatusBadge } from '@/components/shared/status-badge';
+import { timeAgo } from '@/lib/utils';
+import type { CaseResult } from '@/components/projects/project-overview-tab';
 import { Spinner } from '@/components/shared/spinner';
 
 interface CaseListProps {
+  projectId: string;
   cases: TestCase[];
+  /** F5: each case's last finished run, by case id. Cases that never ran are absent. */
+  lastResults?: Record<string, CaseResult>;
   /** The one action in flight, e.g. "run:<caseId>" or "delete-case:<caseId>". */
   busy: string | null;
   optimizingCaseId: string | null;
@@ -19,7 +25,7 @@ interface CaseListProps {
 }
 
 /** The test cases of an open suite, each with its actions. */
-export function CaseList({ cases, busy, optimizingCaseId, onEdit, onDelete, onOptimize, onRun }: CaseListProps) {
+export function CaseList({ projectId, cases, lastResults, busy, optimizingCaseId, onEdit, onDelete, onOptimize, onRun }: CaseListProps) {
   return (
     <ul className="divide-y divide-border">
       {cases.map((tc) => (
@@ -38,6 +44,16 @@ export function CaseList({ cases, busy, optimizingCaseId, onEdit, onDelete, onOp
               <p className="mt-1 line-clamp-1 max-w-xl text-xs text-muted-foreground">{tc.description}</p>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
+              {lastResults?.[tc.id] && (
+                <Link
+                  href={`/dashboard/projects/${projectId}/runs/${lastResults[tc.id].run_id}`}
+                  title={`Last run ${timeAgo(lastResults[tc.id].run_at).toLowerCase()}. Open it.`}
+                  aria-label={`Last run of ${tc.title}: ${lastResults[tc.id].status}. Open it.`}
+                  className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <StatusBadge status={lastResults[tc.id].status} />
+                </Link>
+              )}
               <SeverityBadge severity={tc.priority} />
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                 <ListChecks className="size-3.5" />

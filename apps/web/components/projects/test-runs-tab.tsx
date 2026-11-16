@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/shared/status-badge';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/shared/spinner';
 import { usePending } from '@/lib/hooks/use-pending';
+import { timeAgo } from '@/lib/utils';
 
 interface TestRunsTabProps {
   projectId: string;
@@ -22,21 +23,6 @@ function formatDuration(ms?: number): string {
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
-}
-
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  const diffHr = Math.floor(diffMs / 3600000);
-  const diffDay = Math.floor(diffMs / 86400000);
-
-  if (diffMin < 1) return 'Just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHr < 24) return `${diffHr}h ago`;
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 export function TestRunsTab({ projectId, runs, totalCount, onRefresh, onLoadMore }: TestRunsTabProps) {
@@ -90,7 +76,7 @@ export function TestRunsTab({ projectId, runs, totalCount, onRefresh, onLoadMore
                     {formatDuration(run.duration_ms ?? undefined)}
                   </span>
                   <span className="hidden text-xs text-muted-foreground sm:inline">
-                    {formatDate(run.created_at)}
+                    {timeAgo(run.created_at)}
                   </span>
                   <ChevronRight className="size-4 text-muted-foreground/60" />
                 </div>

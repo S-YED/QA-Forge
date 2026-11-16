@@ -11,6 +11,7 @@ import { toastError } from '@/lib/toast-error';
 import { type GeneratedTestCase, type TestSuite, type TestCase } from '@qaforge/shared-types';
 import { CaseDialog } from '@/components/projects/case-dialog';
 import { CaseList } from '@/components/projects/case-list';
+import type { CaseResult } from '@/components/projects/project-overview-tab';
 import { DraftSteps } from '@/components/projects/draft-steps';
 import { SuiteDialog } from '@/components/projects/suite-dialog';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,8 @@ interface SuiteWithCount extends TestSuite {
 interface TestSuitesTabProps {
   projectId: string;
   suites: SuiteWithCount[];
+  /** F5: each case's last finished run, by case id */
+  lastResults?: Record<string, CaseResult>;
   onRefresh: () => void;
 }
 
@@ -44,7 +47,7 @@ interface SuiteDetailResponse {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabProps) {
+export function TestSuitesTab({ projectId, suites, lastResults, onRefresh }: TestSuitesTabProps) {
   const router = useRouter();
   const isDemo = useDemoMode();
   const [expandedSuiteId, setExpandedSuiteId] = useState<string | null>(null);
@@ -374,6 +377,8 @@ export function TestSuitesTab({ projectId, suites, onRefresh }: TestSuitesTabPro
                       </div>
                     ) : suiteDetail?.test_cases && suiteDetail.test_cases.length > 0 ? (
                       <CaseList
+                        projectId={projectId}
+                        lastResults={lastResults}
                         cases={suiteDetail.test_cases}
                         busy={busy}
                         optimizingCaseId={optimizingCaseId}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Globe, Sparkles } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
@@ -10,6 +10,7 @@ import { TestRunsTab } from '@/components/projects/test-runs-tab';
 import { TestRecordingsTab } from '@/components/projects/test-recordings-tab';
 import { ProjectVariablesTab, type ProjectVariable } from '@/components/projects/project-variables-tab';
 import { ProjectAutomationTab } from '@/components/projects/project-automation-tab';
+import { ProjectOverviewTab, passRate, rateTone, type ProjectOverview } from '@/components/projects/project-overview-tab';
 import { ProjectActions } from '@/components/projects/project-actions';
 import { TestBugsTab, type ProjectBug } from '@/components/projects/test-bugs-tab';
 import { AIGeneratePanel } from '@/components/projects/ai-generate-panel';
@@ -35,7 +36,7 @@ interface RunsResponse {
   per_page: number;
 }
 
-type TabId = 'suites' | 'runs' | 'bugs' | 'recordings' | 'variables' | 'automation';
+type TabId = 'overview' | 'suites' | 'runs' | 'bugs' | 'recordings' | 'variables' | 'automation';
 
 export function ProjectDetailClient({ projectId }: { projectId: string }) {
   const router = useRouter();
@@ -127,13 +128,29 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
     }
   }, [projectId]);
 
+  // F5: health numbers, with days cut in the viewer's timezone. `available` is false until migration 30 exists.
+  const [overview, setOverview] = useState<ProjectOverview>({ available: true });
+  const fetchOverview = useCallback(async () => {
+    try {
+      const tz = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone);
+      setOverview(await apiClient.get<ProjectOverview>(`/api/projects/${projectId}/overview?tz=${tz}`));
+    } catch (err) {
+      toastError('Could not load the overview', err);
+    }
+  }, [projectId]);
+  const lastResults = useMemo(
+    () => Object.fromEntries((overview.cases ?? []).map((c) => [c.test_case_id, c])),
+    [overview.cases],
+  );
+
   useEffect(() => {
-    Promise.all([fetchProject(), fetchSuites(), fetchRuns(), fetchRecordings(), fetchBugs(), fetchVariables()]).finally(() =>
+    Promise.all([fetchProject(), fetchSuites(), fetchRuns(), fetchRecordings(), fetchBugs(), fetchVariables(), fetchOverview()]).finally(() =>
       setLoading(false),
     );
-  }, [fetchProject, fetchSuites, fetchRuns, fetchRecordings, fetchBugs, fetchVariables]);
+  }, [fetchProject, fetchSuites, fetchRuns, fetchRecordings, fetchBugs, fetchVariables, fetchOverview]);
 
   const tabs: { id: TabId; label: string; count?: number }[] = [
+    { id: 'overview', label: 'Overview' },
     { id: 'suites', label: 'Suites', count: suites.length },
     { id: 'runs', label: 'Runs', count: runsCount },
     { id: 'bugs', label: 'Bugs', count: bugsCount },
@@ -148,8 +165,8 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
 
   if (!project) return null;
 
-  const passRate =
-    stats.total_runs > 0 ? Math.round((stats.passed_runs / stats.total_runs) * 100) : 0;
+  // Same rule as the Overview tab: of the runs that ended as passed or failed.
+  const allTimeRate = passRate(stats.passed_runs, stats.failed_runs);
 
   return (
     <div className="space-y-8">
@@ -196,18 +213,8 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
                 value={stats.failed_runs}
                 valueClassName={stats.failed_runs > 0 ? 'text-destructive' : undefined}
               />
-              {stats.total_runs > 0 && (
-                <Stat
-                  label="Pass rate"
-                  value={`${passRate}%`}
-                  valueClassName={
-                    passRate >= 80
-                      ? 'text-success'
-                      : passRate >= 50
-                        ? 'text-warning'
-                        : 'text-destructive'
-                  }
-                />
+              {allTimeRate !== null && (
+                <Stat label="Pass rate" value={`${allTimeRate}%`} valueClassName={rateTone(allTimeRate)} />
               )}
             </StatGroup>
           </div>
@@ -217,7 +224,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)} className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* five tabs are wider than a phone: the row scrolls inside itself instead of pushing the page sideways */}
+          {/* the tabs are wider than a phone: the row scrolls inside itself instead of pushing the page sideways */}
           <TabsList className="max-w-full justify-start overflow-x-auto [&>*]:shrink-0">
             {tabs.map((tab) => (
               <TabsTrigger key={tab.id} value={tab.id}>
@@ -233,8 +240,11 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
           </Button>
         </div>
 
+        <TabsContent value="overview">
+          <ProjectOverviewTab projectId={projectId} overview={overview} />
+        </TabsContent>
         <TabsContent value="suites">
-          <TestSuitesTab projectId={projectId} suites={suites} onRefresh={fetchSuites} />
+          <TestSuitesTab projectId={projectId} suites={suites} lastResults={lastResults} onRefresh={fetchSuites} />
         </TabsContent>
         <TabsContent value="runs">
           <TestRunsTab

@@ -10,20 +10,28 @@ import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/shared/status-badge';
+import { passRate, rateTone } from '@/components/projects/project-overview-tab';
+import { cn, timeAgo } from '@/lib/utils';
 import type { Project } from '@qaforge/shared-types';
+
+/** F5: a project with its 30-day counts and last run. `health` is null until the database has migration 30. */
+type ProjectWithHealth = Project & {
+  health?: { passed_30d: number; failed_30d: number; last_status: string | null; last_run_at: string | null } | null;
+};
 
 /** Matches GET /api/projects response shape from the backend */
 interface ProjectsResponse {
-  projects: Project[];
+  projects: ProjectWithHealth[];
   count: number;
 }
 
 interface ProjectsGridProps {
-  initialProjects: Project[];
+  initialProjects: ProjectWithHealth[];
 }
 
 export function ProjectsGrid({ initialProjects }: ProjectsGridProps) {
-  const [projects, setProjects] = useState<Project[]>(initialProjects);
+  const [projects, setProjects] = useState<ProjectWithHealth[]>(initialProjects);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const refreshProjects = async () => {
@@ -66,7 +74,9 @@ export function ProjectsGrid({ initialProjects }: ProjectsGridProps) {
         />
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {projects.map((project) => (
+          {projects.map((project) => {
+            const rate = project.health ? passRate(project.health.passed_30d, project.health.failed_30d) : null;
+            return (
             <Link
               key={project.id}
               href={`/dashboard/projects/${project.id}`}
@@ -77,10 +87,12 @@ export function ProjectsGrid({ initialProjects }: ProjectsGridProps) {
                   <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-base font-bold text-primary">
                     {project.name.charAt(0).toUpperCase()}
                   </span>
-                  <Badge variant="success">
-                    <span className="size-1.5 rounded-full bg-success" />
-                    Active
-                  </Badge>
+                  {/* the result of the last run; nothing until the health numbers are available */}
+                  {project.health?.last_status ? (
+                    <StatusBadge status={project.health.last_status} />
+                  ) : (
+                    project.health && <Badge variant="outline">No runs yet</Badge>
+                  )}
                 </div>
 
                 <h3 className="mt-4 truncate text-base font-semibold text-foreground">
@@ -104,14 +116,25 @@ export function ProjectsGrid({ initialProjects }: ProjectsGridProps) {
                 )}
 
                 <div className="mt-4 flex items-center justify-between border-t border-border pt-3.5 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1.5">
-                    <Calendar className="size-3.5" />
-                    {new Date(project.created_at).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                  </span>
+                  {project.health?.last_run_at ? (
+                    <span className="min-w-0 truncate">
+                      {rate !== null && (
+                        <>
+                          <span className={cn('font-mono font-semibold tabular-nums', rateTone(rate))}>{rate}%</span> passed in 30 days,{' '}
+                        </>
+                      )}
+                      last run {timeAgo(project.health.last_run_at).toLowerCase()}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Calendar className="size-3.5" />
+                      {new Date(project.created_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </span>
+                  )}
                   <span className="inline-flex items-center gap-1 font-medium text-primary">
                     Open
                     <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
@@ -119,7 +142,8 @@ export function ProjectsGrid({ initialProjects }: ProjectsGridProps) {
                 </div>
               </div>
             </Link>
-          ))}
+            );
+          })}
         </div>
       )}
 

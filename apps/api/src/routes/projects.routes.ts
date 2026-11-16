@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { httpUrl, validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
+import { isTimezone } from '../services/schedules.js';
 
 // All routes in this router are pre-protected by `authenticate` applied in app.ts.
 
@@ -22,7 +23,12 @@ router.get('/', async (req, res, next) => {
 
     if (error) return next(error);
 
-    res.status(200).json({ projects, count: projects?.length ?? 0 });
+    // F5: 30-day counts and last run per project for the cards. Left out (not an error) until migration 30 exists.
+    const { data: health } = await supabase.rpc('projects_health', { p_user_id: req.user.id });
+    const byProject = new Map(((health ?? []) as { project_id: string }[]).map(({ project_id, ...h }) => [project_id, h]));
+    const withHealth = (projects ?? []).map((p) => ({ ...p, health: byProject.get(p.id) ?? null }));
+
+    res.status(200).json({ projects: withHealth, count: withHealth.length });
   } catch (err) {
     next(err);
   }
@@ -80,19 +86,49 @@ router.get(
         return next(new AppError('NOT_FOUND', 404, 'Project not found'));
       }
 
-      // Aggregate basic run stats
-      const { data: runs } = await supabase
-        .from('test_runs')
-        .select('status')
-        .eq('project_id', req.params.id);
-
-      const stats = {
-        total_runs: runs?.length ?? 0,
-        passed_runs: runs?.filter((r) => r.status === 'passed').length ?? 0,
-        failed_runs: runs?.filter((r) => r.status === 'failed').length ?? 0,
+      // Counted by the database: loading the rows and counting here stopped at the 1000-row page limit.
+      const countRuns = async (status?: string) => {
+        let q = supabase.from('test_runs').select('id', { count: 'exact', head: true }).eq('project_id', req.params.id);
+        if (status) q = q.eq('status', status);
+        return (await q).count ?? 0;
       };
+      const [total_runs, passed_runs, failed_runs] = await Promise.all([countRuns(), countRuns('passed'), countRuns('failed')]);
 
-      res.status(200).json({ project, stats });
+      res.status(200).json({ project, stats: { total_runs, passed_runs, failed_runs } });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── GET /:id/overview ─────────────────────────────────────────────────────────
+// F5: pass rate over 30 days, runs per day for 14 days, last result per case. `tz` is the viewer's
+// timezone so "today" is their today. Answers available:false until the database has migration 30.
+
+const overviewQuerySchema = z.object({ tz: z.string().max(64).optional() });
+
+router.get(
+  '/:id/overview',
+  validate(uuidParamsSchema, 'params'),
+  validate(overviewQuerySchema, 'query'),
+  async (req, res, next) => {
+    try {
+      const { data: project } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('id', req.params.id)
+        .eq('user_id', req.user.id)
+        .single();
+      if (!project) return next(new AppError('NOT_FOUND', 404, 'Project not found'));
+
+      const tz = typeof req.query.tz === 'string' && isTimezone(req.query.tz) ? req.query.tz : 'UTC';
+      const { data, error } = await supabase.rpc('project_overview', { p_project_id: req.params.id, p_tz: tz });
+      if (error) {
+        // PGRST202 / 42883: the function is not there yet.
+        if (['PGRST202', '42883'].includes(error.code)) return res.status(200).json({ available: false });
+        return next(error);
+      }
+      res.status(200).json({ available: true, ...(data as object) });
     } catch (err) {
       next(err);
     }
