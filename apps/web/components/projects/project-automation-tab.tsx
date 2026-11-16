@@ -8,6 +8,7 @@ import { useDemoMode } from '@/lib/hooks/use-demo-mode';
 import { toastError } from '@/lib/toast-error';
 import { Button } from '@/components/ui/button';
 import { SuiteSchedules } from '@/components/projects/suite-schedules';
+import { SlackNotifications } from '@/components/projects/slack-notifications';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Spinner } from '@/components/shared/spinner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -148,6 +149,8 @@ export function ProjectAutomationTab({ projectId, suites }: ProjectAutomationTab
   return (
     <div className="space-y-8">
       <SuiteSchedules projectId={projectId} suites={suites} />
+
+      <SlackNotifications projectId={projectId} />
 
       <section className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

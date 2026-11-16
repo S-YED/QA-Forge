@@ -19,6 +19,7 @@ import runBatchesRouter from './routes/run-batches.routes.js';
 import projectVariablesRouter from './routes/project-variables.routes.js';
 import { ciRouter, tokensRouter } from './routes/project-tokens.routes.js';
 import schedulesRouter from './routes/schedules.routes.js';
+import projectNotificationsRouter from './routes/project-notifications.routes.js';
 
 const app: Express = express();
 
@@ -104,6 +105,9 @@ app.use('/api/ci', ciLimiter, ciRouter);
 
 // Scheduled suite runs (F9)
 app.use('/api/projects/:projectId/schedules', authenticate, demoGuard, schedulesRouter);
+
+// Slack notice when a suite run ends with failures (F10)
+app.use('/api/projects/:projectId/notifications', authenticate, demoGuard, projectNotificationsRouter);
 
 // ── 11. AI generation routes (all protected, demo-guarded, AI rate-limited) ───
 // aiLimiter (10/min) caps the expensive AI-generation endpoints per user.

@@ -3,6 +3,7 @@ import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
 import logger from '../utils/logger.js';
 import { executeBatch } from './run-executor.js';
+import { notifySuiteRun } from './notifications.js';
 
 // F3/F8: starting and reading a suite run. Shared by the signed-in routes (run-batches) and the
 // token routes (ci), so a run started from CI is exactly a run started from the web app.
@@ -78,9 +79,12 @@ export async function startSuiteRun(
   }
 
   const runIds = [...runs].sort((a, b) => a.created_at.localeCompare(b.created_at)).map((r) => r.id);
-  executeBatch(io, userId, projectId, runIds).catch((err) => {
-    logger.error('Failed to execute suite run', err);
-  });
+  executeBatch(io, userId, projectId, runIds)
+    // F10: once every case has finished, tell the project's Slack channel if any did not pass (never throws)
+    .then(() => notifySuiteRun(batch.id, projectId))
+    .catch((err) => {
+      logger.error('Failed to execute suite run', err);
+    });
   return { batchId: batch.id, runIds };
 }
 

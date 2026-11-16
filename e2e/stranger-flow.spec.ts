@@ -359,6 +359,36 @@ test('a suite can be scheduled, paused and unscheduled', async ({ page }) => {
 });
 
 // Last: it renames the suite the tests above open by name.
+test('a Slack address can be saved without ever being shown again, and removed', async ({ page }) => {
+  // F10. A made-up address: it is only stored here, no message is sent.
+  const address = 'https://hooks.slack.com/services/T000FAKE/B000FAKE/e2e-synthetic-address-Zk4q';
+  await page.goto(projectUrl);
+  await page.getByRole('tab', { name: /Automation/ }).click();
+  const field = page.getByLabel('Slack incoming-webhook address');
+  const saveButton = page.getByRole('button', { name: 'Save', exact: true });
+
+  // Only a Slack address can be saved.
+  await field.fill('https://example.com/services/T/B/x');
+  await expect(saveButton).toBeDisabled();
+  await field.fill(address);
+  await saveButton.click();
+  await expect(page.getByText('Slack address saved')).toBeVisible();
+  await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+  await expect(page.getByText('Saved address ends in Zk4q')).toBeVisible();
+
+  // After a reload the page knows it is connected but does not have the address.
+  await page.reload();
+  await page.getByRole('tab', { name: /Automation/ }).click();
+  await expect(page.getByText('Saved address ends in Zk4q')).toBeVisible();
+  await expect(page.getByLabel('Replace the address')).toHaveValue('');
+  expect(await page.content()).not.toContain('e2e-synthetic-address');
+
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(page.getByText('Slack notices turned off')).toBeVisible();
+  await expect(page.getByLabel('Slack incoming-webhook address')).toBeVisible();
+});
+
 test('the project, a suite and a bug can be edited', async ({ page }) => {
   await page.goto(projectUrl);
   await page.getByRole('button', { name: 'Project options' }).click();
