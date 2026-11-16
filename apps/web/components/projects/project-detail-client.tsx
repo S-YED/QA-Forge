@@ -9,6 +9,7 @@ import { TestSuitesTab } from '@/components/projects/test-suites-tab';
 import { TestRunsTab } from '@/components/projects/test-runs-tab';
 import { TestRecordingsTab } from '@/components/projects/test-recordings-tab';
 import { ProjectVariablesTab, type ProjectVariable } from '@/components/projects/project-variables-tab';
+import { ProjectAutomationTab } from '@/components/projects/project-automation-tab';
 import { ProjectActions } from '@/components/projects/project-actions';
 import { TestBugsTab, type ProjectBug } from '@/components/projects/test-bugs-tab';
 import { AIGeneratePanel } from '@/components/projects/ai-generate-panel';
@@ -34,7 +35,7 @@ interface RunsResponse {
   per_page: number;
 }
 
-type TabId = 'suites' | 'runs' | 'bugs' | 'recordings' | 'variables';
+type TabId = 'suites' | 'runs' | 'bugs' | 'recordings' | 'variables' | 'automation';
 
 export function ProjectDetailClient({ projectId }: { projectId: string }) {
   const router = useRouter();
@@ -132,12 +133,13 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
     );
   }, [fetchProject, fetchSuites, fetchRuns, fetchRecordings, fetchBugs, fetchVariables]);
 
-  const tabs: { id: TabId; label: string; count: number }[] = [
+  const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: 'suites', label: 'Suites', count: suites.length },
     { id: 'runs', label: 'Runs', count: runsCount },
     { id: 'bugs', label: 'Bugs', count: bugsCount },
     { id: 'recordings', label: 'Recordings', count: recordingsCount },
     { id: 'variables', label: 'Variables', count: variables.list.length },
+    { id: 'automation', label: 'Automation' },
   ];
 
   if (loading) {
@@ -220,7 +222,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
             {tabs.map((tab) => (
               <TabsTrigger key={tab.id} value={tab.id}>
                 {tab.label}
-                <span className="font-mono text-xs text-muted-foreground">{tab.count}</span>
+                {tab.count !== undefined && <span className="font-mono text-xs text-muted-foreground">{tab.count}</span>}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -262,6 +264,9 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
             available={variables.available}
             onRefresh={fetchVariables}
           />
+        </TabsContent>
+        <TabsContent value="automation">
+          <ProjectAutomationTab projectId={projectId} suites={suites.map((s) => ({ id: s.id, name: s.name }))} />
         </TabsContent>
       </Tabs>
 

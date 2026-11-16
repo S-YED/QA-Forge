@@ -281,14 +281,17 @@ describe('F1 stop a running test', () => {
       const caseId = await createCase([{ step_number: 1, action: 'assert_visible', instruction: 'Heading', selector: 'h1' }]);
       const created = await api(`/projects/${projectId}/test-runs`, token, 'POST', { test_case_id: caseId, mode: 'ai_driven' });
       const runId = ((await created.json()) as { test_run: { id: string } }).test_run.id;
-      for (let i = 0; i < 2000; i++) {
+      // Poll quickly but not flat out: without the pause the local database gateway gets overloaded
+      // and the run's own save fails ("invalid response from the upstream server").
+      for (let i = 0; i < 1500; i++) {
         const { count } = await supabase.from('test_steps').select('id', { count: 'exact', head: true }).eq('test_run_id', runId);
         if (count) break;
+        await new Promise((r) => setTimeout(r, 5));
       }
       stopRun(runId); // in-process, so it lands inside the short window an HTTP call would miss
       const run = (await waitForRun(runId)).test_run;
       if (run.status === 'passed') expect(run.error_message).toBeNull();
-      else expect([run.status, run.error_message]).toEqual(['error', 'Stopped by you before it finished.']);
+      else expect(`${run.status}: ${run.error_message}`).toBe('error: Stopped by you before it finished.');
     }
   }, 60_000);
 });

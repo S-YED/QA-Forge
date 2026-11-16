@@ -99,3 +99,17 @@ export const demoRunLimiter = rateLimit({
     );
   },
 });
+
+// ── CI token routes (F8): per caller address, before the token is checked ───
+// Polling a suite run every 5 s is 12 requests a minute; 60 leaves room and slows token guessing.
+
+export const ciLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: makeStore('rl:ci:'),
+  handler: (_req, _res, next) => {
+    next(new AppError('RATE_LIMITED', 429, 'Too many requests from this build system. Poll less often and try again in a minute.'));
+  },
+});

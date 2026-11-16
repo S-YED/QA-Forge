@@ -242,6 +242,44 @@ test('a secret variable logs in without its value appearing in the run or the ex
   expect(code).not.toContain('Demo1234!');
 });
 
+test('a project token starts a suite run from outside the app, and stops working when deleted', async ({ page, request }) => {
+  const API = 'http://localhost:4000';
+  await page.goto(projectUrl);
+  await page.getByRole('tab', { name: /Automation/ }).click();
+  await page.getByRole('button', { name: 'New token' }).first().click();
+  await page.getByLabel('Name').fill('E2E build');
+  await page.getByRole('button', { name: 'Create token' }).click();
+  const secret = await page.getByLabel('Token', { exact: true }).inputValue(); // shown once
+  expect(secret).toMatch(/^qf_/);
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByText('E2E build', { exact: true })).toBeVisible();
+  expect(await page.content()).not.toContain(secret); // gone from the page for good
+
+  // The snippet names a real suite of this project; use that id the way a build would.
+  const snippet = await page.getByLabel('GitHub Actions workflow step').innerText();
+  const suiteId = /QAFORGE_SUITE: ([0-9a-f-]{36})/.exec(snippet)?.[1];
+  expect(suiteId).toBeTruthy();
+  const auth = { Authorization: `Bearer ${secret}` };
+  const started = await request.post(`${API}/api/ci/suites/${suiteId}/run`, { headers: auth });
+  expect(started.status()).toBe(201);
+  const { batch_id } = await started.json();
+  await expect
+    .poll(async () => (await (await request.get(`${API}/api/ci/batches/${batch_id}`, { headers: auth })).json()).status, { timeout: 180_000 })
+    .not.toBe('running');
+
+  // The same suite run shows in the app.
+  await page.goto(`${projectUrl}/batches/${batch_id}`);
+  await expect(page.getByText(/^Finished, \d+ cases?$/)).toBeVisible();
+
+  await page.goto(projectUrl);
+  await page.getByRole('tab', { name: /Automation/ }).click();
+  page.once('dialog', (d) => void d.accept());
+  await page.getByRole('button', { name: 'Delete token E2E build' }).click();
+  await expect(page.getByText('Token deleted')).toBeVisible();
+  expect((await request.post(`${API}/api/ci/suites/${suiteId}/run`, { headers: auth })).status()).toBe(401);
+});
+
 // Last: it renames the suite the tests above open by name.
 test('the project, a suite and a bug can be edited', async ({ page }) => {
   await page.goto(projectUrl);
