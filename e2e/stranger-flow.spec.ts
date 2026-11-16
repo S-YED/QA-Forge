@@ -74,6 +74,13 @@ test('a generated case runs in a real browser and passes, with screenshots', asy
 test('the planted coupon bug fails the run and files a bug', async ({ page }) => {
   await runCase(page, 'Coupon SAVE10 takes 10% off the total');
   await expect(page.getByText(/Test failure at step 14/).first()).toBeVisible({ timeout: 90_000 });
+  // F7: the failed step says where the page was and what the browser reported, live and after a reload.
+  await expect(page.getByText('What the browser reported')).toBeVisible({ timeout: 20_000 });
+  await page.reload();
+  await page.getByText('What the browser reported').click();
+  await expect(page.getByText('Page address')).toBeVisible();
+  await expect(page.getByText(/^http:\/\/127\.0\.0\.1:4100\//)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Copy details' })).toBeVisible();
   await page.goto(projectUrl);
   await page.getByRole('tab', { name: /Bugs/ }).click();
   await expect(page.getByText(/Test failure at step 14/).first()).toBeVisible();

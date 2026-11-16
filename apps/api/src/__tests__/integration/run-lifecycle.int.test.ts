@@ -120,6 +120,13 @@ describe('RUN-1 run lifecycle through the API', () => {
     expect(run.test_run.status).toBe('failed');
     expect(run.steps.map((s) => s.status)).toEqual(['failed', 'skipped']);
     expect(run.bugs).toHaveLength(1);
+
+    // F7: the failed step keeps where the page was and what the browser reported; the bug repeats it.
+    const steps = run.steps as unknown as { metadata: { diagnostics?: { url: string; console: string[]; requests: string[] } } }[];
+    expect(steps[0].metadata.diagnostics).toEqual({ url: targetUrl, console: [], requests: [] });
+    expect(steps[1].metadata.diagnostics).toBeUndefined(); // only the step that failed
+    const { data: bug } = await supabase.from('bugs').select('description').eq('id', run.bugs[0].id).single();
+    expect(bug!.description).toContain(`Page address: ${targetUrl}`);
   }, 90_000);
 
   it('an unreachable target ends error (not passed) and files no bug', async () => {

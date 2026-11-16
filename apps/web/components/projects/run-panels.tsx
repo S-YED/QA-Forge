@@ -226,6 +226,95 @@ export function SectionLabel({ children, count }: { children: React.ReactNode; c
   );
 }
 
+interface Evidence {
+  url?: string;
+  console?: string[];
+  requests?: string[];
+}
+
+/** F7: what the browser reported up to a failed step (page address, console errors, failed requests). */
+function StepEvidence({ step }: { step: TestStep | LiveStep }) {
+  const [copied, setCopied] = useState(false);
+  const evidence = ('metadata' in step ? (step.metadata as { diagnostics?: Evidence } | null)?.diagnostics : undefined) ?? null;
+  if (!evidence) return null;
+  const consoleLines = evidence.console ?? [];
+  const requests = evidence.requests ?? [];
+  const error = 'error_message' in step ? step.error_message : '';
+  const text = [
+    `Step ${step.step_number}: ${step.instruction || step.action}`,
+    error ? `Error: ${error}` : '',
+    evidence.url ? `Page address: ${evidence.url}` : '',
+    consoleLines.length ? `Console errors:\n${consoleLines.map((l) => `- ${l}`).join('\n')}` : '',
+    requests.length ? `Failed requests:\n${requests.map((l) => `- ${l}`).join('\n')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard unavailable: the text is on screen to select */
+    }
+  };
+
+  return (
+    <details className="mt-3 border-t border-border pt-3 pl-10 text-xs">
+      <summary className="cursor-pointer select-none font-medium text-foreground">
+        What the browser reported
+        <span className="ml-2 font-normal text-muted-foreground">
+          {consoleLines.length} console {consoleLines.length === 1 ? 'error' : 'errors'}, {requests.length} failed{' '}
+          {requests.length === 1 ? 'request' : 'requests'}
+        </span>
+      </summary>
+      <div className="mt-3 space-y-3">
+        {evidence.url && (
+          <div>
+            <p className="text-muted-foreground">Page address</p>
+            <p className="mt-0.5 break-all font-mono text-foreground">{evidence.url}</p>
+          </div>
+        )}
+        {consoleLines.length > 0 && (
+          <div>
+            <p className="text-muted-foreground">Console errors</p>
+            <ul className="mt-0.5 space-y-1">
+              {consoleLines.map((line, i) => (
+                <li key={i} className="break-words font-mono text-foreground">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {requests.length > 0 && (
+          <div>
+            <p className="text-muted-foreground">Failed requests</p>
+            <ul className="mt-0.5 space-y-1">
+              {requests.map((line, i) => (
+                <li key={i} className="break-all font-mono text-foreground">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {consoleLines.length === 0 && requests.length === 0 && (
+          <p className="text-muted-foreground">No console errors and no failed requests before this step failed.</p>
+        )}
+        <button
+          type="button"
+          onClick={copy}
+          className="rounded-md border border-border px-2.5 py-1 font-medium text-foreground transition-colors hover:bg-accent"
+        >
+          {copied ? 'Copied' : 'Copy details'}
+        </button>
+      </div>
+    </details>
+  );
+}
+
 /** The steps of a run, each with its state, timing and error. */
 export function StepsTimeline({ steps, mode }: { steps: (TestStep | LiveStep)[]; mode: ViewMode }) {
   return (
@@ -293,6 +382,7 @@ export function StepsTimeline({ steps, mode }: { steps: (TestStep | LiveStep)[];
                   <StatusBadge status={step.status} showIcon={false} />
                 </div>
               </div>
+              <StepEvidence step={step} />
             </li>
           ))}
         </ol>

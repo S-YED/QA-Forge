@@ -204,7 +204,16 @@ export async function executeTestOrchestration(
     // Screenshots go to the private bucket; rows keep the path, readers get signed URLs (EXE-3).
     const screenshotPaths = new Map<number, string>();
 
+    /** F7: what the browser reported up to a failed step, with secrets masked like everything else. */
+    const evidenceOf = (step: StepResult | undefined) =>
+      step?.diagnostics && {
+        url: mask(step.diagnostics.url),
+        console: step.diagnostics.console.map((line) => mask(line)),
+        requests: step.diagnostics.requests.map((line) => mask(line)),
+      };
+
     const persistStep = async (step: StepResult) => {
+      const evidence = evidenceOf(step);
       let screenshot_url: string | null = null;
       if (step.screenshot_buffer) {
         const path = screenshotPath(test_run_id, step.step_number);
@@ -228,7 +237,7 @@ export async function executeTestOrchestration(
         error_message: mask(step.error_message) ?? null,
         duration_ms: step.duration_ms,
         screenshot_url,
-        metadata: {},
+        metadata: evidence ? { diagnostics: evidence } : {},
       });
       if (insertError) throw new Error(`Could not save step ${step.step_number}: ${insertError.message}`);
 
@@ -276,7 +285,18 @@ export async function executeTestOrchestration(
           title: failedStep
             ? `Test failure at step ${failedStep.step_number}: ${failedStep.instruction.substring(0, 100)}`
             : `Test run ${test_run_id} failed`,
-          description: errorMessage ?? 'Test run failed',
+          description: [
+            errorMessage ?? 'Test run failed',
+            // F7: the evidence a developer asks for first, so the bug stands on its own.
+            ...((ev) =>
+              ev
+                ? [
+                    `Page address: ${ev.url}`,
+                    ...(ev.console.length ? [`Console errors:\n${ev.console.map((l) => `- ${l}`).join('\n')}`] : []),
+                    ...(ev.requests.length ? [`Failed requests:\n${ev.requests.map((l) => `- ${l}`).join('\n')}`] : []),
+                  ]
+                : [])(evidenceOf(failedStep)),
+          ].join('\n\n'),
           actual_behavior: mask(failedStep?.error_message) ?? errorMessage ?? 'Unknown failure',
           severity: 'medium',
           status: 'open',

@@ -43,7 +43,7 @@
     --warning-foreground: 0.99 0 0;
     --info: 0.55 0.15 248;
     --info-foreground: 0.99 0 0;
-    --destructive: 0.55 0.20 25;
+    --destructive: 0.51 0.20 25;
     --destructive-foreground: 0.99 0 0;
 
     /* Sidebar - its own slightly-cool neutral layer */
@@ -95,7 +95,7 @@
     --warning-foreground: 0.22 0.04 70;
     --info: 0.70 0.14 245;
     --info-foreground: 0.16 0.02 245;
-    --destructive: 0.64 0.19 25;
+    --destructive: 0.68 0.17 25;
     --destructive-foreground: 0.99 0 0;
 
     --sidebar: 0.185 0.006 240;

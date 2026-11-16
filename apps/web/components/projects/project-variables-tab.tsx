@@ -101,7 +101,7 @@ export function ProjectVariablesTab({ projectId, variables, available, onRefresh
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <h3 className="text-sm font-semibold text-foreground">Variables</h3>
           <p className="max-w-2xl text-sm text-muted-foreground">
@@ -110,7 +110,7 @@ export function ProjectVariablesTab({ projectId, variables, available, onRefresh
             hidden in steps, logs, bug reports and exported scripts. A screenshot shows it only if the page itself does.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => openDialog()} disabled={!available} className="shrink-0">
+        <Button variant="outline" size="sm" onClick={() => openDialog()} disabled={!available} className="shrink-0 self-start">
           <Plus />
           Add variable
         </Button>

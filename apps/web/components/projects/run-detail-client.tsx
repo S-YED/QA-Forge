@@ -136,16 +136,16 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
           const stepNumber = s.step_number;
           const action = s.action;
           const selector = 'selector' in s ? s.selector : undefined;
+          // The log names a step the way the steps list and a live run do: by its description.
+          // Older rows have no description, so they fall back to the action and its element.
+          const what = s.instruction || `${action}${selector ? ` → ${selector}` : ''}`;
 
           // Reveal the step as running…
           setSteps((prev) => [
             ...prev,
-            { step_number: stepNumber, action, status: 'running', selector },
+            { step_number: stepNumber, action, instruction: s.instruction, status: 'running', selector },
           ]);
-          addTerminalLine(
-            `Step ${stepNumber}: ${action}${selector ? ` → ${selector}` : ''}`,
-            'running',
-          );
+          addTerminalLine(`Step ${stepNumber}: ${what}`, 'running');
 
           await sleep(replayDelay('duration_ms' in s ? s.duration_ms : undefined), signal);
 
@@ -154,7 +154,7 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
           const type =
             s.status === 'passed' ? 'success' : s.status === 'failed' ? 'error' : 'info';
           addTerminalLine(
-            `Step ${stepNumber}: ${action} [${s.status}]${
+            `Step ${stepNumber}: ${s.instruction || action} [${s.status}]${
               'duration_ms' in s && s.duration_ms ? ` (${s.duration_ms}ms)` : ''
             }`,
             type as TerminalLine['type'],
@@ -459,11 +459,16 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
           </div>
         </div>
 
-        {run.error_message && mode === null && (
-          <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/8 px-4 py-3 text-sm text-destructive">
-            <span className="font-semibold">Error:</span> {run.error_message}
-          </div>
-        )}
+        {run.error_message &&
+          mode === null &&
+          (run.error_message.startsWith('Stopped by you') ? (
+            // A run the user stopped is not a fault: say so plainly, without the red error box.
+            <div className="mt-4 rounded-lg border bg-muted px-4 py-3 text-sm text-foreground">{run.error_message}</div>
+          ) : (
+            <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/8 px-4 py-3 text-sm text-destructive">
+              <span className="font-semibold">Error:</span> {run.error_message}
+            </div>
+          ))}
       </div>
 
       {/* ── Two-Column Layout: Steps + Terminal ────────────────────────────── */}

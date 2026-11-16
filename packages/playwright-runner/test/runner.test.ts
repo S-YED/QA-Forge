@@ -35,6 +35,11 @@ const PAGES: Record<string, string> = {
     <p id="msg" hidden></p>
     <button>Delete</button><button>Delete</button><a href="/next">Delete</a>
     <span data-testid="badge">New</span>`,
+  // A page with trouble behind it: a console error, an uncaught error and a request that answers 404.
+  '/broken': `<!doctype html><title>Broken</title><h1>Cart</h1><script>
+    console.error('cart service is down');
+    fetch('/api/cart-totals');
+    setTimeout(() => { throw new Error('totals is undefined') }, 0);</script>`,
   '/leak': `<!doctype html><h1>Leak</h1><img src="http://localhost:{PORT}/secret-img">`,
   '/ws': `<!doctype html><p id="ws">open</p><script>
     const s = new WebSocket('ws://localhost:{PORT}/secret-ws');
@@ -301,6 +306,27 @@ describe('targets in plain words', () => {
     });
     expect(result.status).toBe('failed');
     expect(result.steps[1].error_message).toBe('Couldn\'t find a button, link or control called "Log out" on /form');
+  }, 30_000);
+
+  it('a failed step carries what the browser reported: page address, console errors, failed requests (F7)', async () => {
+    const result = await runTest({
+      baseUrl,
+      stepTimeoutMs: 1_500,
+      steps: [
+        s(1, 'navigate', { value: '/broken' }),
+        s(2, 'assert_visible', { selector: 'Cart' }),
+        s(3, 'click', { selector: 'Checkout' }),
+        s(4, 'assert_visible', { selector: 'Thanks' }),
+      ],
+    });
+    expect(result.status).toBe('failed');
+    const [opened, checked, failed, skipped] = result.steps;
+    expect(failed.status).toBe('failed');
+    expect(failed.diagnostics?.url).toBe(`${baseUrl}broken`);
+    expect(failed.diagnostics?.console).toEqual(expect.arrayContaining(['cart service is down', 'Uncaught: totals is undefined']));
+    expect(failed.diagnostics?.requests).toEqual([`GET ${baseUrl}api/cart-totals (404)`]);
+    // Only the failed step carries it.
+    expect([opened.diagnostics, checked.diagnostics, skipped.diagnostics]).toEqual([undefined, undefined, undefined]);
   }, 30_000);
 
   it('refuses to guess when several elements match', async () => {

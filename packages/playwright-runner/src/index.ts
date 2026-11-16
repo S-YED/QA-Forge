@@ -46,6 +46,18 @@ export interface StepResult {
   error_message?: string;
   duration_ms: number;
   screenshot_buffer?: Buffer;
+  /** Only on a failed step: what the browser reported up to the failure (F7). */
+  diagnostics?: StepDiagnostics;
+}
+
+/** Evidence for a failure beyond the screenshot: where the page was and what went wrong in the browser. */
+export interface StepDiagnostics {
+  /** The page address when the step failed */
+  url: string;
+  /** Console errors and uncaught page errors, oldest first (the last 20 of the run) */
+  console: string[];
+  /** Requests that failed or answered 400 or above, as "METHOD url (status or reason)" (the last 20) */
+  requests: string[];
 }
 
 export interface RunResult {
@@ -229,6 +241,23 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
     context.setDefaultNavigationTimeout(navigationTimeoutMs);
     const page = await context.newPage();
 
+    // F7: remember what the browser complains about, so a failed step can say more than its own error.
+    // ponytail: the last 20 of each for the whole run, not per step; an earlier 500 often explains a later failure.
+    const consoleErrors: string[] = [];
+    const failedRequests: string[] = [];
+    const remember = (list: string[], entry: string) => {
+      list.push(entry.replace(/\s+/g, ' ').slice(0, 300));
+      if (list.length > 20) list.shift();
+    };
+    page.on('console', (m) => {
+      if (m.type() === 'error') remember(consoleErrors, m.text());
+    });
+    page.on('pageerror', (e) => remember(consoleErrors, `Uncaught: ${e.message}`));
+    page.on('requestfailed', (r) => remember(failedRequests, `${r.method()} ${r.url()} (${r.failure()?.errorText ?? 'failed'})`));
+    page.on('response', (r) => {
+      if (r.status() >= 400) remember(failedRequests, `${r.request().method()} ${r.url()} (${r.status()})`);
+    });
+
     try {
       throwIfBlocked(await page.goto(baseUrl, { waitUntil: 'domcontentloaded' }));
     } catch (err) {
@@ -261,6 +290,7 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
         error_message: error,
         duration_ms: Date.now() - stepStart,
         screenshot_buffer: screenshot,
+        ...(error && { diagnostics: { url: page.url(), console: [...consoleErrors], requests: [...failedRequests] } }),
       });
       results.push(result);
       await onStepComplete?.(result);

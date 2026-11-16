@@ -58,6 +58,9 @@ const config: Config = {
           accent: c('--console-accent'),
         },
       },
+      // Tint steps the components use (bg-destructive/12, bg-warning/18, bg-destructive/8...). Tailwind only
+      // ships multiples of 5, so without these the classes generated nothing and those badges had no background.
+      opacity: { 4: '0.04', 8: '0.08', 12: '0.12', 18: '0.18' },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',

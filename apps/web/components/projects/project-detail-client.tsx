@@ -188,7 +188,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
           </div>
 
           <div className="shrink-0 rounded-lg border bg-card px-5 py-4">
-            <StatGroup>
+            <StatGroup className="flex-nowrap gap-x-5 sm:gap-x-8 [&>*+*]:pl-5 sm:[&>*+*]:pl-8">
               <Stat label="Total runs" value={stats.total_runs} />
               <Stat label="Passed" value={stats.passed_runs} valueClassName="text-success" />
               <Stat

@@ -160,13 +160,17 @@ describe('F4 variables: in a run', () => {
 
   it('never stores or sends the secret, even when an error quotes it', async () => {
     const { detail, events } = await runWatched([
-      { step_number: 1, action: 'fill', instruction: 'Type the password', selector: '#name', value: '{{PASSWORD}}' },
-      { step_number: 2, action: 'click', instruction: 'Go', selector: '#go' },
+      // The secret also goes into the page address, which the failure evidence (F7) records.
+      { step_number: 1, action: 'navigate', instruction: 'Open with a token', value: '/?token={{PASSWORD}}' },
+      { step_number: 2, action: 'fill', instruction: 'Type the password', selector: '#name', value: '{{PASSWORD}}' },
+      { step_number: 3, action: 'click', instruction: 'Go', selector: '#go' },
       // Wrong on purpose: the error message quotes both the expected text and what the page shows.
-      { step_number: 3, action: 'assert_text', instruction: 'Says goodbye', selector: '#out', value: 'Bye {{PASSWORD}} {{EMAIL}}' },
+      { step_number: 4, action: 'assert_text', instruction: 'Says goodbye', selector: '#out', value: 'Bye {{PASSWORD}} {{EMAIL}}' },
     ]);
     expect(detail.test_run.status).toBe('failed');
-    const failed = detail.steps[2];
+    const failed = detail.steps[3];
+    const evidence = (failed as unknown as { metadata: { diagnostics?: { url: string } } }).metadata.diagnostics;
+    expect(evidence?.url).toMatch(/\/\?token=••••$/); // recorded, with the secret masked
     expect(failed.error_message).toContain('••••'); // the error did quote it, and it was masked
     expect(failed.error_message).toContain(EMAIL); // a plain variable stays readable
     expect(detail.bugs).toHaveLength(1);
