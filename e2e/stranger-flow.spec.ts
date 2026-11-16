@@ -356,6 +356,84 @@ test('the project, a suite and a bug can be edited', async ({ page }) => {
   await expect(page.getByLabel(/^Status of /).first()).toHaveText('Resolved');
 });
 
+test('cases can be searched, duplicated, reordered and moved, and runs and bugs filtered', async ({ page }) => {
+  // F6. Search finds a case by words in a step, across suites, and shows which suite it is in.
+  await page.goto(projectUrl);
+  // A second suite to move a case into.
+  await page.getByRole('button', { name: 'New suite' }).click();
+  await page.getByLabel(/Suite name/).fill('F6 target');
+  await page.getByRole('dialog').getByRole('button', { name: 'Create suite' }).click();
+  await expect(page.getByText('Suite created')).toBeVisible();
+  await page.getByLabel('Search test cases').fill('save10');
+  await expect(page.getByText(/^1 test case matches$/)).toBeVisible();
+  const found = page.locator('li', { hasText: 'Coupon SAVE10 takes 10% off the total' });
+  await expect(found.getByText('E2E suite renamed')).toBeVisible();
+
+  // Duplicate it from the search results; the copy is found too.
+  await found.getByRole('button', { name: /^More actions for / }).click();
+  await page.getByRole('menuitem', { name: 'Duplicate' }).click();
+  await expect(page.getByText('Test case duplicated')).toBeVisible();
+  await expect(page.getByText(/^2 test cases match$/)).toBeVisible();
+
+  // Edit the copy: move its first step down, rename it, save.
+  const copy = 'Coupon SAVE10 takes 10% off the total (copy)';
+  await page.getByRole('button', { name: `Edit ${copy}` }).click();
+  const firstStep = await page.getByLabel('Step 1 description').inputValue();
+  const secondStep = await page.getByLabel('Step 2 description').inputValue();
+  await expect(page.getByRole('button', { name: 'Move step 1 up' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Move step 1 down' }).click();
+  await expect(page.getByLabel('Step 1 description')).toHaveValue(secondStep);
+  await expect(page.getByLabel('Step 2 description')).toHaveValue(firstStep);
+  await page.getByLabel('Title').fill('F6 reordered copy');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByText('Test case saved')).toBeVisible();
+
+  // The notices stack over the row buttons at the bottom right: let them clear (they stay while the pointer is on them).
+  await page.mouse.move(0, 0);
+  await expect(page.locator('[data-sonner-toast]')).toHaveCount(0, { timeout: 20_000 });
+
+  // The order was saved, and the original is untouched.
+  await expect(page.getByText(/^2 test cases match$/)).toBeVisible();
+  await page.getByRole('button', { name: 'Edit F6 reordered copy' }).click();
+  await expect(page.getByLabel('Step 1 description')).toHaveValue(secondStep);
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('button', { name: 'Edit Coupon SAVE10 takes 10% off the total', exact: true }).click();
+  await expect(page.getByLabel('Step 1 description')).toHaveValue(firstStep);
+  await page.getByRole('button', { name: 'Cancel' }).click();
+
+  // Move the copy to another suite.
+  await page.getByRole('button', { name: 'More actions for F6 reordered copy' }).click();
+  await page.getByRole('menuitem', { name: 'Move to suite' }).click();
+  await page.getByRole('menuitem', { name: 'F6 target' }).click();
+  await expect(page.getByText('Moved to F6 target')).toBeVisible();
+  await expect(page.locator('li', { hasText: 'F6 reordered copy' }).getByText('F6 target')).toBeVisible();
+
+  // Clearing the box brings the suites back.
+  await page.getByLabel('Search test cases').fill('zzz-no-such-case');
+  await expect(page.getByText('No test case has that in its title or steps.')).toBeVisible();
+  await page.getByLabel('Search test cases').fill('');
+  await expect(page.getByRole('button', { name: 'Run suite E2E suite renamed' })).toBeVisible();
+
+  // Runs: only failed ones, then none in a status nothing has.
+  await page.getByRole('tab', { name: /Runs/ }).click();
+  await page.getByLabel('Filter runs by status').click();
+  await page.getByRole('option', { name: 'Failed' }).click();
+  await expect(page.getByRole('listbox')).toBeHidden();
+  const runRows = page.getByRole('tabpanel').locator('li');
+  await expect(runRows.first()).toBeVisible();
+  await expect(runRows.filter({ hasText: 'Passed' })).toHaveCount(0);
+  await page.getByLabel('Filter runs by status').click();
+  await page.getByRole('option', { name: 'Pending' }).click();
+  await expect(page.getByText('No runs match these filters.')).toBeVisible();
+
+  // Bugs: search by a word of the title.
+  await page.getByRole('tab', { name: /Bugs/ }).click();
+  await page.getByLabel('Search bugs').fill('zzz-no-such-bug');
+  await expect(page.getByText('No bugs match these filters.')).toBeVisible();
+  await page.getByLabel('Search bugs').fill('test failure');
+  await expect(page.getByRole('tabpanel').locator('li').first()).toBeVisible();
+});
+
 test('record a login by clicking and typing in the live viewport, then replay it green', async ({ page, context }) => {
   // Where the demo login fields sit at the recorder's 1280x720 viewport (same page, same layout).
   const probe = await context.newPage();

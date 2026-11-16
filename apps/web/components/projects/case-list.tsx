@@ -1,6 +1,15 @@
 'use client';
 
-import { ListChecks, Pencil, Play, Sparkles, Trash2 } from 'lucide-react';
+import { Copy, FolderInput, ListChecks, MoreHorizontal, Pencil, Play, Sparkles, Trash2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { type TestCase } from '@qaforge/shared-types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +21,12 @@ import { Spinner } from '@/components/shared/spinner';
 
 interface CaseListProps {
   projectId: string;
-  cases: TestCase[];
+  /** `suite_name` is set on search results, which span suites; it is then shown on the row. */
+  cases: (TestCase & { suite_name?: string })[];
+  /** F6: every suite of the project; a case can move to any but its own. */
+  moveTargets: { id: string; name: string }[];
+  onDuplicate: (tc: TestCase) => void;
+  onMove: (tc: TestCase, suiteId: string) => void;
   /** F5: each case's last finished run, by case id. Cases that never ran are absent. */
   lastResults?: Record<string, CaseResult>;
   /** The one action in flight, e.g. "run:<caseId>" or "delete-case:<caseId>". */
@@ -25,7 +39,7 @@ interface CaseListProps {
 }
 
 /** The test cases of an open suite, each with its actions. */
-export function CaseList({ projectId, cases, lastResults, busy, optimizingCaseId, onEdit, onDelete, onOptimize, onRun }: CaseListProps) {
+export function CaseList({ projectId, cases, moveTargets, onDuplicate, onMove, lastResults, busy, optimizingCaseId, onEdit, onDelete, onOptimize, onRun }: CaseListProps) {
   return (
     <ul className="divide-y divide-border">
       {cases.map((tc) => (
@@ -54,6 +68,7 @@ export function CaseList({ projectId, cases, lastResults, busy, optimizingCaseId
                   <StatusBadge status={lastResults[tc.id].status} />
                 </Link>
               )}
+              {tc.suite_name && <Badge variant="outline">{tc.suite_name}</Badge>}
               <SeverityBadge severity={tc.priority} />
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                 <ListChecks className="size-3.5" />
@@ -68,6 +83,43 @@ export function CaseList({ projectId, cases, lastResults, busy, optimizingCaseId
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
+            {/* F6: the less common actions live in a menu so the row stays readable */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`More actions for ${tc.title}`}
+                  title="More actions"
+                  disabled={busy === `organise:${tc.id}`}
+                >
+                  {busy === `organise:${tc.id}` ? <Spinner /> : <MoreHorizontal />}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => onDuplicate(tc)}>
+                  <Copy className="size-4" />
+                  Duplicate
+                </DropdownMenuItem>
+                {moveTargets.some((s) => s.id !== tc.suite_id) && (
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <FolderInput className="size-4" />
+                      Move to suite
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      {moveTargets
+                        .filter((s) => s.id !== tc.suite_id)
+                        .map((s) => (
+                          <DropdownMenuItem key={s.id} onSelect={() => onMove(tc, s.id)}>
+                            {s.name}
+                          </DropdownMenuItem>
+                        ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button variant="ghost" size="icon" onClick={() => onEdit(tc)} aria-label={`Edit ${tc.title}`} title="Edit steps">
               <Pencil />
             </Button>

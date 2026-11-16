@@ -4,6 +4,7 @@ import { validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
 import { signBugScreenshots } from '../utils/artifacts.js';
+import { containsAny, daysParam, searchParam, sinceIso } from '../utils/list-filters.js';
 
 // All routes nested under /projects/:projectId/bugs
 // Pre-protected by `authenticate` applied in app.ts.
@@ -14,9 +15,18 @@ const uuidParamsSchema = z.object({ id: z.guid() });
 
 // ── GET /projects/:projectId/bugs ─────────────────────────────────────────────
 
-router.get('/', async (req, res, next) => {
+// F6: optional filters. `q` searches the title and description, `days` means "filed in the last N days".
+const listQuerySchema = z.object({
+  status: z.enum(['open', 'in_progress', 'resolved', 'closed', 'wont_fix']).optional(),
+  severity: z.enum(['critical', 'high', 'medium', 'low']).optional(),
+  q: searchParam.optional(),
+  days: daysParam,
+});
+
+router.get('/', validate(listQuerySchema, 'query'), async (req, res, next) => {
   try {
     const { projectId } = req.params as any;
+    const { status, severity, q, days } = req.query as unknown as z.infer<typeof listQuerySchema>;
 
     // Verify project ownership
     const { data: project } = await supabase
@@ -44,13 +54,10 @@ router.get('/', async (req, res, next) => {
       .order('created_at', { ascending: false })
       .range(from, to);
 
-    if (req.query.status) {
-      query = query.eq('status', req.query.status as string);
-    }
-
-    if (req.query.severity) {
-      query = query.eq('severity', req.query.severity as string);
-    }
+    if (status) query = query.eq('status', status);
+    if (severity) query = query.eq('severity', severity);
+    if (q) query = query.or(containsAny(['title', 'description'], q));
+    if (days) query = query.gte('created_at', sinceIso(days));
 
     const { data: bugs, error, count } = await query;
 

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
+import { searchParam } from '../utils/list-filters.js';
 
 // All routes in this router are pre-protected by `authenticate` applied in app.ts.
 
@@ -38,6 +39,44 @@ router.get('/', async (req, res, next) => {
     if (error) return next(error);
 
     res.status(200).json({ suites: suites ?? [] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── GET /projects/:projectId/test-suites/search?q= ────────────────────────────
+// F6: find test cases across all suites of the project by title, description or step text.
+// Declared before /:id so "search" is not read as a suite id.
+
+const searchQuerySchema = z.object({ q: searchParam });
+
+router.get('/search', validate(searchQuerySchema, 'query'), async (req, res, next) => {
+  try {
+    const { projectId } = req.params as unknown as { projectId: string };
+    const { data: project } = await supabase.from('projects').select('id').eq('id', projectId).eq('user_id', req.user.id).single();
+    if (!project) return next(new AppError('NOT_FOUND', 404, 'Project not found'));
+
+    // ponytail: loads the project's cases (up to 1000) and matches here, because step text lives in JSON.
+    // Move to a database text search if projects grow past that.
+    const { data: cases, error } = await supabase
+      .from('test_cases')
+      .select('*, test_suites!inner(name, project_id)')
+      .eq('test_suites.project_id', projectId)
+      .order('created_at', { ascending: true })
+      .limit(1000);
+    if (error) return next(error);
+
+    const needle = (req.query.q as string).toLowerCase();
+    const stepText = (steps: unknown) =>
+      (Array.isArray(steps) ? steps : [])
+        .map((s) => [s?.instruction, s?.description, s?.value, s?.selector].filter((v) => typeof v === 'string').join(' '))
+        .join(' ');
+    const matches = (cases ?? [])
+      .filter((c) => `${c.title} ${c.description ?? ''} ${stepText(c.steps)}`.toLowerCase().includes(needle))
+      .slice(0, 50)
+      .map(({ test_suites, ...c }) => ({ ...c, suite_name: (test_suites as { name: string }).name }));
+
+    res.status(200).json({ test_cases: matches });
   } catch (err) {
     next(err);
   }

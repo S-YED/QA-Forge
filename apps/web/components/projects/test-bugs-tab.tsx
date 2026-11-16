@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ListFilters } from '@/components/projects/list-filters';
 import { Bug, ChevronRight, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api/client';
@@ -28,6 +29,8 @@ interface TestBugsTabProps {
   totalCount: number;
   onRefresh: () => unknown;
   onLoadMore: () => unknown;
+  /** F6: reload the list from page 1 with these filters (a query string, "" for none). Must be stable. */
+  onFilter: (query: string) => void;
 }
 
 const BUG_STATUSES = [
@@ -39,7 +42,7 @@ const BUG_STATUSES = [
 ] as const;
 
 /** Every bug in the project, newest first; failed runs file them automatically (UI-2). */
-export function TestBugsTab({ projectId, bugs, totalCount, onRefresh, onLoadMore }: TestBugsTabProps) {
+export function TestBugsTab({ projectId, bugs, totalCount, onRefresh, onLoadMore, onFilter }: TestBugsTabProps) {
   const router = useRouter();
   const { pending, track } = usePending();
   // Status changes made here, shown at once without reloading the list.
@@ -59,7 +62,17 @@ export function TestBugsTab({ projectId, bugs, totalCount, onRefresh, onLoadMore
     }
   };
 
-  if (bugs.length === 0) {
+  // F6: the filters live here; the project page does the request.
+  const [filtered, setFiltered] = useState(false);
+  const applyFilter = useCallback(
+    (query: string) => {
+      setFiltered(!!query);
+      onFilter(query);
+    },
+    [onFilter],
+  );
+
+  if (bugs.length === 0 && !filtered) {
     return (
       <EmptyState
         icon={Bug}
@@ -71,15 +84,17 @@ export function TestBugsTab({ projectId, bugs, totalCount, onRefresh, onLoadMore
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-foreground">Bugs</h3>
         <Button variant="ghost" size="sm" onClick={track('refresh', onRefresh)} disabled={!!pending}>
           {pending === 'refresh' ? <Spinner /> : <RefreshCw />}
           Refresh
         </Button>
       </div>
+      <ListFilters noun="bugs" statuses={BUG_STATUSES} search onChange={applyFilter} />
 
       <div className="overflow-hidden rounded-lg border bg-card">
+        {bugs.length === 0 && <p className="px-4 py-8 text-center text-sm text-muted-foreground">No bugs match these filters.</p>}
         <ul className="divide-y divide-border">
           {bugs.map((bug) => {
             const summary = (

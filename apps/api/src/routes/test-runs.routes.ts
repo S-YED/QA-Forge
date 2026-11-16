@@ -7,6 +7,7 @@ import { STOPPED, executeTestOrchestration, stopRun } from '../services/run-exec
 import { signArtifacts } from '../utils/artifacts.js';
 import { demoRunLimiter } from '../middleware/rate-limiter.js';
 import logger from '../utils/logger.js';
+import { daysParam, sinceIso } from '../utils/list-filters.js';
 // All routes nested under /projects/:projectId/test-runs
 // Pre-protected by `authenticate` applied in app.ts.
 
@@ -16,9 +17,16 @@ const uuidParamsSchema = z.object({ id: z.guid() });
 
 // ── GET /projects/:projectId/test-runs ────────────────────────────────────────
 
-router.get('/', async (req, res, next) => {
+// F6: optional filters. `status` is one run status, `days` means "started in the last N days".
+const listQuerySchema = z.object({
+  status: z.enum(['pending', 'running', 'passed', 'failed', 'error', 'skipped']).optional(),
+  days: daysParam,
+});
+
+router.get('/', validate(listQuerySchema, 'query'), async (req, res, next) => {
   try {
     const { projectId } = req.params as any;
+    const { status, days } = req.query as unknown as z.infer<typeof listQuerySchema>;
 
     // Verify project ownership
     const { data: project } = await supabase
@@ -38,13 +46,17 @@ router.get('/', async (req, res, next) => {
     const from = (page - 1) * perPage;
     const to = from + perPage - 1;
 
-    const { data: runs, error, count } = await supabase
+    let query = supabase
       .from('test_runs')
       .select('*, test_cases(title)', { count: 'exact' })
       .eq('project_id', projectId)
       .eq('user_id', req.user.id)
       .order('created_at', { ascending: false })
       .range(from, to);
+    if (status) query = query.eq('status', status);
+    if (days) query = query.gte('created_at', sinceIso(days));
+
+    const { data: runs, error, count } = await query;
 
     if (error) return next(error);
 

@@ -151,6 +151,8 @@ const updateTestCaseSchema = z.object({
   priority: z.enum(['critical', 'high', 'medium', 'low']).optional(),
   type: z.enum(['functional', 'regression', 'smoke', 'edge_case', 'accessibility', 'negative']).optional(),
   tags: z.array(z.string()).optional(),
+  /** F6: move the case to another suite of the same project */
+  suite_id: z.guid().optional(),
 });
 
 router.put(
@@ -163,6 +165,10 @@ router.put(
 
       if (!(await verifyOwnership(projectId, suiteId, req.user.id))) {
         return next(new AppError('NOT_FOUND', 404, 'Suite not found'));
+      }
+      // A move: the target must be a suite of this same project (which the caller owns).
+      if (req.body.suite_id && req.body.suite_id !== suiteId && !(await verifyOwnership(projectId, req.body.suite_id, req.user.id))) {
+        return next(new AppError('NOT_FOUND', 404, 'Target suite not found'));
       }
 
       const { data: testCase, error } = await supabase
@@ -186,6 +192,35 @@ router.put(
     }
   },
 );
+
+// ── POST /projects/:projectId/test-suites/:suiteId/test-cases/:id/duplicate ──
+// F6: a copy of the case in the same suite, titled "<title> (copy)".
+
+router.post('/:id/duplicate', validate(uuidParamsSchema, 'params'), async (req, res, next) => {
+  try {
+    const { projectId, suiteId } = req.params as unknown as { projectId: string; suiteId: string };
+
+    if (!(await verifyOwnership(projectId, suiteId, req.user.id))) {
+      return next(new AppError('NOT_FOUND', 404, 'Suite not found'));
+    }
+
+    const { data: original } = await supabase.from('test_cases').select('*').eq('id', req.params.id).eq('suite_id', suiteId).single();
+    if (!original) return next(new AppError('NOT_FOUND', 404, 'Test case not found'));
+
+    const now = new Date().toISOString();
+    // id is left for the database to assign
+    const { data: testCase, error } = await supabase
+      .from('test_cases')
+      .insert({ ...original, id: undefined, title: `${String(original.title).slice(0, 493)} (copy)`, created_at: now, updated_at: now })
+      .select()
+      .single();
+    if (error || !testCase) return next(error ?? new AppError('INTERNAL_ERROR', 500, 'Failed to duplicate test case'));
+
+    res.status(201).json({ test_case: testCase });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ── DELETE /projects/:projectId/test-suites/:suiteId/test-cases/:id ──────────
 

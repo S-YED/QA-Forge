@@ -60,6 +60,13 @@ export function CaseDialog({ projectId, suiteId, editing, open, onClose, onSaved
   // Per-step field errors, shown next to the fields after a save attempt (null = not checked yet).
   const [errors, setErrors] = useState<StepErrors[] | null>(null);
 
+  // F6: swap two steps; they are numbered by position when saved.
+  const moveStep = (from: number, to: number) => {
+    const next = [...steps];
+    [next[from], next[to]] = [next[to], next[from]];
+    setSteps(next);
+  };
+
   const save = async () => {
     if (!title.trim()) return;
 
@@ -209,6 +216,8 @@ export function CaseDialog({ projectId, suiteId, editing, open, onClose, onSaved
                   errors={errors ? (isBlankStep(step) ? {} : stepErrors(step)) : undefined}
                   onChange={(next) => setSteps(steps.map((s, i) => (i === idx ? next : s)))}
                   onRemove={steps.length > 1 ? () => setSteps(steps.filter((_, i) => i !== idx)) : undefined}
+                  onMoveUp={idx > 0 ? () => moveStep(idx, idx - 1) : undefined}
+                  onMoveDown={idx < steps.length - 1 ? () => moveStep(idx, idx + 1) : undefined}
                 />
               ))}
             </div>

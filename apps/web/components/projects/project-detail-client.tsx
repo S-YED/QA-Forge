@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Globe, Sparkles } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
@@ -75,14 +75,22 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
     }
   }, [projectId]);
 
+  // F6: the filters each list was last loaded with ("" for none); "Load more" and Refresh keep them.
+  const runsQuery = useRef('');
+  const bugsQuery = useRef('');
+  // What the tab labels show: every run and bug of the project, whatever the filters.
+  const [totals, setTotals] = useState({ runs: 0, bugs: 0 });
+
   const fetchRuns = useCallback(
-    async (page = 1) => {
+    async (page = 1, query = runsQuery.current) => {
+      runsQuery.current = query;
       try {
         const data = await apiClient.get<RunsResponse>(
-          `/api/projects/${projectId}/test-runs?page=${page}&per_page=20`,
+          `/api/projects/${projectId}/test-runs?page=${page}&per_page=20${query}`,
         );
         setRuns((prev) => (page === 1 ? (data.test_runs ?? []) : [...prev, ...(data.test_runs ?? [])]));
         setRunsCount(data.count ?? 0);
+        if (!query) setTotals((t) => ({ ...t, runs: data.count ?? 0 }));
         setRunsPage(page);
       } catch (err) {
         toastError('Could not load runs', err);
@@ -102,18 +110,23 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
     }
   }, [projectId]);
 
-  const fetchBugs = useCallback(async (page = 1) => {
+  const fetchBugs = useCallback(async (page = 1, query = bugsQuery.current) => {
+    bugsQuery.current = query;
     try {
       const data = await apiClient.get<{ bugs: ProjectBug[]; count: number }>(
-        `/api/projects/${projectId}/bugs?page=${page}&per_page=20`,
+        `/api/projects/${projectId}/bugs?page=${page}&per_page=20${query}`,
       );
       setBugs((prev) => (page === 1 ? (data.bugs ?? []) : [...prev, ...(data.bugs ?? [])]));
       setBugsCount(data.count ?? 0);
+      if (!query) setTotals((t) => ({ ...t, bugs: data.count ?? 0 }));
       setBugsPage(page);
     } catch (err) {
       toastError('Could not load bugs', err);
     }
   }, [projectId]);
+
+  const filterRuns = useCallback((query: string) => void fetchRuns(1, query), [fetchRuns]);
+  const filterBugs = useCallback((query: string) => void fetchBugs(1, query), [fetchBugs]);
 
   // F4: values steps use as {{NAME}}. `available` is false until the database has the variables table.
   const [variables, setVariables] = useState<{ list: ProjectVariable[]; available: boolean }>({ list: [], available: true });
@@ -152,8 +165,8 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
   const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'suites', label: 'Suites', count: suites.length },
-    { id: 'runs', label: 'Runs', count: runsCount },
-    { id: 'bugs', label: 'Bugs', count: bugsCount },
+    { id: 'runs', label: 'Runs', count: totals.runs },
+    { id: 'bugs', label: 'Bugs', count: totals.bugs },
     { id: 'recordings', label: 'Recordings', count: recordingsCount },
     { id: 'variables', label: 'Variables', count: variables.list.length },
     { id: 'automation', label: 'Automation' },
@@ -253,6 +266,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
             totalCount={runsCount}
             onRefresh={fetchRuns}
             onLoadMore={() => fetchRuns(runsPage + 1)}
+            onFilter={filterRuns}
           />
         </TabsContent>
         <TabsContent value="bugs">
@@ -262,6 +276,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
             totalCount={bugsCount}
             onRefresh={() => fetchBugs(1)}
             onLoadMore={() => fetchBugs(bugsPage + 1)}
+            onFilter={filterBugs}
           />
         </TabsContent>
         <TabsContent value="recordings">

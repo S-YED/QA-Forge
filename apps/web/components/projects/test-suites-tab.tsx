@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, ChevronRight, Trash2, FileText, Pencil, Play } from 'lucide-react';
+import { Plus, ChevronRight, Trash2, FileText, Pencil, Play, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { useDemoMode } from '@/lib/hooks/use-demo-mode';
@@ -38,6 +39,9 @@ interface TestSuitesTabProps {
   lastResults?: Record<string, CaseResult>;
   onRefresh: () => void;
 }
+
+/** A search hit: the case plus the name of the suite it lives in. */
+type FoundCase = TestCase & { suite_name: string };
 
 interface SuiteDetailResponse {
   suite: TestSuite;
@@ -107,13 +111,86 @@ export function TestSuitesTab({ projectId, suites, lastResults, onRefresh }: Tes
     }
   };
 
+  // F6: search test cases across every suite. `results` is null while the box is empty (the suites show instead).
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<FoundCase[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const runSearch = useCallback(
+    async (q: string) => {
+      const data = await apiClient.get<{ test_cases: FoundCase[] }>(
+        `/api/projects/${projectId}/test-suites/search?q=${encodeURIComponent(q)}`,
+      );
+      setResults(data.test_cases ?? []);
+    },
+    [projectId],
+  );
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setResults(null);
+      return;
+    }
+    let stale = false;
+    setSearching(true);
+    // wait for a pause in typing, and ignore an answer that arrives after a newer search began
+    const timer = setTimeout(async () => {
+      try {
+        const data = await apiClient.get<{ test_cases: FoundCase[] }>(
+          `/api/projects/${projectId}/test-suites/search?q=${encodeURIComponent(q)}`,
+        );
+        if (!stale) setResults(data.test_cases ?? []);
+      } catch (err) {
+        if (!stale) toastError('Could not search the test cases', err);
+      } finally {
+        if (!stale) setSearching(false);
+      }
+    }, 300);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  }, [query, projectId]);
+
+  /** After a case changed: reload what is on screen (the open suite, the search results) and the suite counts. */
+  const reload = async (...suiteIds: string[]) => {
+    if (expandedSuiteId && suiteIds.includes(expandedSuiteId)) setSuiteDetail(await loadSuite(expandedSuiteId));
+    if (query.trim()) await runSearch(query.trim());
+    onRefresh();
+  };
+  const suiteOf = (caseId: string) => results?.find((c) => c.id === caseId)?.suite_id ?? '';
+
+  const handleDuplicateCase = async (tc: TestCase) => {
+    setBusy(`organise:${tc.id}`);
+    try {
+      await apiClient.post(`/api/projects/${projectId}/test-suites/${tc.suite_id}/test-cases/${tc.id}/duplicate`, {});
+      await reload(tc.suite_id);
+      toast.success('Test case duplicated', { description: `"${tc.title} (copy)" was added to the same suite.` });
+    } catch (err) {
+      toastError('Could not duplicate the test case', err);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleMoveCase = async (tc: TestCase, toSuiteId: string) => {
+    setBusy(`organise:${tc.id}`);
+    try {
+      await apiClient.put(`/api/projects/${projectId}/test-suites/${tc.suite_id}/test-cases/${tc.id}`, { suite_id: toSuiteId });
+      await reload(tc.suite_id, toSuiteId);
+      toast.success(`Moved to ${suites.find((s) => s.id === toSuiteId)?.name ?? 'the suite'}`);
+    } catch (err) {
+      toastError('Could not move the test case', err);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const handleDeleteCase = async (caseId: string, suiteId: string) => {
     if (!confirm('Delete this test case and its run history? This cannot be undone.')) return;
     setBusy(`delete-case:${caseId}`);
     try {
       await apiClient.del(`/api/projects/${projectId}/test-suites/${suiteId}/test-cases/${caseId}`);
-      setSuiteDetail(await loadSuite(suiteId));
-      onRefresh();
+      await reload(suiteId);
       toast.success('Test case deleted');
     } catch (err) {
       toastError('Could not delete the test case', err);
@@ -168,7 +245,7 @@ export function TestSuitesTab({ projectId, suites, lastResults, onRefresh }: Tes
         `/api/projects/${projectId}/ai/optimize/${optimizeReview.caseId}/apply`,
         optimizeReview.draft,
       );
-      setSuiteDetail(await loadSuite(optimizeReview.suiteId));
+      await reload(optimizeReview.suiteId);
       setOptimizeReview(null);
       toast.success('Optimized test case saved');
     } catch (err) {
@@ -269,8 +346,53 @@ export function TestSuitesTab({ projectId, suites, lastResults, onRefresh }: Tes
         </Button>
       </div>
 
-      {/* Empty state */}
-      {rootSuites.length === 0 ? (
+      {rootSuites.length > 0 && (
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search test cases by title or step"
+            aria-label="Search test cases"
+            maxLength={100}
+            className="pl-9"
+          />
+        </div>
+      )}
+
+      {/* Search results replace the suites while the box has text */}
+      {query.trim() ? (
+        <div className="overflow-hidden rounded-lg border bg-card" aria-live="polite">
+          <p className="border-b border-border px-4 py-2.5 text-xs font-semibold text-muted-foreground">
+            {results === null
+              ? 'Searching…'
+              : `${results.length} test ${results.length === 1 ? 'case matches' : 'cases match'}${results.length === 50 ? ' (first 50 shown)' : ''}`}
+            {searching && results !== null && <Spinner className="ml-2 inline size-3" />}
+          </p>
+          {results && results.length > 0 && (
+            <CaseList
+              projectId={projectId}
+              lastResults={lastResults}
+              cases={results}
+              moveTargets={suites}
+              busy={busy}
+              optimizingCaseId={optimizingCaseId}
+              onEdit={(tc) => openCaseDialog(tc.suite_id, tc)}
+              onDelete={(caseId) => handleDeleteCase(caseId, suiteOf(caseId))}
+              onOptimize={(caseId) => handleOptimizeTestCase(caseId, suiteOf(caseId))}
+              onDuplicate={handleDuplicateCase}
+              onMove={handleMoveCase}
+              onRun={handleRunTestCase}
+            />
+          )}
+          {results?.length === 0 && (
+            <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+              No test case has that in its title or steps.
+            </p>
+          )}
+        </div>
+      ) : rootSuites.length === 0 ? (
         <EmptyState
           icon={FileText}
           title="No test suites yet"
@@ -380,6 +502,9 @@ export function TestSuitesTab({ projectId, suites, lastResults, onRefresh }: Tes
                         projectId={projectId}
                         lastResults={lastResults}
                         cases={suiteDetail.test_cases}
+                        moveTargets={suites}
+                        onDuplicate={handleDuplicateCase}
+                        onMove={handleMoveCase}
                         busy={busy}
                         optimizingCaseId={optimizingCaseId}
                         onEdit={(tc) => openCaseDialog(suite.id, tc)}
@@ -419,10 +544,7 @@ export function TestSuitesTab({ projectId, suites, lastResults, onRefresh }: Tes
           editing={caseDialog.editing}
           open={caseDialogOpen}
           onClose={() => setCaseDialogOpen(false)}
-          onSaved={async () => {
-            setSuiteDetail(await loadSuite(caseDialog.suiteId));
-            onRefresh();
-          }}
+          onSaved={() => reload(caseDialog.suiteId)}
         />
       )}
 

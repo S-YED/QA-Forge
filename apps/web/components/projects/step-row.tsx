@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-import { CircleHelp, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, CircleHelp, X } from 'lucide-react';
 import {
   STEP_ACTIONS,
   STEP_ACTION_FIELDS,
@@ -91,9 +91,13 @@ interface StepRowProps {
   errors?: StepErrors;
   onChange: (step: DraftStep) => void;
   onRemove?: () => void;
+  /** Absent on the first step. */
+  onMoveUp?: () => void;
+  /** Absent on the last step. */
+  onMoveDown?: () => void;
 }
 
-export function StepRow({ index, step, errors = {}, onChange, onRemove }: StepRowProps) {
+export function StepRow({ index, step, errors = {}, onChange, onRemove, onMoveUp, onMoveDown }: StepRowProps) {
   const n = index + 1;
   const info = step.action ? STEP_ACTION_FIELDS[step.action] : null;
   const showTarget = !!info && (info.selector || OPTIONAL_TARGET.includes(step.action as StepAction));
@@ -130,6 +134,35 @@ export function StepRow({ index, step, errors = {}, onChange, onRemove }: StepRo
           />
           <FieldError message={errors.instruction} />
         </div>
+        {/* F6: reorder with buttons, so it works from the keyboard too */}
+        {(onMoveUp || onMoveDown) && (
+          <div className="flex shrink-0">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-9 text-muted-foreground"
+              onClick={onMoveUp}
+              disabled={!onMoveUp}
+              aria-label={`Move step ${n} up`}
+              title="Move up"
+            >
+              <ArrowUp className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-9 text-muted-foreground"
+              onClick={onMoveDown}
+              disabled={!onMoveDown}
+              aria-label={`Move step ${n} down`}
+              title="Move down"
+            >
+              <ArrowDown className="size-4" />
+            </Button>
+          </div>
+        )}
         {onRemove && (
           <Button
             type="button"

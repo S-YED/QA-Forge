@@ -1,6 +1,8 @@
 'use client';
 
+import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ListFilters } from '@/components/projects/list-filters';
 import { RefreshCw, ChevronRight, Play } from 'lucide-react';
 import type { TestRun } from '@qaforge/shared-types';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -18,7 +20,17 @@ interface TestRunsTabProps {
   totalCount: number;
   onRefresh: (page?: number) => unknown;
   onLoadMore: () => unknown;
+  /** F6: reload the list from page 1 with these filters (a query string, "" for none). Must be stable. */
+  onFilter: (query: string) => void;
 }
+
+const RUN_STATUSES = [
+  ['passed', 'Passed'],
+  ['failed', 'Failed'],
+  ['error', 'Error'],
+  ['running', 'Running'],
+  ['pending', 'Pending'],
+] as const;
 
 function formatDuration(ms?: number): string {
   if (!ms) return '-';
@@ -27,12 +39,22 @@ function formatDuration(ms?: number): string {
   return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
 }
 
-export function TestRunsTab({ projectId, runs, totalCount, onRefresh, onLoadMore }: TestRunsTabProps) {
+export function TestRunsTab({ projectId, runs, totalCount, onRefresh, onLoadMore, onFilter }: TestRunsTabProps) {
   const router = useRouter();
   const { pending, track } = usePending();
   const { busy: startingAgain, runAgain } = useRunAgain(projectId);
 
-  if (runs.length === 0) {
+  // F6: the filters live here; the project page does the request.
+  const [filtered, setFiltered] = useState(false);
+  const applyFilter = useCallback(
+    (query: string) => {
+      setFiltered(!!query);
+      onFilter(query);
+    },
+    [onFilter],
+  );
+
+  if (runs.length === 0 && !filtered) {
     return (
       <EmptyState
         icon={Play}
@@ -44,15 +66,19 @@ export function TestRunsTab({ projectId, runs, totalCount, onRefresh, onLoadMore
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-foreground">Recent runs</h3>
-        <Button variant="ghost" size="sm" onClick={track('refresh', () => onRefresh(1))} disabled={!!pending}>
-          {pending === 'refresh' ? <Spinner /> : <RefreshCw />}
-          Refresh
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <ListFilters noun="runs" statuses={RUN_STATUSES} onChange={applyFilter} />
+          <Button variant="ghost" size="sm" onClick={track('refresh', () => onRefresh(1))} disabled={!!pending}>
+            {pending === 'refresh' ? <Spinner /> : <RefreshCw />}
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-lg border bg-card">
+        {runs.length === 0 && <p className="px-4 py-8 text-center text-sm text-muted-foreground">No runs match these filters.</p>}
         <ul className="divide-y divide-border">
           {runs.map((run) => (
             <li key={run.id} className="flex items-center">
