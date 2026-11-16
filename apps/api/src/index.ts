@@ -9,6 +9,7 @@ import { createSocketServer } from './websocket/socket-server.js';
 import { env } from './config/env.js';
 import logger from './utils/logger.js';
 import { reapInterruptedRuns, shutdownRuns } from './services/run-executor.js';
+import { startScheduler } from './services/schedules.js';
 
 const server = http.createServer(app);
 
@@ -29,9 +30,13 @@ const io = createSocketServer(server);
 app.set('io', io);
 logger.info('🔌 Socket.io server attached');
 
+// F9: start due scheduled suite runs, checked once a minute.
+const stopScheduler = startScheduler(io);
+
 // EXE-2: on deploy/stop, cancel in-flight runs so they end as `error` instead of staying `running`.
 const shutdown = async (signal: string) => {
   logger.info({ event: 'api:shutdown', signal });
+  stopScheduler();
   io.close(); // also stops the HTTP server accepting new connections
   await shutdownRuns();
   process.exit(0);

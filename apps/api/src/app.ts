@@ -18,6 +18,7 @@ import recordedSessionsRouter from './routes/recorded-sessions.routes.js';
 import runBatchesRouter from './routes/run-batches.routes.js';
 import projectVariablesRouter from './routes/project-variables.routes.js';
 import { ciRouter, tokensRouter } from './routes/project-tokens.routes.js';
+import schedulesRouter from './routes/schedules.routes.js';
 
 const app: Express = express();
 
@@ -100,6 +101,9 @@ app.use('/api/projects/:projectId/variables', authenticate, demoGuard, projectVa
 // CI (F8): project tokens are managed by the signed-in owner; /api/ci is called by build systems with a token
 app.use('/api/projects/:projectId/tokens', authenticate, demoGuard, tokensRouter);
 app.use('/api/ci', ciLimiter, ciRouter);
+
+// Scheduled suite runs (F9)
+app.use('/api/projects/:projectId/schedules', authenticate, demoGuard, schedulesRouter);
 
 // ── 11. AI generation routes (all protected, demo-guarded, AI rate-limited) ───
 // aiLimiter (10/min) caps the expensive AI-generation endpoints per user.

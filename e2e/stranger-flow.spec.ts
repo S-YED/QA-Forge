@@ -280,6 +280,36 @@ test('a project token starts a suite run from outside the app, and stops working
   expect((await request.post(`${API}/api/ci/suites/${suiteId}/run`, { headers: auth })).status()).toBe(401);
 });
 
+test('a suite can be scheduled, paused and unscheduled', async ({ page }) => {
+  await page.goto(projectUrl);
+  await page.getByRole('tab', { name: /Automation/ }).click();
+  await page.getByRole('button', { name: `Schedule ${suite}`, exact: true }).click();
+  await page.getByLabel('Repeat').click();
+  await page.getByRole('option', { name: 'Every week' }).click();
+  await expect(page.getByRole('listbox')).toBeHidden();
+  await page.getByLabel('Day').click();
+  await page.getByRole('option', { name: 'Friday' }).click();
+  await expect(page.getByRole('listbox')).toBeHidden();
+  await page.getByLabel('Time').click();
+  await page.getByRole('option', { name: '06:00' }).click();
+  await expect(page.getByRole('listbox')).toBeHidden();
+  await page.getByRole('button', { name: 'Save schedule' }).click();
+  await expect(page.getByText('Schedule saved')).toBeVisible();
+  await expect(page.getByText(/Every Friday at 06:00 \(.+\) · next run Fri/)).toBeVisible();
+
+  await page.reload(); // it is saved, not just shown
+  await page.getByRole('tab', { name: /Automation/ }).click();
+  await page.getByRole('button', { name: `Change the schedule of ${suite}` }).click();
+  await page.getByLabel('On', { exact: true }).click();
+  await page.getByRole('button', { name: 'Save schedule' }).click();
+  await expect(page.getByText('Paused', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: `Change the schedule of ${suite}` }).click();
+  await page.getByRole('button', { name: 'Remove schedule' }).click();
+  await expect(page.getByText('Schedule removed')).toBeVisible();
+  await expect(page.getByRole('button', { name: `Schedule ${suite}`, exact: true })).toBeVisible();
+});
+
 // Last: it renames the suite the tests above open by name.
 test('the project, a suite and a bug can be edited', async ({ page }) => {
   await page.goto(projectUrl);

@@ -25,7 +25,7 @@ const read = async (table: string, id: string) => (await admin.from(table).selec
 /** Every table in `public` (all have RLS enabled); a new table must be added to the matrix. */
 const PUBLIC_TABLES = [
   'api_keys', 'app_contexts', 'bugs', 'export_schemas', 'integrations', 'media_attachments', 'profiles', 'projects',
-  'project_tokens', 'project_variables', 'run_batches',
+  'project_tokens', 'project_variables', 'run_batches', 'suite_schedules',
   'recorded_sessions', 'session_actions', 'sprint_changes', 'test_cases', 'test_runs', 'test_steps', 'test_suites',
 ];
 
@@ -55,6 +55,7 @@ beforeAll(async () => {
     test_suites: { id: suite, patch: { name: 'pwned' }, intrude: { project_id: project, name: 'x' } },
     test_cases: { id: tcase, patch: { title: 'pwned' }, intrude: { suite_id: suite, title: 'x' } },
     test_runs: { id: run, patch: { error_message: 'pwned' }, intrude: { project_id: project, user_id: bob.id, mode: 'ai_driven' } },
+    suite_schedules: { id: await insert('suite_schedules', { project_id: project, suite_id: suite, user_id: victim, frequency: 'daily', hour: 9, next_run_at: '2099-01-01T00:00:00Z' }), patch: { enabled: false } },
     project_tokens: { id: await insert('project_tokens', { project_id: project, user_id: victim, name: 't', token_hash: 'h-' + Date.now(), token_prefix: 'qf_x' }), patch: { name: 'pwned' }, intrude: { project_id: project, user_id: bob.id, name: 'x', token_hash: 'i-' + Date.now(), token_prefix: 'qf_y' } },
     project_variables: { id: await insert('project_variables', { project_id: project, name: 'TOKEN', value_encrypted: 'x' }), patch: { is_secret: false }, intrude: { project_id: project, name: 'OTHER', value_encrypted: 'x' } },
     run_batches: { id: await insert('run_batches', { project_id: project, user_id: victim, suite_id: suite }), patch: { suite_id: null }, intrude: { project_id: project, user_id: bob.id } },
