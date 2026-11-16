@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/shared/spinner';
 import { usePending } from '@/lib/hooks/use-pending';
 import { timeAgo } from '@/lib/utils';
+import { isRunActive } from '@/lib/run-steps';
+import { CASE_DELETED, useRunAgain } from '@/lib/hooks/use-run-again';
 
 interface TestRunsTabProps {
   projectId: string;
@@ -28,6 +30,7 @@ function formatDuration(ms?: number): string {
 export function TestRunsTab({ projectId, runs, totalCount, onRefresh, onLoadMore }: TestRunsTabProps) {
   const router = useRouter();
   const { pending, track } = usePending();
+  const { busy: startingAgain, runAgain } = useRunAgain(projectId);
 
   if (runs.length === 0) {
     return (
@@ -52,10 +55,10 @@ export function TestRunsTab({ projectId, runs, totalCount, onRefresh, onLoadMore
       <div className="overflow-hidden rounded-lg border bg-card">
         <ul className="divide-y divide-border">
           {runs.map((run) => (
-            <li key={run.id}>
+            <li key={run.id} className="flex items-center">
               <button
                 onClick={() => router.push(`/dashboard/projects/${projectId}/runs/${run.id}`)}
-                className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-accent/40"
+                className="flex min-w-0 flex-1 items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-accent/40"
               >
                 <div className="flex min-w-0 flex-1 items-center gap-3">
                   <StatusBadge status={run.status} />
@@ -81,6 +84,20 @@ export function TestRunsTab({ projectId, runs, totalCount, onRefresh, onLoadMore
                   <ChevronRight className="size-4 text-muted-foreground/60" />
                 </div>
               </button>
+              {/* F2: a sibling of the row button, not inside it */}
+              {!isRunActive(run.status) && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="mr-2 shrink-0"
+                  onClick={() => run.test_case_id && runAgain(run.test_case_id, run.id)}
+                  disabled={!run.test_case_id || !!startingAgain}
+                  title={run.test_case_id ? 'Run again' : CASE_DELETED}
+                  aria-label={`Run ${run.test_cases?.title ?? 'this test case'} again`}
+                >
+                  {startingAgain === run.id ? <Spinner /> : <Play />}
+                </Button>
+              )}
             </li>
           ))}
         </ul>

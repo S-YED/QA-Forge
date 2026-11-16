@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Download, RotateCcw, Bug, Square, X } from 'lucide-react';
+import { ArrowLeft, Download, Play, RotateCcw, Bug, Square, X } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
+import { CASE_DELETED, useRunAgain } from '@/lib/hooks/use-run-again';
 import { toastError } from '@/lib/toast-error';
 import { createClient } from '@/lib/supabase/client';
 import { isRunActive, mergeSavedSteps, upsertStep } from '@/lib/run-steps';
@@ -62,6 +63,7 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
   const [run, setRun] = useState<RunDetailResponse['test_run'] | null>(null);
   const [exporting, setExporting] = useState(false);
   const [stopping, setStopping] = useState(false);
+  const { busy: startingAgain, runAgain } = useRunAgain(projectId); // F2
 
   // F1: ask the API to stop the run. The live connection then reports the end like any other finish.
   const stopRun = async () => {
@@ -424,11 +426,25 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          {/* three buttons are wider than a phone: they wrap instead of running off the edge */}
+          <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:flex-nowrap">
             {isRunActive(run.status) && (
               <Button variant="outline" onClick={stopRun} disabled={stopping} aria-label="Stop this test run">
                 {stopping ? <Spinner /> : <Square />}
                 {stopping ? 'Stopping…' : 'Stop'}
+              </Button>
+            )}
+
+            {!isRunActive(run.status) && (
+              <Button
+                variant="outline"
+                onClick={() => run.test_case_id && runAgain(run.test_case_id)}
+                disabled={!run.test_case_id || !!startingAgain}
+                title={run.test_case_id ? 'Start a new run of this test case' : CASE_DELETED}
+                aria-label="Run this test case again"
+              >
+                {startingAgain ? <Spinner /> : <Play />}
+                {startingAgain ? 'Starting…' : 'Run again'}
               </Button>
             )}
 
