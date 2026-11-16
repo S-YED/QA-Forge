@@ -5,6 +5,25 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** A name made safe for a file: "Login works!" becomes "login-works". */
+export const fileSlug = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '') || 'export';
+
+/** Hand the browser a text file to save. */
+export function downloadText(filename: string, text: string, mime: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 /** "Just now", "5m ago", "3h ago", "2d ago", then a short date. */
 export function timeAgo(dateStr: string): string {
   const d = new Date(dateStr);

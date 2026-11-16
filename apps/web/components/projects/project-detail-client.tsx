@@ -257,7 +257,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
           <ProjectOverviewTab projectId={projectId} overview={overview} />
         </TabsContent>
         <TabsContent value="suites">
-          <TestSuitesTab projectId={projectId} suites={suites} lastResults={lastResults} onRefresh={fetchSuites} />
+          <TestSuitesTab projectId={projectId} suites={suites} lastResults={lastResults} baseUrl={project.base_url ?? undefined} onRefresh={fetchSuites} />
         </TabsContent>
         <TabsContent value="runs">
           <TestRunsTab

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Camera, Check, RotateCcw, TerminalSquare, X } from 'lucide-react';
 import type { TestStep } from '@qaforge/shared-types';
 import { stepsToPlaywright } from '@qaforge/shared-types';
-import { cn } from '@/lib/utils';
+import { cn, downloadText, fileSlug } from '@/lib/utils';
 import { StatusBadge } from '@/components/shared/status-badge';
 
 // The display pieces of the run page: console, screenshot strip, steps list and the script download.
@@ -41,22 +41,7 @@ export function downloadPlaywrightScript(
     testTitle,
     baseUrl,
   );
-  const slug = testTitle
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-  const timestamp = new Date().toISOString().slice(0, 10);
-  const filename = `${slug}-${timestamp}.spec.ts`;
-
-  const blob = new Blob([code], { type: 'text/typescript' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  downloadText(`${fileSlug(testTitle)}-${new Date().toISOString().slice(0, 10)}.spec.ts`, code, 'text/typescript');
 }
 
 // ── Live Terminal Component ───────────────────────────────────────────────────

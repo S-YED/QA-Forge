@@ -2,14 +2,15 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, ChevronRight, Trash2, FileText, Pencil, Play, Search } from 'lucide-react';
+import { Plus, ChevronRight, Download, FileCode, FileSpreadsheet, Trash2, FileText, Pencil, Play, Search } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api/client';
-import { cn } from '@/lib/utils';
+import { cn, downloadText, fileSlug } from '@/lib/utils';
 import { useDemoMode } from '@/lib/hooks/use-demo-mode';
 import { toast } from 'sonner';
 import { toastError } from '@/lib/toast-error';
-import { type GeneratedTestCase, type TestSuite, type TestCase } from '@qaforge/shared-types';
+import { casesToCsv, suiteToPlaywright, type GeneratedTestCase, type TestSuite, type TestCase } from '@qaforge/shared-types';
 import { CaseDialog } from '@/components/projects/case-dialog';
 import { CaseList } from '@/components/projects/case-list';
 import type { CaseResult } from '@/components/projects/project-overview-tab';
@@ -37,6 +38,8 @@ interface TestSuitesTabProps {
   suites: SuiteWithCount[];
   /** F5: each case's last finished run, by case id */
   lastResults?: Record<string, CaseResult>;
+  /** F11: the project's base URL, written into an exported Playwright file */
+  baseUrl?: string;
   onRefresh: () => void;
 }
 
@@ -51,7 +54,7 @@ interface SuiteDetailResponse {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export function TestSuitesTab({ projectId, suites, lastResults, onRefresh }: TestSuitesTabProps) {
+export function TestSuitesTab({ projectId, suites, lastResults, baseUrl, onRefresh }: TestSuitesTabProps) {
   const router = useRouter();
   const isDemo = useDemoMode();
   const [expandedSuiteId, setExpandedSuiteId] = useState<string | null>(null);
@@ -275,6 +278,23 @@ export function TestSuitesTab({ projectId, suites, lastResults, onRefresh }: Tes
     }
   };
 
+  // F11: download every case of the suite. Built in the browser from the saved cases; steps keep {{NAME}},
+  // so no variable value ends up in the file.
+  const handleExportSuite = async (suite: TestSuite, kind: 'playwright' | 'csv') => {
+    setBusy(`export:${suite.id}`);
+    try {
+      const { test_cases: cases } = await loadSuite(suite.id);
+      const name = `${fileSlug(suite.name)}-${new Date().toISOString().slice(0, 10)}`;
+      if (kind === 'playwright') downloadText(`${name}.spec.ts`, suiteToPlaywright(cases, baseUrl), 'text/typescript');
+      else downloadText(`${name}.csv`, String.fromCharCode(0xfeff) + casesToCsv(cases), 'text/csv;charset=utf-8'); // the mark makes Excel read accents right
+      toast.success(`Exported ${cases.length} test ${cases.length === 1 ? 'case' : 'cases'}`);
+    } catch (err) {
+      toastError('Could not export the suite', err);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   // F3: queue every case of the suite and open the suite run's page.
   const handleRunSuite = async (suiteId: string) => {
     if (isDemo) {
@@ -413,11 +433,12 @@ export function TestSuitesTab({ projectId, suites, lastResults, onRefresh }: Tes
             return (
               <div key={suite.id} className="overflow-hidden rounded-lg border bg-card">
                 {/* Suite header */}
-                <div className="flex items-center justify-between gap-2 pr-3">
+                {/* on a phone the name gets its own row and the controls sit under it */}
+                <div className="flex flex-wrap items-center justify-between gap-x-2 sm:flex-nowrap sm:pr-3">
                   <button
                     onClick={() => toggleSuite(suite.id)}
                     aria-expanded={isExpanded}
-                    className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-accent/40"
+                    className="flex min-w-0 flex-1 basis-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-accent/40 sm:basis-auto"
                   >
                     <ChevronRight
                       className={cn(
@@ -437,7 +458,7 @@ export function TestSuitesTab({ projectId, suites, lastResults, onRefresh }: Tes
                     </span>
                   </button>
 
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-2 pb-3 pl-4 sm:pb-0 sm:pl-0">
                     <Badge variant="secondary">
                       {caseCount} {caseCount === 1 ? 'case' : 'cases'}
                     </Badge>
@@ -453,6 +474,31 @@ export function TestSuitesTab({ projectId, suites, lastResults, onRefresh }: Tes
                       {busy === `run-suite:${suite.id}` ? <Spinner /> : <Play />}
                       <span className="hidden sm:inline">{busy === `run-suite:${suite.id}` ? 'Starting…' : 'Run suite'}</span>
                     </Button>
+                    {/* F11: the suite's cases as one Playwright file or a CSV */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground"
+                          disabled={caseCount === 0 || busy === `export:${suite.id}`}
+                          aria-label={`Export ${suite.name}`}
+                          title={caseCount === 0 ? 'Add a test case first' : 'Export this suite'}
+                        >
+                          {busy === `export:${suite.id}` ? <Spinner /> : <Download className="size-4" />}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => handleExportSuite(suite, 'playwright')}>
+                          <FileCode className="size-4" />
+                          Playwright file (.spec.ts)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => handleExportSuite(suite, 'csv')}>
+                          <FileSpreadsheet className="size-4" />
+                          Spreadsheet (.csv)
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <Button
                       variant="ghost"
                       size="icon"

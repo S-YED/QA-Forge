@@ -89,6 +89,16 @@ async function find(page: Page, words: string, kind: 'field' | 'control' | 'pres
  * plain-word targets go through the same lookup order the runner uses, so the file behaves like the QA Forge run.
  */
 export function stepsToPlaywright(steps: ExportStep[], title: string, baseUrl?: string): string {
+  return suiteToPlaywright([{ title, steps }], baseUrl);
+}
+
+export interface ExportCase {
+  title: string;
+  steps: ExportStep[];
+}
+
+/** F11: one Playwright Test file for several cases, one `test()` each. Same rules as `stepsToPlaywright`. */
+export function suiteToPlaywright(cases: ExportCase[], baseUrl?: string): string {
   let needsFind = false;
   // Project variables ({{NAME}}, F4) are read from the environment, so no value, secret or not, is written into the file.
   const envNames = new Set<string>();
@@ -110,7 +120,7 @@ export function stepsToPlaywright(steps: ExportStep[], title: string, baseUrl?: 
     return `(await find(page, ${lit(unquote(target))}, ${s(kind)}))`;
   };
 
-  const body = steps.map(legacy).map((step) => {
+  const bodyOf = (steps: ExportStep[]) => steps.map(legacy).map((step) => {
     const action = step.action as StepAction;
     const v = lit(step.value ?? '');
     const target = () => el(step, KIND[action] ?? 'any');
@@ -135,6 +145,14 @@ export function stepsToPlaywright(steps: ExportStep[], title: string, baseUrl?: 
     return `${comment}  ${code}`;
   });
 
+  // Playwright refuses two tests with the same title in one file, so a repeated title gets a number.
+  const seen = new Map<string, number>();
+  const tests = cases.flatMap(({ title, steps }) => {
+    const n = (seen.get(title) ?? 0) + 1;
+    seen.set(title, n);
+    return ['', `test(${s(n > 1 ? `${title} (${n})` : title)}, async ({ page }) => {`, ...bodyOf(steps), '});'];
+  });
+
   return [
     `import { test, expect${needsFind ? ', type Locator, type Page' : ''} } from '@playwright/test';`,
     '',
@@ -144,10 +162,28 @@ export function stepsToPlaywright(steps: ExportStep[], title: string, baseUrl?: 
       ? ['', '// These steps use project variables. Set them in the environment before running:', `// ${[...envNames].join(', ')}`]
       : []),
     ...(needsFind ? ['', FIND_HELPER] : []),
-    '',
-    `test(${s(title)}, async ({ page }) => {`,
-    ...body,
-    '});',
+    ...tests,
     '',
   ].join('\n');
+}
+
+/**
+ * F11: a suite's cases as CSV, one row per step, for spreadsheets and test-management tools. Steps keep
+ * `{{NAME}}` as written, so no variable value is in the file. A cell that a spreadsheet would run as a
+ * formula (starting with = + - @) gets a leading apostrophe.
+ */
+export function casesToCsv(cases: (ExportCase & { priority?: string | null; type?: string | null })[]): string {
+  const cell = (value: unknown) => {
+    let text = value == null ? '' : String(value);
+    if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  const rows: unknown[][] = [['Case', 'Priority', 'Type', 'Step', 'Action', 'Description', 'Element', 'Value']];
+  for (const c of cases) {
+    const steps = c.steps.length ? c.steps : [{ action: '' } as ExportStep];
+    steps.forEach((st, i) =>
+      rows.push([c.title, c.priority, c.type, c.steps.length ? i + 1 : '', st.action, st.instruction, st.selector, st.value]),
+    );
+  }
+  return rows.map((r) => r.map(cell).join(',')).join('\r\n') + '\r\n';
 }

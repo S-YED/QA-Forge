@@ -200,6 +200,31 @@ test('Export script downloads a test that finds elements by their words', async 
   expect(code).toContain('await expect.poll(() => page.url()).toContain("/dashboard");');
 });
 
+test('a suite exports as one Playwright file and as a spreadsheet', async ({ page }) => {
+  const { readFile } = await import('node:fs/promises');
+  await page.goto(projectUrl);
+
+  // F11. One file, one test per case, the finder helper once.
+  await page.getByRole('button', { name: `Export ${suite}` }).click();
+  const [spec] = await Promise.all([page.waitForEvent('download'), page.getByRole('menuitem', { name: /Playwright file/ }).click()]);
+  expect(spec.suggestedFilename()).toMatch(/^e2e-suite-\d{4}-\d{2}-\d{2}\.spec\.ts$/);
+  const code = await readFile((await spec.path())!, 'utf8');
+  const tests = code.match(/^test\(/gm) ?? [];
+  expect(tests.length).toBeGreaterThan(1);
+  expect(code).toContain('test("E2E plain sentences", async ({ page }) => {');
+  expect(code).toContain(`const BASE_URL = "${DEMO_SHOP}"`);
+  expect(code.match(/^async function find\(/gm)).toHaveLength(1);
+  await expect(page.getByText(`Exported ${tests.length} test cases`)).toBeVisible();
+
+  // The spreadsheet has a header and a row per step.
+  await page.getByRole('button', { name: `Export ${suite}` }).click();
+  const [sheet] = await Promise.all([page.waitForEvent('download'), page.getByRole('menuitem', { name: /Spreadsheet/ }).click()]);
+  expect(sheet.suggestedFilename()).toMatch(/\.csv$/);
+  const csv = (await readFile((await sheet.path())!, 'utf8')).replace(/^﻿/, '');
+  expect(csv.split('\r\n')[0]).toBe('Case,Priority,Type,Step,Action,Description,Element,Value');
+  expect(csv).toMatch(/\r\nE2E plain sentences,\w+,\w+,1,navigate,/);
+});
+
 test('a whole suite runs case by case, shows the totals, and can be stopped', async ({ page }) => {
   await page.goto(projectUrl);
   await page.getByRole('button', { name: `Run suite ${suite}` }).click();
