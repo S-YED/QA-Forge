@@ -1,5 +1,6 @@
 import { createServerSupabaseClient, getUser } from '@/lib/supabase/server';
 import { ProfileForm } from '@/components/settings/profile-form';
+import { PasswordCard } from '@/components/settings/password-card';
 import { PageHeader } from '@/components/shared/page-header';
 import { Card } from '@/components/ui/card';
 import type { Profile } from '@qaforge/shared-types';
@@ -46,7 +47,10 @@ export default async function ProfilePage() {
     <div className="space-y-6">
       <PageHeader title="Profile" description="Manage your account settings." />
       {profile ? (
-        <ProfileForm profile={profile} />
+        <>
+          <ProfileForm profile={profile} />
+          <PasswordCard isDemo={!!profile.is_demo} />
+        </>
       ) : (
         <Card className="max-w-lg p-6 text-center text-sm text-muted-foreground">
           Unable to load profile. Please try again later.

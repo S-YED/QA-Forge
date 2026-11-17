@@ -7,9 +7,8 @@ import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/shared/spinner';
+import { NewPasswordForm } from '@/components/settings/new-password-form';
 
 /**
  * DD-5: where the password-reset email lands. Opening the link signs the person in; here they choose the
@@ -19,28 +18,11 @@ export default function ResetPasswordPage() {
   const router = useRouter();
   const [supabase] = useState(createClient);
   const [state, setState] = useState<'checking' | 'ready' | 'expired'>('checking');
-  const [password, setPassword] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // getSession waits until the client has turned the code in the link into a session (or failed to).
     void supabase.auth.getSession().then(({ data }) => setState(data.session ? 'ready' : 'expired'));
   }, [supabase]);
-
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
-    const { error: refused } = await supabase.auth.updateUser({ password });
-    if (refused) {
-      setError(refused.message);
-      setSaving(false);
-      return;
-    }
-    toast.success('Password changed');
-    router.push('/dashboard/projects');
-  };
 
   if (state === 'checking') {
     return (
@@ -75,31 +57,13 @@ export default function ResetPasswordPage() {
         <CardDescription>You will sign in with it from now on.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={save} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="new-password">New password</Label>
-            <Input
-              id="new-password"
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              aria-invalid={!!error}
-              aria-describedby={error ? 'new-password-error' : undefined}
-            />
-            {error && (
-              <p id="new-password-error" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-          </div>
-          <Button type="submit" className="w-full" disabled={saving || !password}>
-            {saving && <Spinner className="text-current" />}
-            {saving ? 'Saving…' : 'Set new password'}
-          </Button>
-        </form>
+        <NewPasswordForm
+          submitLabel="Set new password"
+          onDone={() => {
+            toast.success('Password changed');
+            router.push('/dashboard/projects');
+          }}
+        />
       </CardContent>
     </Card>
   );

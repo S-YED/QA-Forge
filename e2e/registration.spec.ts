@@ -91,6 +91,32 @@ test('a forgotten password is reset from the emailed link, and the new one signs
   await expect(page).toHaveURL(/\/dashboard\/projects/);
 });
 
+test('a signed-in person changes their password in Settings, and only the new one signs in', async ({ page, context }) => {
+  // G1. A fresh account, so no shared test user changes password.
+  const email = `e2e-change-${Date.now()}@qaforge.dev`;
+  await page.goto('/login?view=sign_up');
+  await expect(page.getByRole('button', { name: 'Sign up' })).toBeVisible();
+  await page.locator('input[type="email"]').fill(email);
+  await page.locator('input[type="password"]').fill('First-Pass-123!');
+  await page.getByRole('button', { name: 'Sign up' }).click();
+  await expect(page).toHaveURL(/\/dashboard\/projects/);
+
+  await page.goto('/dashboard/settings/profile');
+  await page.getByLabel('New password').fill('Second-Pass-456!');
+  await page.getByRole('button', { name: 'Change password' }).click();
+  await expect(page.getByText('Password changed')).toBeVisible();
+
+  await context.clearCookies();
+  for (const [password, works] of [['First-Pass-123!', false], ['Second-Pass-456!', true]] as const) {
+    await page.goto('/login');
+    await page.locator('input[type="email"]').fill(email);
+    await page.locator('input[type="password"]').fill(password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    if (works) await expect(page).toHaveURL(/\/dashboard\/projects/);
+    else await expect(page.getByText('Invalid login credentials')).toBeVisible();
+  }
+});
+
 test('a reset link that no longer works says so and offers a new one', async ({ page }) => {
   await page.goto('/reset-password');
   await expect(page.getByText('This reset link no longer works')).toBeVisible();

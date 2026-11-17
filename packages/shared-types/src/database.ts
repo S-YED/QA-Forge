@@ -17,6 +17,8 @@ export interface Profile {
   full_name?: string;
   avatar_url?: string;
   role: UserRole;
+  /** The shared, read-only demo account (migration 19) */
+  is_demo?: boolean;
   created_at: string;
   updated_at: string;
 }
