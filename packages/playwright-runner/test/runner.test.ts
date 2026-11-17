@@ -187,9 +187,10 @@ describe('runTest', () => {
     expect(result.steps[0].error_message).toMatch(/strict mode/i);
   }, 30_000);
 
-  it('refuses non-http navigation', async () => {
+  it('refuses non-http navigation as a run that cannot run, not a failure of the app (G6)', async () => {
     const result = await runTest({ baseUrl, steps: [s(1, 'navigate', { value: 'file:///etc/passwd' })] });
-    expect(result.status).toBe('failed');
+    expect(result.status).toBe('error');
+    expect(result.error_message).toMatch(/^Step 1 cannot run: Refusing to open file: URL/);
     expect(result.steps[0].error_message).toMatch(/Refusing to open file: URL/);
   }, 30_000);
 
@@ -259,11 +260,11 @@ describe('SSRF guard', () => {
     expect(page.status).toBe('passed');
 
     const redirect = await runTest({ baseUrl, stepTimeoutMs: 2_000, steps: [s(1, 'navigate', { value: '/hop' })] });
-    expect(redirect.status).toBe('failed');
+    expect(redirect.status).toBe('error'); // G6: a blocked target is not a failure of the app under test
     expect(redirect.steps[0].error_message).toMatch(/^Blocked: Refusing to open localhost: .*private/);
 
     const direct = await runTest({ baseUrl, steps: [s(1, 'navigate', { value: baseUrl.replace('127.0.0.1', 'localhost') + 'next' })] });
-    expect(direct.status).toBe('failed');
+    expect(direct.status).toBe('error');
     expect(direct.steps[0].error_message).toMatch(/^Refusing to open localhost: .*private/);
 
     expect(hits.some((h) => h.includes('/hop'))).toBe(true); // the guard let the allowed hop through...

@@ -18,6 +18,14 @@ for (const [range, prefix] of [
   ['::', 96], ['::ffff:0:0', 96], ['64:ff9b::', 96], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8],
 ] as const) BLOCKED_V6.addSubnet(range, prefix, 'ipv6');
 
+/**
+ * The guard refused a target: a scheme other than http(s), or a private or reserved address. A step that hits it
+ * cannot run here; that is a problem with the test or its setup, not a failure of the app under test (G6).
+ */
+export class BlockedTargetError extends Error {
+  override name = 'BlockedTargetError';
+}
+
 /** Header the guard proxy sets on the response it returns instead of contacting a blocked host. */
 export const BLOCKED_HEADER = 'x-qaforge-blocked';
 
@@ -33,7 +41,7 @@ async function resolveAllowed(hostname: string, allowedPrivateHosts: readonly st
     : await lookup(host, { all: true, verbatim: true });
   for (const { address, family } of addresses) {
     if (family === 6 ? BLOCKED_V6.check(address, 'ipv6') : BLOCKED_V4.check(address, 'ipv4')) {
-      throw new Error(`Refusing to open ${hostname}: it resolves to a private or reserved address (${address})`);
+      throw new BlockedTargetError(`Refusing to open ${hostname}: it resolves to a private or reserved address (${address})`);
     }
   }
   return addresses[0].address;
@@ -42,7 +50,7 @@ async function resolveAllowed(hostname: string, allowedPrivateHosts: readonly st
 /** Throw unless `rawUrl` is http(s) and its host resolves only to public addresses (or is allowed). */
 export async function assertAllowedTarget(rawUrl: string, allowedPrivateHosts: readonly string[] = []): Promise<void> {
   const url = new URL(rawUrl);
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(`Refusing to open ${url.protocol} URL`);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new BlockedTargetError(`Refusing to open ${url.protocol} URL`);
   await resolveAllowed(url.hostname, allowedPrivateHosts);
 }
 

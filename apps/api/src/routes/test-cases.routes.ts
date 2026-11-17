@@ -99,7 +99,8 @@ const createTestCaseSchema = z.object({
   expected_result: z.string().max(1000).optional(),
   priority: z.enum(['critical', 'high', 'medium', 'low']).optional().default('medium'),
   type: z.enum(['functional', 'regression', 'smoke', 'edge_case', 'accessibility', 'negative']).optional().default('functional'),
-  tags: z.array(z.string()).optional().default([]),
+  // G6: the same cap as AI drafts (GeneratedTestCaseSchema): 20 tags of up to 50 characters
+  tags: z.array(z.string().max(50)).max(20).optional().default([]),
 });
 
 router.post('/', validate(createTestCaseSchema), async (req, res, next) => {
@@ -150,7 +151,7 @@ const updateTestCaseSchema = z.object({
   expected_result: z.string().max(1000).optional().nullable(),
   priority: z.enum(['critical', 'high', 'medium', 'low']).optional(),
   type: z.enum(['functional', 'regression', 'smoke', 'edge_case', 'accessibility', 'negative']).optional(),
-  tags: z.array(z.string()).optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
   /** F6: move the case to another suite of the same project */
   suite_id: z.guid().optional(),
 });

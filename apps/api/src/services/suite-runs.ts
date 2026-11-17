@@ -37,6 +37,12 @@ export async function startSuiteRun(
     .maybeSingle();
   if (!suite) throw new AppError('NOT_FOUND', 404, 'Suite not found');
 
+  // G6: without a base URL every case would stop at once with the same error; say so before queuing any.
+  const { data: project } = await supabase.from('projects').select('base_url').eq('id', projectId).maybeSingle();
+  if (!project?.base_url) {
+    throw new AppError('BAD_REQUEST', 400, "Set the project's base URL before running a suite: every case starts there");
+  }
+
   const { data: cases, error: casesError } = await supabase
     .from('test_cases')
     .select('id')

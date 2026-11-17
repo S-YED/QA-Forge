@@ -7,6 +7,8 @@
  * SEC-2: AI optimize cannot read/overwrite another user's test case (IDOR).
  * CON-1: test-case writes enforce the shared step contract with field-level 400s.
  */
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 import { supabase } from '../../config/supabase.js';
 import { ANON_KEY, SUPABASE_URL, USERS, signIn, useApi } from './helpers.js';
@@ -42,6 +44,56 @@ async function withBobProject(name: string, fn: (projectId: string, token: strin
     await api(`/projects/${created.project.id}`, bob.token, 'DELETE');
   }
 }
+
+describe('G6 edges found by the deep-dive probe', () => {
+  it('a step the address guard blocks ends the run as error and files no bug', async () => {
+    const page = http.createServer((_req, res) => res.writeHead(200, { 'Content-Type': 'text/html' }).end('<h1>Start</h1>'));
+    await new Promise<void>((r) => page.listen(0, '127.0.0.1', r));
+    try {
+      await withBobProject('g6-blocked', async (projectId, token) => {
+        await api(`/projects/${projectId}`, token, 'PUT', { base_url: `http://127.0.0.1:${(page.address() as AddressInfo).port}/` });
+        const suite = ((await (await api(`/projects/${projectId}/test-suites`, token, 'POST', { name: 's' })).json()) as { suite: { id: string } }).suite;
+        const tc = ((await (await api(`/projects/${projectId}/test-suites/${suite.id}/test-cases`, token, 'POST', {
+          title: 'opens a javascript: address',
+          steps: [{ step_number: 1, action: 'navigate', instruction: 'Open it', value: 'javascript:alert(1)' }],
+        })).json()) as { test_case: { id: string } }).test_case;
+        const run = ((await (await api(`/projects/${projectId}/test-runs`, token, 'POST', { test_case_id: tc.id, mode: 'ai_driven' })).json()) as { test_run: { id: string } }).test_run;
+        let done: { test_run: { status: string; error_message: string }; bugs: unknown[] } | undefined;
+        for (let i = 0; i < 60; i++) {
+          done = (await (await api(`/projects/${projectId}/test-runs/${run.id}`, token)).json()) as typeof done;
+          if (!['pending', 'running'].includes(done!.test_run.status)) break;
+          await new Promise((r) => setTimeout(r, 500));
+        }
+        expect(done!.test_run.status).toBe('error');
+        expect(done!.test_run.error_message).toMatch(/^Step 1 cannot run: Refusing to open javascript: URL/);
+        expect(done!.bugs).toEqual([]);
+      });
+    } finally {
+      await new Promise<void>((r) => page.close(() => r()));
+    }
+  }, 60_000);
+
+  it('refuses a suite run on a project with no base URL, an unknown assignee, and too many or too long tags', async () => {
+    await withBobProject('g6-edges', async (projectId, token) => {
+      const suite = ((await (await api(`/projects/${projectId}/test-suites`, token, 'POST', { name: 's' })).json()) as { suite: { id: string } }).suite;
+      const cases = `/projects/${projectId}/test-suites/${suite.id}/test-cases`;
+      const step = [{ step_number: 1, action: 'assert_visible', instruction: 'Heading', selector: 'h1' }];
+      expect((await api(cases, token, 'POST', { title: 'c', steps: step })).status).toBe(201);
+
+      const batch = await api(`/projects/${projectId}/run-batches`, token, 'POST', { suite_id: suite.id });
+      expect(batch.status).toBe(400);
+      expect(((await batch.json()) as { error: { message: string } }).error.message).toMatch(/base URL/);
+
+      const bug = ((await (await api(`/projects/${projectId}/bugs`, token, 'POST', { title: 'b' })).json()) as { bug: { id: string } }).bug;
+      const assign = await api(`/projects/${projectId}/bugs/${bug.id}`, token, 'PUT', { assigned_to: '00000000-0000-4000-8000-000000000000' });
+      expect(assign.status).toBe(400);
+
+      expect((await api(cases, token, 'POST', { title: 't', steps: step, tags: Array.from({ length: 21 }, (_, i) => `t${i}`) })).status).toBe(400);
+      expect((await api(cases, token, 'POST', { title: 't', steps: step, tags: ['x'.repeat(51)] })).status).toBe(400);
+      expect((await api(cases, token, 'POST', { title: 't', steps: step, tags: Array.from({ length: 20 }, () => 'x'.repeat(50)) })).status).toBe(201);
+    });
+  });
+});
 
 describe('SEC-5 the shared demo account heals itself', () => {
   it('a visitor who changes the demo password does not lock out the next visitor', async () => {

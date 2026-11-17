@@ -178,7 +178,7 @@ router.post('/:id/complete', validate(uuidParamsSchema, 'params'), async (req, r
 // G3: the owner deletes a recording; its captured actions go with it (ON DELETE CASCADE). A live browser is closed first.
 router.delete('/:id', validate(uuidParamsSchema, 'params'), async (req, res, next) => {
   try {
-    const { projectId } = req.params as any;
+    const { projectId } = req.params as unknown as { projectId: string };
     const { data: session } = await supabase
       .from('recorded_sessions')
       .select('id')

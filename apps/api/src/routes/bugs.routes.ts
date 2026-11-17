@@ -217,6 +217,10 @@ router.put(
         .select()
         .single();
 
+      // G6: an assignee who is not a user breaks the foreign key; that is a bad request, not a missing bug.
+      if (error?.code === '23503') {
+        return next(new AppError('BAD_REQUEST', 400, 'No such person to assign the bug to'));
+      }
       if (error || !bug) {
         return next(new AppError('NOT_FOUND', 404, 'Bug not found'));
       }

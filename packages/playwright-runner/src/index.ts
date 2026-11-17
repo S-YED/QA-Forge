@@ -1,9 +1,9 @@
 import type { Browser, BrowserContext, Locator, Page, Response } from 'playwright';
 import { TestCaseStepsSchema, TestStepStatus, type TestCaseStep } from '@qaforge/shared-types';
 import { locateTarget } from './locate.js';
-import { BLOCKED_HEADER, assertAllowedTarget, launchGuardedBrowser } from './target-guard.js';
+import { BLOCKED_HEADER, BlockedTargetError, assertAllowedTarget, launchGuardedBrowser } from './target-guard.js';
 
-export { assertAllowedTarget, launchGuardedBrowser } from './target-guard.js';
+export { BlockedTargetError, assertAllowedTarget, launchGuardedBrowser } from './target-guard.js';
 export { looksLikeSelector } from './locate.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ export function readableError(err: unknown): string {
 /** A navigation that ended on the guard proxy's block page (e.g. via a redirect) is an error, not a page. */
 function throwIfBlocked(response: Response | null) {
   const reason = response?.headers()[BLOCKED_HEADER];
-  if (reason) throw new Error(`Blocked: ${reason}`);
+  if (reason) throw new BlockedTargetError(`Blocked: ${reason}`);
 }
 
 /** Poll until `check` is true or the timeout passes (assertions that may settle after an action). */
@@ -265,6 +265,8 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
     }
 
     let failure: string | undefined;
+    // G6: a step the address guard refused could not run; the run ends as error and no bug is filed against the app.
+    let blocked = false;
     for (const step of steps) {
       if (failure) {
         const skipped = toResult(step, TestStepStatus.SKIPPED);
@@ -281,6 +283,7 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
       } catch (err) {
         if (signal?.aborted) return finish('error', 'Run cancelled');
         error = readableError(err);
+        blocked = err instanceof BlockedTargetError;
       }
 
       const screenshot = await page.screenshot({ type: 'png' }).catch(() => undefined);
@@ -294,10 +297,10 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
       });
       results.push(result);
       await onStepComplete?.(result);
-      if (error) failure = `Step ${step.step_number} failed: ${error}`;
+      if (error) failure = `Step ${step.step_number} ${blocked ? 'cannot run' : 'failed'}: ${error}`;
     }
 
-    if (failure) return finish('failed', failure);
+    if (failure) return finish(blocked ? 'error' : 'failed', failure);
     // ponytail: belt and braces — never report passed unless every step ran and passed.
     const allPassed = results.length === steps.length && results.every((r) => r.status === TestStepStatus.PASSED);
     return allPassed ? finish('passed') : finish('error', 'Not every step was executed');
