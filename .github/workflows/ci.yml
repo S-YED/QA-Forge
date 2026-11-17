@@ -13,7 +13,9 @@ concurrency:
 jobs:
   verify:
     name: type-check · build · test · audit
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04 on 17 Nov 2026 and our Playwright cannot install Chromium there yet.
+    # Move to the next image when a Playwright upgrade supports it.
+    runs-on: ubuntu-24.04
     # Non-secret, throwaway values so the env-validated API (config/env.ts zod
     # schema) and the encryption tests can boot in CI without real credentials.
     env:
@@ -67,7 +69,9 @@ jobs:
   # The production API image (what Railway deploys) must keep building, with its browser inside.
   docker-image:
     name: API Docker image
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04 on 17 Nov 2026 and our Playwright cannot install Chromium there yet.
+    # Move to the next image when a Playwright upgrade supports it.
+    runs-on: ubuntu-24.04
     needs: verify
     steps:
       - name: Checkout
@@ -85,7 +89,9 @@ jobs:
   # Chromium. No AI keys: generation uses the labelled local demo mode (AI_LOCAL_DEMO).
   integration-e2e:
     name: integration · e2e (local Supabase)
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04 on 17 Nov 2026 and our Playwright cannot install Chromium there yet.
+    # Move to the next image when a Playwright upgrade supports it.
+    runs-on: ubuntu-24.04
     needs: verify
     timeout-minutes: 40
     steps:
