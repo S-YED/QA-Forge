@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { io as socketIO, type Socket } from 'socket.io-client';
 import { toast } from 'sonner';
 import { toastError } from '@/lib/toast-error';
-import { cn } from '@/lib/utils';
+import { cn, scrollBehavior } from '@/lib/utils';
 import { useDemoMode, resolveDemoMode } from '@/lib/hooks/use-demo-mode';
 import { Button } from '@/components/ui/button';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
@@ -238,7 +238,7 @@ export function RecordingPortal({ projectId, sessionId }: RecordingPortalProps) 
 
   // Scroll actions timeline to bottom
   useEffect(() => {
-    timelineEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    timelineEndRef.current?.scrollIntoView({ behavior: scrollBehavior() });
   }, [actions]);
 
   const handleStopRecording = async () => {

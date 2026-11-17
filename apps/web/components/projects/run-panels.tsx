@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Camera, Check, ChevronLeft, ChevronRight, RotateCcw, TerminalSquare, X } from 'lucide-react';
 import type { TestStep } from '@qaforge/shared-types';
 import { stepsToPlaywright } from '@qaforge/shared-types';
-import { cn, downloadText, fileSlug } from '@/lib/utils';
+import { cn, downloadText, fileSlug, scrollBehavior } from '@/lib/utils';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -312,7 +312,7 @@ export function RunSummary({
 
   const goToStep = () => {
     const el = failed && document.getElementById(`step-${failed.step_number}`);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el?.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
     el?.focus({ preventScroll: true });
   };
 

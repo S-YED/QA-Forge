@@ -5,6 +5,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** 'smooth' unless the person asked for reduced motion (CSS cannot override a smooth scroll asked for in script). U5 */
+export const scrollBehavior = (): ScrollBehavior =>
+  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+
 /** A name made safe for a file: "Login works!" becomes "login-works". */
 export const fileSlug = (name: string) =>
   name

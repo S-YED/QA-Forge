@@ -96,8 +96,10 @@
     --warning-foreground: 0.22 0.04 70;
     --info: 0.70 0.14 245;
     --info-foreground: 0.16 0.02 245;
-    --destructive: 0.68 0.17 25;
-    --destructive-foreground: 0.99 0 0;
+    /* U5: white text on this light red was 3.0:1 (every Delete button, failed step numbers); dark text like the other
+       semantic colours gives 7.3:1, and 0.72 (was 0.68) keeps red text on a red-tinted panel above 4.5:1 */
+    --destructive: 0.72 0.17 25;
+    --destructive-foreground: 0.16 0.02 25;
 
     --sidebar: 0.185 0.006 240;
     --sidebar-foreground: 0.95 0.005 230;

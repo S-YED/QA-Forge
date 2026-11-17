@@ -77,6 +77,19 @@ for (const [size, viewport] of Object.entries(VIEWPORTS)) {
         await check(page, `project: ${tab}`, problems);
       }
 
+      // U5: the app's confirm box too, which a page scan never opens (its red button was 3:1 in dark mode). Cancelled.
+      await page.getByRole('tab', { name: /Suites/ }).click();
+      const deleteSuite = page.getByRole('button', { name: /^Delete suite / }).first();
+      if (await deleteSuite.isVisible()) {
+        await deleteSuite.click();
+        await expect(page.getByRole('alertdialog')).toBeVisible();
+        // Scan it once its fade-in is over: half-faded, the dark page shows through and every colour reads darker.
+        await page.getByRole('alertdialog').evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
+        await check(page, 'confirm box', problems);
+        await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
+        await expect(page.getByRole('alertdialog')).toBeHidden();
+      }
+
       // The newest run of that project, when it has one: the run page is the busiest screen.
       await page.getByRole('tab', { name: /Runs/ }).click();
       const firstRun = page.getByRole('tabpanel').locator('li > button').first();
