@@ -665,3 +665,27 @@ test('a link to a recording, run or suite run that is not there says so and goes
     await expect(page).toHaveURL(projectUrl);
   }
 });
+
+test('a bug opens on its own with its evidence, and one can be filed by hand', async ({ page }) => {
+  // G5. The coupon bug the planted-bug test filed: what happened, its screenshot and its run.
+  await page.goto(projectUrl);
+  await page.getByRole('tab', { name: /Bugs/ }).click();
+  await page.getByRole('button', { name: /Test failure at step 14/ }).first().click();
+  const sheet = page.getByRole('dialog');
+  await expect(sheet.getByRole('heading', { name: 'What happened' })).toBeVisible();
+  await expect(sheet.getByText(/\$108\.00/).first()).toBeVisible();
+  await expect(sheet.getByRole('img', { name: /The page when/ })).toBeVisible();
+  await sheet.getByRole('link', { name: 'Open the run that found it' }).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]{36}$/);
+
+  // Last test of the file: a bug filed by hand does not disturb the bug filters checked above.
+  await page.goto(projectUrl);
+  await page.getByRole('tab', { name: /Bugs/ }).click();
+  await page.getByRole('button', { name: 'File a bug' }).click();
+  await page.getByLabel(/^Title/).fill('Footer link goes nowhere');
+  await page.getByLabel('What happened').fill('Clicking "Terms" reloads the same page');
+  await page.getByRole('button', { name: 'File bug' }).click();
+  await expect(page.getByText('Bug filed')).toBeVisible();
+  await page.getByRole('button', { name: /Footer link goes nowhere/ }).click();
+  await expect(page.getByRole('dialog').getByText('Clicking "Terms" reloads the same page')).toBeVisible();
+});

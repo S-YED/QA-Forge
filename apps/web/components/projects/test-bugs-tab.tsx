@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { ListFilters } from '@/components/projects/list-filters';
-import { Bug, ChevronRight, RefreshCw } from 'lucide-react';
+import { BUG_STATUSES, BugDetailSheet } from '@/components/projects/bug-detail-sheet';
+import { NewBugDialog } from '@/components/projects/new-bug-dialog';
+import { useDemoMode } from '@/lib/hooks/use-demo-mode';
+import { Bug, ChevronRight, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api/client';
 import { toastError } from '@/lib/toast-error';
@@ -35,18 +37,24 @@ interface TestBugsTabProps {
   onOpenSuites?: () => void;
 }
 
-const BUG_STATUSES = [
-  ['open', 'Open'],
-  ['in_progress', 'In progress'],
-  ['resolved', 'Resolved'],
-  ['closed', 'Closed'],
-  ['wont_fix', "Won't fix"],
-] as const;
-
-/** Every bug in the project, newest first; failed runs file them automatically (UI-2). */
+/** Every bug in the project, newest first; failed runs file them automatically (UI-2), people file the rest (G5). */
 export function TestBugsTab({ projectId, bugs, totalCount, onRefresh, onLoadMore, onFilter, onOpenSuites }: TestBugsTabProps) {
-  const router = useRouter();
+  const isDemo = useDemoMode();
   const { pending, track } = usePending();
+  // G5: one bug opens on its own; a new one is filed by hand.
+  const [openBugId, setOpenBugId] = useState<string | null>(null);
+  const closeBug = useCallback(() => setOpenBugId(null), []);
+  const [filing, setFiling] = useState(false);
+  const fileBug = () =>
+    isDemo
+      ? toast.info('Demo is read-only', { description: 'Sign up to file bugs in your own projects.' })
+      : setFiling(true);
+  const dialogs = (
+    <>
+      <BugDetailSheet projectId={projectId} bugId={openBugId} onClose={closeBug} />
+      <NewBugDialog projectId={projectId} open={filing} onClose={() => setFiling(false)} onFiled={() => void onRefresh()} />
+    </>
+  );
   // Status changes made here, shown at once without reloading the list.
   const [statuses, setStatuses] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -76,12 +84,23 @@ export function TestBugsTab({ projectId, bugs, totalCount, onRefresh, onLoadMore
 
   if (bugs.length === 0 && !filtered) {
     return (
-      <EmptyState
-        icon={Bug}
-        title="No bugs yet"
-        description="When a run fails, QA Forge files a bug here with the failing step and its screenshot."
-        action={onOpenSuites && <Button onClick={onOpenSuites}>Open suites</Button>}
-      />
+      <>
+        <EmptyState
+          icon={Bug}
+          title="No bugs yet"
+          description="When a run fails, QA Forge files a bug here with the failing step and its screenshot. You can file one yourself too."
+          action={
+            <div className="flex flex-wrap justify-center gap-2">
+              {onOpenSuites && <Button onClick={onOpenSuites}>Open suites</Button>}
+              <Button variant="outline" onClick={fileBug}>
+                <Plus />
+                File a bug
+              </Button>
+            </div>
+          }
+        />
+        {dialogs}
+      </>
     );
   }
 
@@ -89,10 +108,16 @@ export function TestBugsTab({ projectId, bugs, totalCount, onRefresh, onLoadMore
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-foreground">Bugs</h3>
-        <Button variant="ghost" size="sm" onClick={track('refresh', onRefresh)} disabled={!!pending}>
-          {pending === 'refresh' ? <Spinner /> : <RefreshCw />}
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={track('refresh', onRefresh)} disabled={!!pending}>
+            {pending === 'refresh' ? <Spinner /> : <RefreshCw />}
+            Refresh
+          </Button>
+          <Button variant="outline" size="sm" onClick={fileBug}>
+            <Plus />
+            File a bug
+          </Button>
+        </div>
       </div>
       <ListFilters noun="bugs" statuses={BUG_STATUSES} search onChange={applyFilter} />
 
@@ -107,22 +132,18 @@ export function TestBugsTab({ projectId, bugs, totalCount, onRefresh, onLoadMore
                 <span className="ml-auto hidden shrink-0 text-xs text-muted-foreground sm:inline">
                   {new Date(bug.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </span>
-                {bug.test_run_id && <ChevronRight className="size-4 shrink-0 text-muted-foreground/60" />}
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground/60" />
               </>
             );
             return (
               <li key={bug.id} className="flex items-center gap-3 px-4 py-2.5">
-                {bug.test_run_id ? (
-                  <button
-                    onClick={() => router.push(`/dashboard/projects/${projectId}/runs/${bug.test_run_id}`)}
-                    className="flex min-w-0 flex-1 items-center gap-3 rounded-md py-1 text-left transition-colors hover:text-primary"
-                    title="Open the run that found this bug"
-                  >
-                    {summary}
-                  </button>
-                ) : (
-                  <div className="flex min-w-0 flex-1 items-center gap-3 py-1">{summary}</div>
-                )}
+                <button
+                  onClick={() => setOpenBugId(bug.id)}
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-md py-1 text-left transition-colors hover:text-primary"
+                  title="Open this bug"
+                >
+                  {summary}
+                </button>
                 <div className="flex shrink-0 items-center gap-2">
                   {savingId === bug.id && <Spinner />}
                   <Select
@@ -159,6 +180,7 @@ export function TestBugsTab({ projectId, bugs, totalCount, onRefresh, onLoadMore
           </Button>
         </div>
       )}
+      {dialogs}
     </div>
   );
 }
