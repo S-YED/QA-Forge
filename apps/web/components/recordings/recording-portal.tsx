@@ -7,6 +7,7 @@ import { apiClient } from '@/lib/api/client';
 import { createClient } from '@/lib/supabase/client';
 import { io as socketIO, type Socket } from 'socket.io-client';
 import { toast } from 'sonner';
+import { toastError } from '@/lib/toast-error';
 import { cn } from '@/lib/utils';
 import { useDemoMode, resolveDemoMode } from '@/lib/hooks/use-demo-mode';
 import { Button } from '@/components/ui/button';
@@ -104,11 +105,13 @@ export function RecordingPortal({ projectId, sessionId }: RecordingPortalProps) 
         setError('The browser session encountered an error and was terminated.');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch recording session details');
+      // Like a run or suite run that cannot be opened: say so and go back, instead of an empty page (DD-4).
+      toastError('Could not open this recording', err);
+      router.push(`/dashboard/projects/${projectId}`);
     } finally {
       setLoading(false);
     }
-  }, [projectId, sessionId]);
+  }, [projectId, sessionId, router]);
 
   // Connect to socket server
   const connectSocket = useCallback(

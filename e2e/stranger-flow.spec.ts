@@ -606,3 +606,16 @@ test('record a login by clicking and typing in the live viewport, then replay it
   await expect(page).toHaveURL(/\/runs\//, { timeout: 30_000 });
   await expect(page.getByText('All steps passed')).toBeVisible({ timeout: 90_000 });
 });
+
+test('a link to a recording, run or suite run that is not there says so and goes back to the project', async ({ page }) => {
+  const missing = '00000000-0000-4000-8000-000000000000';
+  for (const [path, message] of [
+    [`recordings/${missing}`, 'Could not open this recording'], // DD-4: was an empty page
+    [`runs/${missing}`, 'Could not open this run'],
+    [`batches/${missing}`, 'Could not open this suite run'],
+  ]) {
+    await page.goto(`${projectUrl}/${path}`);
+    await expect(page.getByText(message)).toBeVisible();
+    await expect(page).toHaveURL(projectUrl);
+  }
+});
