@@ -228,6 +228,8 @@ router.post('/:id/cancel', validate(uuidParamsSchema, 'params'), async (req, res
         .eq('id', run.id)
         .in('status', ['pending', 'running']);
       if (error) return next(error);
+      // G9: picked up by the executor between the check above and that update? It is in flight now: stop it.
+      stopRun(run.id);
     }
     res.status(202).json({ stopping: true });
   } catch (err) {

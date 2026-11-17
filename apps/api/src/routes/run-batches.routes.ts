@@ -78,6 +78,7 @@ router.post('/:id/cancel', validate(uuidParamsSchema, 'params'), async (req, res
       if (!stopRun(run.id)) {
         // Not executing in this process (left behind): close it here, only if still open.
         await supabase.from('test_runs').update(closed).eq('id', run.id).eq('status', 'running');
+        stopRun(run.id); // G9: unless the executor listed it in flight meanwhile; then stop it there too
       }
     }
 

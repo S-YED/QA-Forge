@@ -5,10 +5,10 @@
  */
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { USERS, signIn, useApi } from './helpers.js';
 import { supabase } from '../../config/supabase.js';
-import { executeTestOrchestration, reapInterruptedRuns, shutdownRuns, stopRun } from '../../services/run-executor.js';
+import { STOPPED, executeTestOrchestration, reapInterruptedRuns, shutdownRuns, stopRun } from '../../services/run-executor.js';
 
 const api = useApi();
 
@@ -266,6 +266,48 @@ describe('F1 stop a running test', () => {
     expect(detail.bugs).toEqual([]);
 
     expect((await api(cancelPath, token, 'POST', {})).status).toBe(409); // already finished
+  }, 60_000);
+
+  it('a Stop that closes the run just after it is picked up keeps its browser from starting (G9)', async () => {
+    const caseId = await createCase([{ step_number: 1, action: 'assert_visible', instruction: 'Heading', selector: 'h1' }]);
+    const { data: run, error } = await supabase
+      .from('test_runs')
+      .insert({ project_id: projectId, user_id: userId, test_case_id: caseId, mode: 'ai_driven', status: 'pending', browser: 'chromium' })
+      .select('id')
+      .single();
+    expect(error).toBeNull();
+
+    // The worst moment for Stop: the executor has claimed the run and is loading its inputs, but is not listed as in
+    // flight to the stop route yet, so the route closes the row itself. Done here while the project row is read.
+    const realFrom = supabase.from.bind(supabase);
+    let stopped = false;
+    const spy = vi.spyOn(supabase, 'from').mockImplementation(((table: string) => {
+      const query = realFrom(table);
+      if (table !== 'projects' || stopped) return query;
+      stopped = true;
+      const closing = realFrom('test_runs')
+        .update({ status: 'error', error_message: STOPPED, completed_at: new Date().toISOString() })
+        .eq('id', run!.id)
+        .in('status', ['pending', 'running']);
+      const select = query.select.bind(query) as (...a: unknown[]) => { then: (ok: unknown, bad: unknown) => unknown };
+      return Object.assign(query, {
+        select: (...a: unknown[]) => {
+          const filter = select(...a);
+          const then = filter.then.bind(filter) as (ok: unknown, bad: unknown) => unknown;
+          return Object.assign(filter, { then: (ok: unknown, bad: unknown) => closing.then(() => then(ok, bad)) });
+        },
+      });
+    }) as typeof supabase.from);
+    try {
+      await executeTestOrchestration(undefined, userId, { test_run_id: run!.id, project_id: projectId });
+    } finally {
+      spy.mockRestore();
+    }
+
+    const detail = await waitForRun(run!.id);
+    expect(detail.test_run.error_message).toBe(STOPPED);
+    expect(detail.steps).toEqual([]); // no browser started: no step was run or saved
+    expect(detail.bugs).toEqual([]);
   }, 60_000);
 
   it('closes a run that never started executing', async () => {

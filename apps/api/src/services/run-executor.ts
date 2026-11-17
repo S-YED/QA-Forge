@@ -256,6 +256,14 @@ export async function executeTestOrchestration(
       });
     };
 
+    // G9: Stop can close the row in the instant after the claim, before this run was listed as in flight (the
+    // route then closes it directly). Do not start a browser for a run that is already over.
+    const { data: current } = await supabase.from('test_runs').select('status').eq('id', test_run_id).maybeSingle();
+    if (current?.status !== 'running') {
+      logger.info({ event: 'run:closed_before_start', testRunId: test_run_id, status: current?.status ?? 'gone' });
+      return;
+    }
+
     const result = await runTest({
       baseUrl: project.base_url,
       steps: resolved.steps,
