@@ -9,9 +9,11 @@ import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { io as connect, type Socket } from 'socket.io-client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import app from '../../app.js';
+import { supabase } from '../../config/supabase.js';
 import { createSocketServer } from '../../websocket/socket-server.js';
+import { recordingLimits } from '../../websocket/handlers/recording.handler.js';
 import { USERS, signIn } from './helpers.js';
 
 let server: http.Server;
@@ -147,6 +149,130 @@ describe('A4 recording from the workbench viewport', () => {
     ]);
   }, 120_000);
 
+  it('keeps a value typed just before Stop even when saving an action is slow', async () => {
+    const loginUrl = `${demoUrl}/login`;
+    const created = await api(`/projects/${projectId}/recorded-sessions`, alice.token, 'POST', { name: 'stop rec', base_url: loginUrl });
+    const sessionId = ((await created.json()) as { recorded_session: { id: string } }).recorded_session.id;
+    const at = await centres(loginUrl, ['login-email']);
+
+    // Each action takes 800 ms to save, longer than Stop's wait for the focused field's blur; Stop must still wait.
+    const realFrom = supabase.from.bind(supabase);
+    const slowSaves = vi.spyOn(supabase, 'from').mockImplementation(((table: string) => {
+      const builder = realFrom(table);
+      if (table !== 'session_actions') return builder;
+      const insert = builder.insert.bind(builder) as (...a: unknown[]) => { select: () => { single: () => PromiseLike<unknown> } };
+      return Object.assign(builder, {
+        insert: (...args: unknown[]) => {
+          const query = insert(...args).select().single();
+          const delayed = {
+            select: () => delayed,
+            single: () => delayed,
+            then: (ok: (v: unknown) => unknown, fail: (e: unknown) => unknown) =>
+              new Promise((r) => setTimeout(r, 800)).then(() => query).then(ok, fail),
+          };
+          return delayed;
+        },
+      });
+    }) as typeof supabase.from);
+
+    const s = open(alice.token);
+    const events: string[] = [];
+    s.on('recording:action:captured', (d: { action: { action_type: string } }) => events.push(`captured ${d.action.action_type}`));
+    try {
+      await next(s, 'connect');
+      s.emit('recording:join', { session_id: sessionId });
+      const started = next(s, 'recording:started');
+      s.emit('recording:start', { session_id: sessionId });
+      await started;
+      s.emit('recording:input', { session_id: sessionId, kind: 'click', ...at['login-email'] });
+      s.emit('recording:input', { session_id: sessionId, kind: 'type', text: 'demo@qaforge.dev' });
+      const done = next(s, 'recording:completed').then(() => events.push('completed'));
+      s.emit('recording:stop', { session_id: sessionId }); // the field is still focused: Stop blurs it
+      await done;
+    } finally {
+      slowSaves.mockRestore();
+      s.close();
+    }
+
+    expect(events).toEqual(['captured type', 'completed']);
+    const saved = (await (await api(`/projects/${projectId}/recorded-sessions/${sessionId}`, alice.token)).json()) as {
+      recorded_session: { status: string };
+      actions: { action_type: string; value: string; timestamp_ms: number }[];
+    };
+    expect(saved.recorded_session.status).toBe('completed');
+    expect(saved.actions.map((a) => [a.action_type, a.value])).toEqual([['type', 'demo@qaforge.dev']]);
+    expect(saved.actions[0].timestamp_ms).toBeGreaterThan(0);
+  }, 60_000);
+
+  it('closes a recording left without Stop once it has been idle', async () => {
+    const created = await api(`/projects/${projectId}/recorded-sessions`, alice.token, 'POST', { name: 'idle rec', base_url: `${demoUrl}/login` });
+    const sessionId = ((await created.json()) as { recorded_session: { id: string } }).recorded_session.id;
+    const s = open(alice.token);
+    recordingLimits.idleMs = 1_500;
+    try {
+      await next(s, 'connect');
+      s.emit('recording:join', { session_id: sessionId });
+      const started = next(s, 'recording:started');
+      s.emit('recording:start', { session_id: sessionId });
+      await started;
+      await next(s, 'recording:completed', 15_000); // nobody pressed Stop
+    } finally {
+      recordingLimits.idleMs = 15 * 60_000;
+      s.close();
+    }
+    const saved = (await (await api(`/projects/${projectId}/recorded-sessions/${sessionId}`, alice.token)).json()) as {
+      recorded_session: { status: string };
+    };
+    expect(saved.recorded_session.status).toBe('completed');
+  }, 60_000);
+
+  it('lets a reloaded page or reconnected socket watch the running recording', async () => {
+    const created = await api(`/projects/${projectId}/recorded-sessions`, alice.token, 'POST', { name: 'reload rec', base_url: `${demoUrl}/login` });
+    const sessionId = ((await created.json()) as { recorded_session: { id: string } }).recorded_session.id;
+    const first = open(alice.token);
+    const again = open(alice.token);
+    try {
+      await Promise.all([next(first, 'connect'), next(again, 'connect')]);
+      const started = next(first, 'recording:started');
+      first.emit('recording:start', { session_id: sessionId });
+      await started;
+
+      // The page asks to start again, as it does on every connect: it gets the running browser, not an error.
+      const errors: string[] = [];
+      again.on('recording:error', (d: { message: string }) => errors.push(d.message));
+      const watching = Promise.all([next(again, 'recording:started'), next(again, 'recording:frame')]);
+      again.emit('recording:join', { session_id: sessionId });
+      again.emit('recording:start', { session_id: sessionId });
+      await watching;
+      expect(errors).toEqual([]);
+
+      const done = next(again, 'recording:completed');
+      again.emit('recording:stop', { session_id: sessionId });
+      await done;
+    } finally {
+      first.close();
+      again.close();
+    }
+  }, 60_000);
+
+  it('Stop ends a recording whose browser is gone, e.g. after an API restart', async () => {
+    const created = await api(`/projects/${projectId}/recorded-sessions`, alice.token, 'POST', { name: 'orphan rec', base_url: `${demoUrl}/login` });
+    const sessionId = ((await created.json()) as { recorded_session: { id: string } }).recorded_session.id;
+    const s = open(alice.token);
+    try {
+      await next(s, 'connect');
+      const done = next(s, 'recording:completed');
+      s.emit('recording:stop', { session_id: sessionId }); // no browser was ever started in this process
+      await done;
+    } finally {
+      s.close();
+    }
+    const saved = (await (await api(`/projects/${projectId}/recorded-sessions/${sessionId}`, alice.token)).json()) as {
+      recorded_session: { status: string };
+    };
+    expect(saved.recorded_session.status).toBe('completed');
+  }, 60_000);
+
   it('ignores input for a session the socket does not own', async () => {
     const created = await api(`/projects/${projectId}/recorded-sessions`, alice.token, 'POST', { name: 'owned', base_url: `${demoUrl}/login` });
     const sessionId = ((await created.json()) as { recorded_session: { id: string } }).recorded_session.id;
@@ -163,6 +289,20 @@ describe('A4 recording from the workbench viewport', () => {
       his.emit('recording:input', { session_id: sessionId, kind: 'click', x: 10, y: 10 });
       await new Promise((r) => setTimeout(r, 1_500));
       expect(frames).toBe(0); // bob's click did nothing: no frame, no action
+
+      // Nor can he end her recording, over the socket or through his own project's route.
+      const refused = next<{ message: string }>(his, 'recording:error');
+      his.emit('recording:stop', { session_id: sessionId });
+      expect((await refused).message).toMatch(/unauthorized/i);
+      const bobsProject = await api('/projects', bob.token, 'POST', { name: 'not hers', base_url: `${demoUrl}/` });
+      const bobsProjectId = ((await bobsProject.json()) as { project: { id: string } }).project.id;
+      const viaRoute = await api(`/projects/${bobsProjectId}/recorded-sessions/${sessionId}/complete`, bob.token, 'POST', {});
+      await api(`/projects/${bobsProjectId}`, bob.token, 'DELETE');
+      expect(viaRoute.status).toBe(404);
+      const stillLive = next(hers, 'recording:frame');
+      hers.emit('recording:input', { session_id: sessionId, kind: 'scroll', dy: 100 });
+      await stillLive; // her browser is still open and answering
+
       const done = next(hers, 'recording:completed');
       hers.emit('recording:stop', { session_id: sessionId });
       await done;

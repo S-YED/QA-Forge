@@ -151,16 +151,17 @@ router.post('/:id/complete', validate(uuidParamsSchema, 'params'), async (req, r
   try {
     const { projectId } = req.params as any;
 
-    // Verify project ownership
-    const { data: project } = await supabase
-      .from('projects')
+    // The session itself must be this user's, in this project: owning some project is not enough.
+    const { data: session } = await supabase
+      .from('recorded_sessions')
       .select('id')
-      .eq('id', projectId)
+      .eq('id', req.params.id)
+      .eq('project_id', projectId)
       .eq('user_id', req.user.id)
-      .single();
+      .maybeSingle();
 
-    if (!project) {
-      return next(new AppError('NOT_FOUND', 404, 'Project not found'));
+    if (!session) {
+      return next(new AppError('NOT_FOUND', 404, 'Recording session not found'));
     }
 
     // Call closing function

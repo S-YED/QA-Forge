@@ -12,18 +12,32 @@ interface StartRecordingPayload {
   browser?: 'chromium' | 'firefox' | 'webkit';
 }
 
+interface ActiveRecording {
+  browser: Browser;
+  context: BrowserContext;
+  page: Page;
+  startTime: number;
+  /** Inputs from the viewport, applied one after another in arrival order */
+  queue: Promise<void>;
+  /**
+   * Actions the page reported, saved and announced one at a time in the order reported (REC-ORDER): a field's
+   * typed value and the click that blurred it arrive together. Stopping waits for this to drain.
+   */
+  actions: Promise<void>;
+  /** Closes the recording when nothing happens for `recordingLimits.idleMs`; refreshed by every input and action. */
+  idle?: NodeJS.Timeout;
+}
+
 // Global registry of active recording sessions to keep track of their browsers
-const activeRecordings = new Map<
-  string,
-  {
-    browser: Browser;
-    context: BrowserContext;
-    page: Page;
-    startTime: number;
-    /** Inputs from the viewport, applied one after another in arrival order */
-    queue: Promise<void>;
-  }
->();
+const activeRecordings = new Map<string, ActiveRecording>();
+/** Sessions whose browser is being launched, so a second start for the same session never launches another. */
+const launching = new Set<string>();
+
+/**
+ * A recording whose page was closed or left without pressing Stop would keep its browser open until the API restarts.
+ * ponytail: an idle cap; also close when the last watching socket leaves if browsers still pile up. A property so tests can shorten it.
+ */
+export const recordingLimits = { idleMs: 15 * 60_000 };
 
 /** What the workbench viewport sends: a click at viewport coordinates, typed text, a key, or a scroll. */
 type RecordingInput =
@@ -50,20 +64,16 @@ async function injectRecorderScript(
     value?: string;
     url: string;
     timestamp: number;
-  }) => void | Promise<void>
+  }) => void
 ) {
-  // One action at a time, in the order the page reported them (REC-ORDER): a field's typed value and the click
-  // that blurred it arrive together, and saving them side by side let the click's row be announced first.
-  let previous: Promise<void> = Promise.resolve();
   await page.exposeFunction('emitRecordedAction', (action: {
     type: string;
     selector?: string;
     value?: string;
     url: string;
   }) => {
-    // Called from the page; where and when are taken now, not when this action's turn comes.
-    const recorded = { ...action, url: page.url(), timestamp: Date.now() };
-    previous = previous.then(() => onAction(recorded)).catch(() => {});
+    // Where and when are taken as the page reports it, not when the action's turn to be saved comes.
+    onAction({ ...action, url: page.url(), timestamp: Date.now() });
   });
 
   // Some TypeScript runners (tsx/esbuild keepNames) wrap named functions in __name(...); the script below is sent
@@ -206,13 +216,23 @@ async function captureAndStreamFrame(io: Server, roomName: string, sessionId: st
  */
 export async function closeRecordingSession(sessionId: string) {
   const active = activeRecordings.get(sessionId);
-  if (!active) return;
+  if (!active) {
+    // No browser here (the API restarted mid-recording): still end the session, keeping what it captured.
+    await supabase
+      .from('recorded_sessions')
+      .update({ status: 'completed', completed_at: new Date().toISOString() })
+      .eq('id', sessionId)
+      .eq('status', 'recording');
+    return;
+  }
+  clearTimeout(active.idle);
 
   try {
     // A field still focused has not fired "change" yet: blur it so its typed value becomes a step.
     await active.queue.catch(() => {});
     await active.page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur()).catch(() => {});
-    await active.page.waitForTimeout(400).catch(() => {});
+    await active.page.waitForTimeout(400).catch(() => {}); // the blur's change event reaches us through the page binding
+    await active.actions; // every reported action is saved before the session is marked completed
     const durationMs = Date.now() - active.startTime;
     await active.browser.close();
     activeRecordings.delete(sessionId);
@@ -281,6 +301,7 @@ export function registerRecordingHandlers(io: Server, socket: Socket) {
   socket.on('recording:start', async (payload: StartRecordingPayload) => {
     const { session_id } = payload;
     const roomName = `recording:${session_id}`;
+    let ownsLaunch = false;
 
     try {
       // Double check session ownership
@@ -301,11 +322,20 @@ export function registerRecordingHandlers(io: Server, socket: Socket) {
         return;
       }
 
-      // Check if session is already running
-      if (activeRecordings.has(session_id)) {
-        socket.emit('recording:error', { session_id, message: 'Recording is already running' });
-        return;
+      // Already running or starting (a reloaded page, or a socket that reconnected and asks again): watch it instead
+      // of failing or launching a second browser.
+      const running = activeRecordings.get(session_id);
+      if (running || launching.has(session_id)) {
+        socket.join(roomName);
+        ownedRecordings(socket).add(session_id);
+        if (running) {
+          socket.emit('recording:started', { session_id, base_url: session.base_url });
+          await captureAndStreamFrame(io, roomName, session_id, running.page);
+        }
+        return; // still launching: 'recording:started' reaches this socket through the room
       }
+      launching.add(session_id);
+      ownsLaunch = true;
 
       // Only the URL stored (and validated) with the session is opened, never one from the socket payload.
       const base_url: string = session.base_url;
@@ -319,13 +349,15 @@ export function registerRecordingHandlers(io: Server, socket: Socket) {
       const page = await context.newPage();
 
       // Store in memory
-      activeRecordings.set(session_id, {
+      const entry: ActiveRecording = {
         browser,
         context,
         page,
         startTime: Date.now(),
         queue: Promise.resolve(),
-      });
+        actions: Promise.resolve(),
+      };
+      activeRecordings.set(session_id, entry);
 
       // Join the socket room
       socket.join(roomName);
@@ -340,13 +372,14 @@ export function registerRecordingHandlers(io: Server, socket: Socket) {
       let actionCount = 0;
 
       // Inject recorder listener script with real-time callback
-      await injectRecorderScript(page, async (action) => {
+      const saveAction = async (action: { type: string; selector?: string; value?: string; url: string; timestamp: number }) => {
         try {
+          entry.idle?.refresh();
           actionCount++;
-          const timeOffsetMs = action.timestamp - (activeRecordings.get(session_id)?.startTime || action.timestamp);
+          const timeOffsetMs = action.timestamp - entry.startTime;
 
           // Save action event directly to PostgreSQL
-          const { data: insertedAction } = await supabase
+          const { data: insertedAction, error: insertError } = await supabase
             .from('session_actions')
             .insert({
               session_id,
@@ -360,24 +393,32 @@ export function registerRecordingHandlers(io: Server, socket: Socket) {
             })
             .select()
             .single();
+          if (insertError) throw new Error(insertError.message);
 
-          if (insertedAction) {
-            // Notify frontend room of captured action
-            io.to(roomName).emit('recording:action:captured', {
-              session_id,
-              action: insertedAction,
-            });
-          }
+          // Notify frontend room of captured action
+          io.to(roomName).emit('recording:action:captured', {
+            session_id,
+            action: insertedAction,
+          });
 
-          // Trigger a frame capture and broadcast the fresh viewport frame
-          await captureAndStreamFrame(io, roomName, session_id, page);
+          // A fresh frame, outside the save order: a slow screenshot (e.g. mid-navigation) must not hold up later steps.
+          void captureAndStreamFrame(io, roomName, session_id, page);
         } catch (err) {
-          logger.error(`Error saving recorded action for session ${session_id}`, err);
+          logger.error({ event: 'recording:action_save_failed', session_id, error: err instanceof Error ? err.message : String(err) });
         }
+      };
+      await injectRecorderScript(page, (action) => {
+        entry.actions = entry.actions.then(() => saveAction(action));
       });
 
       // Navigate to the start base URL
       await page.goto(base_url, { waitUntil: 'domcontentloaded' });
+
+      entry.idle = setTimeout(() => {
+        logger.info({ event: 'recording:idle_closed', session_id });
+        void closeRecordingSession(session_id).then(() => io.to(roomName).emit('recording:completed', { session_id }));
+      }, recordingLimits.idleMs);
+      entry.idle.unref();
 
       // Notify room that recording setup is running
       io.to(roomName).emit('recording:started', {
@@ -404,9 +445,12 @@ export function registerRecordingHandlers(io: Server, socket: Socket) {
 
       const active = activeRecordings.get(session_id);
       if (active) {
+        clearTimeout(active.idle);
         await active.browser.close().catch(() => {});
         activeRecordings.delete(session_id);
       }
+    } finally {
+      if (ownsLaunch) launching.delete(session_id);
     }
   });
 
@@ -416,6 +460,7 @@ export function registerRecordingHandlers(io: Server, socket: Socket) {
     // Only a socket that proved ownership (join/start) may drive this session's browser.
     const active = session_id && ownedRecordings(socket).has(session_id) ? activeRecordings.get(session_id) : undefined;
     if (!active) return;
+    active.idle?.refresh();
     const { page } = active;
     active.queue = active.queue
       .then(async () => {
@@ -446,11 +491,23 @@ export function registerRecordingHandlers(io: Server, socket: Socket) {
     const roomName = `recording:${session_id}`;
 
     try {
+      // Only the session's owner may end it (like join and start).
+      const { data: session } = await supabase
+        .from('recorded_sessions')
+        .select('id')
+        .eq('id', session_id)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (!session) {
+        socket.emit('recording:error', { session_id, message: 'Unauthorized session access' });
+        return;
+      }
+
       // Close browser and update DB
       await closeRecordingSession(session_id);
 
-      // Notify room of completion
-      io.to(roomName).emit('recording:completed', { session_id });
+      // Notify room of completion, and the socket that asked even if its join has not landed yet (sent once to each)
+      io.to(roomName).to(socket.id).emit('recording:completed', { session_id });
 
       socket.leave(roomName);
     } catch (err) {
