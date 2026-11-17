@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { demoAuthLimiter } from '../middleware/rate-limiter.js';
-import { validate } from '../middleware/validation.js';
+import { httpUrl, validate } from '../middleware/validation.js';
+import { demoGuard } from '../middleware/demo-guard.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
 import { env } from '../config/env.js';
@@ -71,14 +72,16 @@ router.get('/me', authenticate, async (req, res, next) => {
 
 // ── PUT /api/auth/me ───────────────────────────────────────────────────────────
 
+// null (or an empty name) clears the field (DD-2: clearing used to be ignored while saying "updated").
 const updateProfileSchema = z.object({
-  full_name: z.string().min(1).max(100).optional(),
-  avatar_url: z.string().url().optional(),
+  full_name: z.string().trim().max(100).transform((s) => s || null).nullable().optional(),
+  avatar_url: httpUrl().nullable().optional(),
 });
 
 router.put(
   '/me',
   authenticate,
+  demoGuard, // the demo account is shared by every visitor; its profile is read-only like the rest of the demo (DD-2)
   validate(updateProfileSchema),
   async (req, res, next) => {
     try {

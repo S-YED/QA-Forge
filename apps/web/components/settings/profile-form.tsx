@@ -24,9 +24,10 @@ export function ProfileForm({ profile }: ProfileFormProps) {
     setLoading(true);
 
     try {
+      // An emptied field is sent as null so it is cleared, not silently kept.
       await apiClient.put('/api/auth/me', {
-        full_name: fullName || undefined,
-        avatar_url: avatarUrl || undefined,
+        full_name: fullName.trim() || null,
+        avatar_url: avatarUrl.trim() || null,
       });
       toast.success('Profile updated successfully');
     } catch (err) {

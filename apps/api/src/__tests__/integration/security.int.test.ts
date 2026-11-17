@@ -56,6 +56,29 @@ describe('DD-1 a bad request is answered as one, not as a server error', () => {
   });
 });
 
+describe('DD-2 profile edits', () => {
+  type Me = { profile: { full_name: string | null; avatar_url: string | null } };
+  it('the shared demo account cannot change its profile', async () => {
+    const demo = await signIn(USERS.demo);
+    const before = ((await (await api('/auth/me', demo.token)).json()) as Me).profile;
+    expect((await api('/auth/me', demo.token, 'PUT', { full_name: 'Renamed by a visitor' })).status).toBe(403);
+    expect(((await (await api('/auth/me', demo.token)).json()) as Me).profile.full_name).toBe(before.full_name);
+  });
+
+  it('clears a name and avatar left empty, and refuses an avatar that is not a web address', async () => {
+    const bob = await signIn(USERS.bob);
+    const before = ((await (await api('/auth/me', bob.token)).json()) as Me).profile;
+    try {
+      expect((await api('/auth/me', bob.token, 'PUT', { avatar_url: 'javascript:alert(1)' })).status).toBe(400);
+      expect((await api('/auth/me', bob.token, 'PUT', { full_name: '  ', avatar_url: null })).status).toBe(200);
+      const cleared = ((await (await api('/auth/me', bob.token)).json()) as Me).profile;
+      expect([cleared.full_name, cleared.avatar_url]).toEqual([null, null]);
+    } finally {
+      await api('/auth/me', bob.token, 'PUT', { full_name: before.full_name, avatar_url: before.avatar_url });
+    }
+  });
+});
+
 describe('CR-2 one sign-in check per request', () => {
   it('checks the token once for a route nested under /projects', async () => {
     await withBobProject('auth-once', async (projectId, token) => {
