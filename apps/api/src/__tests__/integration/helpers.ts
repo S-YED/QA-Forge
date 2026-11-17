@@ -35,10 +35,11 @@ export function useApi() {
   });
   afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
 
-  return (path: string, token: string, method = 'GET', body?: unknown) =>
+  /** `init` sends a raw body or extra headers, for requests a well-behaved client would not make. */
+  return (path: string, token: string, method = 'GET', body?: unknown, init: { body?: string; headers?: Record<string, string> } = {}) =>
     fetch(`${apiBase}${path}`, {
       method,
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...init.headers },
+      body: init.body ?? (body === undefined ? undefined : JSON.stringify(body)),
     });
 }

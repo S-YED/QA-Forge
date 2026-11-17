@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { env } from './config/env.js';
 import { defaultLimiter, aiLimiter, ciLimiter } from './middleware/rate-limiter.js';
-import { errorHandler } from './middleware/error-handler.js';
+import { AppError, errorHandler } from './middleware/error-handler.js';
 import { authenticate } from './middleware/auth.middleware.js';
 import { demoGuard } from './middleware/demo-guard.js';
 import authRouter from './routes/auth.routes.js';
@@ -52,7 +52,7 @@ app.use(
       if (!origin || env.CORS_ORIGINS.includes(origin)) {
         cb(null, true);
       } else {
-        cb(new Error('Not allowed by CORS'));
+        cb(new AppError('FORBIDDEN', 403, 'This site is not allowed to call the QA Forge API')); // a refusal, not a server error (DD-1)
       }
     },
     credentials: true,

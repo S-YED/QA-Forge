@@ -43,6 +43,19 @@ async function withBobProject(name: string, fn: (projectId: string, token: strin
   }
 }
 
+describe('DD-1 a bad request is answered as one, not as a server error', () => {
+  it('says 400 for a body that is not JSON, 413 for one too large, 403 for a site that may not call the API', async () => {
+    const { token } = await signIn(USERS.bob);
+    const notJson = await api('/projects', token, 'POST', undefined, { body: '{"name": ' });
+    expect(notJson.status).toBe(400);
+    expect(((await notJson.json()) as { error: { message: string } }).error.message).toBe('The request body is not valid JSON');
+    const tooBig = await api('/projects', token, 'POST', undefined, { body: JSON.stringify({ name: 'x'.repeat(11 * 1024 * 1024) }) });
+    expect(tooBig.status).toBe(413);
+    const foreign = await api('/projects', token, 'GET', undefined, { headers: { Origin: 'https://not-qaforge.example' } });
+    expect(foreign.status).toBe(403);
+  });
+});
+
 describe('CR-2 one sign-in check per request', () => {
   it('checks the token once for a route nested under /projects', async () => {
     await withBobProject('auth-once', async (projectId, token) => {

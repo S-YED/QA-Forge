@@ -66,6 +66,17 @@ export function errorHandler(
     return;
   }
 
+  // The body parser's own errors (bad JSON, too large) are the caller's mistake, not a server failure (DD-1).
+  const { status, type } = err as { status?: number; type?: string };
+  if (status && status >= 400 && status < 500) {
+    const message =
+      type === 'entity.parse.failed' ? 'The request body is not valid JSON'
+        : type === 'entity.too.large' ? 'The request body is too large'
+          : 'The request could not be read';
+    res.status(status).json({ error: { code: status === 413 ? 'PAYLOAD_TOO_LARGE' : 'BAD_REQUEST', message, details: null } });
+    return;
+  }
+
   // Unhandled error — never expose message or stack in production
   res.status(500).json({
     error: {
