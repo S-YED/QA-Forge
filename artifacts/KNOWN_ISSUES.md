@@ -18,7 +18,7 @@ ticket is **Verified** in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 | LOW | Stop pressed in the instant a run is being picked up can close its row as "Stopped" while the browser still runs that case to the end (the stop route closes runs not yet in this process's in-flight list; seen in the 17 Nov code review, not observed) | G9 |
 | LOW | Each replay of a recording adds another "Replay of recording: ..." case to the "Replayed Session Tests" suite | G8 |
 | MED | Password reset in production needs Supabase Auth (URL Configuration) to allow `https://qa-forge-gamma.vercel.app/reset-password`; until then the emailed link falls back to the site address (owner) | DD-5 |
-| LOW | No way to delete your account (changing your password is built in G1, waiting for push) | G2 |
+| LOW | No way to delete your account | G2 |
 | LOW | Child suites can be made through the API but the app never shows them or their cases | G4 |
 | LOW | Bugs cannot be filed by hand or opened on their own in the app (the API can); a bug opens its run | G5 |
 | LOW | Small API edges from the 17 Nov probe: a step blocked by the address guard files a bug against the app; a suite run on a project with no base address starts and errors case by case; assigning a bug to an unknown person says "Bug not found"; hand-written cases have no cap on tags | G6 |
