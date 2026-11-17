@@ -295,24 +295,36 @@ router.post('/:id/replay', validate(uuidParamsSchema, 'params'), async (req, res
       suiteId = newSuite.id;
     }
 
-    // 3. Create a new test case out of these compiled steps
+    // 3. The recording's own test case: made on the first replay, its steps refreshed on later ones (G8: every
+    // replay used to add another copy). Found by the description written here, anywhere in this project.
     const caseTitle = `Replay of recording: ${session.name}`;
+    const marker = `Automated compile of recorded session ${session.id}`;
     const now = new Date().toISOString();
 
-    const { data: testCase, error: caseError } = await supabase
+    const { data: earlier } = await supabase
       .from('test_cases')
-      .insert({
-        suite_id: suiteId,
-        title: caseTitle,
-        description: `Automated compile of recorded session ${session.id}`,
-        steps,
-        is_ai_generated: false,
-        source: 'manual',
-        created_at: now,
-        updated_at: now,
-      })
-      .select()
-      .single();
+      .select('id, test_suites!inner(project_id)')
+      .eq('description', marker)
+      .eq('test_suites.project_id', projectId)
+      .limit(1)
+      .maybeSingle();
+
+    const { data: testCase, error: caseError } = earlier
+      ? await supabase.from('test_cases').update({ steps, updated_at: now }).eq('id', earlier.id).select().single()
+      : await supabase
+          .from('test_cases')
+          .insert({
+            suite_id: suiteId,
+            title: caseTitle,
+            description: marker,
+            steps,
+            is_ai_generated: false,
+            source: 'manual',
+            created_at: now,
+            updated_at: now,
+          })
+          .select()
+          .single();
 
     if (caseError || !testCase) {
       return next(caseError ?? new AppError('INTERNAL_ERROR', 500, 'Failed to create test case'));

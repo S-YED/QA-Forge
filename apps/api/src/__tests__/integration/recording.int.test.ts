@@ -288,6 +288,28 @@ describe('A4 recording from the workbench viewport', () => {
     expect(((await replay.json()) as { test_run: { browser: string } }).test_run.browser).toBe('chromium');
   }, 60_000);
 
+  it('replaying a recording again reuses its test case instead of adding a copy (G8)', async () => {
+    const created = await api(`/projects/${projectId}/recorded-sessions`, alice.token, 'POST', { name: 'replayed twice', base_url: `${demoUrl}/login` });
+    const sessionId = ((await created.json()) as { recorded_session: { id: string } }).recorded_session.id;
+    await supabase.from('recorded_sessions').update({ status: 'completed' }).eq('id', sessionId);
+    await supabase.from('session_actions').insert({ session_id: sessionId, action_number: 1, action_type: 'click', selector: 'Log in', url: `${demoUrl}/login`, timestamp_ms: 10, metadata: {} });
+
+    const replay = async () =>
+      ((await (await api(`/projects/${projectId}/recorded-sessions/${sessionId}/replay`, alice.token, 'POST', {})).json()) as {
+        test_case: { id: string };
+        test_run: { test_case_id: string };
+      });
+    const first = await replay();
+    const second = await replay();
+    expect(second.test_case.id).toBe(first.test_case.id);
+    expect(second.test_run.test_case_id).toBe(first.test_case.id);
+    const { count } = await supabase
+      .from('test_cases')
+      .select('id', { count: 'exact', head: true })
+      .eq('description', `Automated compile of recorded session ${sessionId}`);
+    expect(count).toBe(1);
+  }, 60_000);
+
   it('the owner deletes a recording with its actions; nobody else can', async () => {
     const created = await api(`/projects/${projectId}/recorded-sessions`, alice.token, 'POST', { name: 'to delete', base_url: `${demoUrl}/login` });
     const sessionId = ((await created.json()) as { recorded_session: { id: string } }).recorded_session.id;
