@@ -174,6 +174,29 @@ router.post('/:id/complete', validate(uuidParamsSchema, 'params'), async (req, r
   }
 });
 
+// ── DELETE /:id ──
+// G3: the owner deletes a recording; its captured actions go with it (ON DELETE CASCADE). A live browser is closed first.
+router.delete('/:id', validate(uuidParamsSchema, 'params'), async (req, res, next) => {
+  try {
+    const { projectId } = req.params as any;
+    const { data: session } = await supabase
+      .from('recorded_sessions')
+      .select('id')
+      .eq('id', req.params.id)
+      .eq('project_id', projectId)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
+    if (!session) return next(new AppError('NOT_FOUND', 404, 'Recording session not found'));
+
+    await closeRecordingSession(session.id);
+    const { error } = await supabase.from('recorded_sessions').delete().eq('id', session.id);
+    if (error) return next(error);
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── POST /:id/replay ──
 // Compiles session actions into test case steps and runs it immediately!
 router.post('/:id/replay', validate(uuidParamsSchema, 'params'), async (req, res, next) => {

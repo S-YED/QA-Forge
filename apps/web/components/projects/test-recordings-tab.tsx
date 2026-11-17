@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { CircleDot, Clock, Calendar, ArrowRight } from 'lucide-react';
+import { CircleDot, Clock, Calendar, ArrowRight, Trash2 } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
 import { toastError } from '@/lib/toast-error';
+import { useConfirm } from '@/components/shared/confirm-dialog';
 import { toast } from 'sonner';
 import { useDemoMode } from '@/lib/hooks/use-demo-mode';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -56,6 +57,8 @@ export function TestRecordingsTab({ projectId }: TestRecordingsTabProps) {
   const [description, setDescription] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [creating, setCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const ask = useConfirm();
 
   const fetchSessions = async () => {
     try {
@@ -110,6 +113,31 @@ export function TestRecordingsTab({ projectId }: TestRecordingsTabProps) {
       toastError('Could not start the recording', err);
     } finally {
       setCreating(false);
+    }
+  };
+
+  // G3: delete a recording and its captured steps (test cases already made from it stay).
+  const handleDelete = async (session: RecordedSession) => {
+    if (isDemo) {
+      toast.info('Demo is read-only', { description: 'Sign up to record and manage your own sessions.' });
+      return;
+    }
+    const yes = await ask({
+      title: `Delete the recording "${session.name}"?`,
+      description: 'Its captured steps are deleted too. Test cases already made from it stay.',
+      confirmLabel: 'Delete recording',
+      destructive: true,
+    });
+    if (!yes) return;
+    setDeletingId(session.id);
+    try {
+      await apiClient.del(`/api/projects/${projectId}/recorded-sessions/${session.id}`);
+      setSessions((prev) => prev.filter((s) => s.id !== session.id));
+      toast.success('Recording deleted');
+    } catch (err) {
+      toastError('Could not delete the recording', err);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -187,16 +215,29 @@ export function TestRecordingsTab({ projectId }: TestRecordingsTabProps) {
                   </span>
                 </div>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    router.push(`/dashboard/projects/${projectId}/recordings/${session.id}`)
-                  }
-                >
-                  Open workbench
-                  <ArrowRight />
-                </Button>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => handleDelete(session)}
+                    disabled={deletingId === session.id}
+                    aria-label={`Delete recording ${session.name}`}
+                    title="Delete recording"
+                  >
+                    {deletingId === session.id ? <Spinner /> : <Trash2 className="size-4" />}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      router.push(`/dashboard/projects/${projectId}/recordings/${session.id}`)
+                    }
+                  >
+                    Open workbench
+                    <ArrowRight />
+                  </Button>
+                </div>
               </div>
             </div>
           ))}

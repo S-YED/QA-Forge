@@ -609,6 +609,17 @@ test('record a login by clicking and typing in the live viewport, then replay it
   await expect(page.getByText('All steps passed')).toBeVisible({ timeout: 90_000 });
 });
 
+test('a recording can be deleted after asking', async ({ page }) => {
+  // G3, on the recording the test above made (its replayed test case stays).
+  await page.goto(projectUrl);
+  await page.getByRole('tab', { name: /Recordings/ }).click();
+  const remove = page.getByRole('button', { name: 'Delete recording E2E recorded login' });
+  await remove.click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete recording' }).click();
+  await expect(page.getByText('Recording deleted')).toBeVisible();
+  await expect(remove).toHaveCount(0);
+});
+
 test("deleting asks in the app's own box: Cancel keeps it, the delete button removes it", async ({ page }) => {
   // U4: no browser confirm boxes. Playwright dismisses a native one, so with one nothing below would be deleted.
   await page.goto(projectUrl);

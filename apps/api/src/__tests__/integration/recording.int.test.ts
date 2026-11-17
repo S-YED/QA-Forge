@@ -288,6 +288,23 @@ describe('A4 recording from the workbench viewport', () => {
     expect(((await replay.json()) as { test_run: { browser: string } }).test_run.browser).toBe('chromium');
   }, 60_000);
 
+  it('the owner deletes a recording with its actions; nobody else can', async () => {
+    const created = await api(`/projects/${projectId}/recorded-sessions`, alice.token, 'POST', { name: 'to delete', base_url: `${demoUrl}/login` });
+    const sessionId = ((await created.json()) as { recorded_session: { id: string } }).recorded_session.id;
+    await supabase.from('session_actions').insert({ session_id: sessionId, action_number: 1, action_type: 'click', selector: 'Log in', url: `${demoUrl}/login`, timestamp_ms: 10, metadata: {} });
+
+    const bobsProject = await api('/projects', bob.token, 'POST', { name: 'not hers either' });
+    const bobsProjectId = ((await bobsProject.json()) as { project: { id: string } }).project.id;
+    const byBob = await api(`/projects/${bobsProjectId}/recorded-sessions/${sessionId}`, bob.token, 'DELETE');
+    await api(`/projects/${bobsProjectId}`, bob.token, 'DELETE');
+    expect(byBob.status).toBe(404);
+
+    expect((await api(`/projects/${projectId}/recorded-sessions/${sessionId}`, alice.token, 'DELETE')).status).toBe(204);
+    expect((await api(`/projects/${projectId}/recorded-sessions/${sessionId}`, alice.token)).status).toBe(404);
+    const { count } = await supabase.from('session_actions').select('id', { count: 'exact', head: true }).eq('session_id', sessionId);
+    expect(count).toBe(0);
+  }, 60_000);
+
   it('ignores input for a session the socket does not own', async () => {
     const created = await api(`/projects/${projectId}/recorded-sessions`, alice.token, 'POST', { name: 'owned', base_url: `${demoUrl}/login` });
     const sessionId = ((await created.json()) as { recorded_session: { id: string } }).recorded_session.id;
