@@ -273,6 +273,21 @@ describe('A4 recording from the workbench viewport', () => {
     expect(saved.recorded_session.status).toBe('completed');
   }, 60_000);
 
+  it('records and replays in Chromium only, even a session saved as Firefox before', async () => {
+    const firefox = await api(`/projects/${projectId}/recorded-sessions`, alice.token, 'POST', { name: 'ff', base_url: `${demoUrl}/login`, browser: 'firefox' });
+    expect(firefox.status).toBe(400);
+
+    const created = await api(`/projects/${projectId}/recorded-sessions`, alice.token, 'POST', { name: 'older ff', base_url: `${demoUrl}/login` });
+    const sessionId = ((await created.json()) as { recorded_session: { id: string } }).recorded_session.id;
+    // what the database holds for a session created when the dialog still offered Firefox
+    await supabase.from('recorded_sessions').update({ browser: 'firefox', status: 'completed' }).eq('id', sessionId);
+    await supabase.from('session_actions').insert({ session_id: sessionId, action_number: 1, action_type: 'click', selector: 'Log in', url: `${demoUrl}/login`, timestamp_ms: 10, metadata: {} });
+
+    const replay = await api(`/projects/${projectId}/recorded-sessions/${sessionId}/replay`, alice.token, 'POST', {});
+    expect(replay.status).toBe(201);
+    expect(((await replay.json()) as { test_run: { browser: string } }).test_run.browser).toBe('chromium');
+  }, 60_000);
+
   it('ignores input for a session the socket does not own', async () => {
     const created = await api(`/projects/${projectId}/recorded-sessions`, alice.token, 'POST', { name: 'owned', base_url: `${demoUrl}/login` });
     const sessionId = ((await created.json()) as { recorded_session: { id: string } }).recorded_session.id;

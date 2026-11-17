@@ -23,13 +23,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 interface RecordedSession {
   id: string;
@@ -62,7 +55,6 @@ export function TestRecordingsTab({ projectId }: TestRecordingsTabProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
-  const [browserType, setBrowserType] = useState<'chromium' | 'firefox' | 'webkit'>('chromium');
   const [creating, setCreating] = useState(false);
 
   const fetchSessions = async () => {
@@ -103,7 +95,6 @@ export function TestRecordingsTab({ projectId }: TestRecordingsTabProps) {
           name: name.trim(),
           description: description.trim() || undefined,
           base_url: baseUrl.trim(),
-          browser: browserType,
         },
       );
 
@@ -264,23 +255,6 @@ export function TestRecordingsTab({ projectId }: TestRecordingsTabProps) {
                 placeholder="https://localhost:3000/login"
                 className="font-mono"
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="rec-browser">Browser</Label>
-              <Select
-                value={browserType}
-                onValueChange={(v) => setBrowserType(v as 'chromium' | 'firefox' | 'webkit')}
-              >
-                <SelectTrigger id="rec-browser">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="chromium">Chromium (Chrome / Edge)</SelectItem>
-                  <SelectItem value="firefox">Firefox</SelectItem>
-                  <SelectItem value="webkit">WebKit (Safari)</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </div>
 

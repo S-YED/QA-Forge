@@ -98,7 +98,8 @@ const createSessionSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(1000).optional(),
   base_url: httpUrl(),
-  browser: z.enum(['chromium', 'firefox', 'webkit']).optional().default('chromium'),
+  // The recorder runs Chromium and the API image ships no other browser (DD-3).
+  browser: z.literal('chromium').optional().default('chromium'),
 });
 
 router.post('/', validate(createSessionSchema), async (req, res, next) => {
@@ -303,7 +304,8 @@ router.post('/:id/replay', validate(uuidParamsSchema, 'params'), async (req, res
         test_case_id: testCase.id,
         status: 'pending',
         mode: 'replay',
-        browser: session.browser || 'chromium',
+        // Replayed where it was recorded: the recorder always used Chromium, whatever older sessions say (DD-3).
+        browser: 'chromium',
         created_at: now,
       })
       .select()
