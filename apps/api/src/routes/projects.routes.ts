@@ -15,18 +15,25 @@ const uuidParamsSchema = z.object({ id: z.guid() });
 
 router.get('/', async (req, res, next) => {
   try {
-    const { data: projects, error } = await supabase
+    const { data: rows, error } = await supabase
       .from('projects')
-      .select('*')
+      .select('*, test_suites(test_cases(count))')
       .eq('user_id', req.user.id)
       .order('created_at', { ascending: false });
 
     if (error) return next(error);
 
+    // U1: how many test cases each project has, for the first-run checklist (counted by the database).
+    type Row = { id: string; test_suites?: { test_cases?: { count: number }[] }[] };
+    const projects = ((rows ?? []) as Row[]).map(({ test_suites, ...p }) => ({
+      ...p,
+      case_count: (test_suites ?? []).reduce((n, s) => n + (s.test_cases?.[0]?.count ?? 0), 0),
+    }));
+
     // F5: 30-day counts and last run per project for the cards. Left out (not an error) until migration 30 exists.
     const { data: health } = await supabase.rpc('projects_health', { p_user_id: req.user.id });
     const byProject = new Map(((health ?? []) as { project_id: string }[]).map(({ project_id, ...h }) => [project_id, h]));
-    const withHealth = (projects ?? []).map((p) => ({ ...p, health: byProject.get(p.id) ?? null }));
+    const withHealth = projects.map((p) => ({ ...p, health: byProject.get(p.id) ?? null }));
 
     res.status(200).json({ projects: withHealth, count: withHealth.length });
   } catch (err) {

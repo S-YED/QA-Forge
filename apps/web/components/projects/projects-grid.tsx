@@ -2,12 +2,12 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Plus, FolderPlus, Globe, Calendar, ChevronRight } from 'lucide-react';
+import { Plus, Globe, Calendar, ChevronRight } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
 import { toastError } from '@/lib/toast-error';
 import { CreateProjectModal } from '@/components/projects/create-project-modal';
 import { PageHeader } from '@/components/shared/page-header';
-import { EmptyState } from '@/components/shared/empty-state';
+import { FirstRunChecklist } from '@/components/projects/first-run-checklist';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/shared/status-badge';
@@ -17,6 +17,8 @@ import type { Project } from '@qaforge/shared-types';
 
 /** F5: a project with its 30-day counts and last run. `health` is null until the database has migration 30. */
 type ProjectWithHealth = Project & {
+  /** U1: test cases across the project's suites */
+  case_count?: number;
   health?: { passed_30d: number; failed_30d: number; last_status: string | null; last_run_at: string | null } | null;
 };
 
@@ -60,19 +62,10 @@ export function ProjectsGrid({ initialProjects }: ProjectsGridProps) {
         </Button>
       </PageHeader>
 
-      {projects.length === 0 ? (
-        <EmptyState
-          icon={FolderPlus}
-          title="No projects yet"
-          description="Create your first project to start generating and running AI-driven end-to-end tests."
-          action={
-            <Button onClick={() => setIsModalOpen(true)}>
-              <Plus />
-              Create project
-            </Button>
-          }
-        />
-      ) : (
+      {/* U1: until the account has a project, a case and a run; with no projects it is the whole page */}
+      <FirstRunChecklist projects={projects} onCreate={() => setIsModalOpen(true)} />
+
+      {projects.length > 0 && (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => {
             const rate = project.health ? passRate(project.health.passed_30d, project.health.failed_30d) : null;

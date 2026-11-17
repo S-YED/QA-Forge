@@ -68,7 +68,8 @@ test('a generated case runs in a real browser and passes, with screenshots', asy
   await expect(page.getByText('All steps passed')).toBeVisible({ timeout: 90_000 });
   const shots = page.locator('img[src*="/object/sign/"]');
   await expect(shots.first()).toBeVisible();
-  expect(await shots.first().evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  // the element appears before its image has loaded: wait for real pixels rather than reading the width once
+  await expect.poll(() => shots.first().evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
 
   // F2: "Run again" starts a new run of the same case, from a clean page, and it passes too.
   const firstRun = page.url();

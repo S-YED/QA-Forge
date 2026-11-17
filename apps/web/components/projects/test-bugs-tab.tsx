@@ -31,6 +31,8 @@ interface TestBugsTabProps {
   onLoadMore: () => unknown;
   /** F6: reload the list from page 1 with these filters (a query string, "" for none). Must be stable. */
   onFilter: (query: string) => void;
+  /** U1: the empty state's action, which switches to the Suites tab */
+  onOpenSuites?: () => void;
 }
 
 const BUG_STATUSES = [
@@ -42,7 +44,7 @@ const BUG_STATUSES = [
 ] as const;
 
 /** Every bug in the project, newest first; failed runs file them automatically (UI-2). */
-export function TestBugsTab({ projectId, bugs, totalCount, onRefresh, onLoadMore, onFilter }: TestBugsTabProps) {
+export function TestBugsTab({ projectId, bugs, totalCount, onRefresh, onLoadMore, onFilter, onOpenSuites }: TestBugsTabProps) {
   const router = useRouter();
   const { pending, track } = usePending();
   // Status changes made here, shown at once without reloading the list.
@@ -78,6 +80,7 @@ export function TestBugsTab({ projectId, bugs, totalCount, onRefresh, onLoadMore
         icon={Bug}
         title="No bugs yet"
         description="When a run fails, QA Forge files a bug here with the failing step and its screenshot."
+        action={onOpenSuites && <Button onClick={onOpenSuites}>Open suites</Button>}
       />
     );
   }

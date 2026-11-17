@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Activity } from 'lucide-react';
 import { EmptyState } from '@/components/shared/empty-state';
+import { Button } from '@/components/ui/button';
 import { Stat, StatGroup } from '@/components/shared/stat';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { timeAgo } from '@/lib/utils';
@@ -134,7 +135,16 @@ function CaseRows({ projectId, title, empty, cases }: { projectId: string; title
 }
 
 /** F5: how the project is doing. Pass rate over 30 days, runs per day for 14, and the cases that need a look. */
-export function ProjectOverviewTab({ projectId, overview }: { projectId: string; overview: ProjectOverview }) {
+export function ProjectOverviewTab({
+  projectId,
+  overview,
+  onOpenSuites,
+}: {
+  projectId: string;
+  overview: ProjectOverview;
+  /** U1: the empty state's action, which switches to the Suites tab */
+  onOpenSuites?: () => void;
+}) {
   if (!overview.available) {
     return (
       <p className="rounded-lg border border-dashed bg-card p-6 text-center text-sm text-muted-foreground">
@@ -150,6 +160,7 @@ export function ProjectOverviewTab({ projectId, overview }: { projectId: string;
         icon={Activity}
         title="No runs yet"
         description="Run a test case or a whole suite. Pass rate, daily runs and failing cases show up here."
+        action={onOpenSuites && <Button onClick={onOpenSuites}>Open suites</Button>}
       />
     );
   }

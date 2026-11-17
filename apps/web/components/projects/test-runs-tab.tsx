@@ -22,6 +22,8 @@ interface TestRunsTabProps {
   onLoadMore: () => unknown;
   /** F6: reload the list from page 1 with these filters (a query string, "" for none). Must be stable. */
   onFilter: (query: string) => void;
+  /** U1: the empty state's action, which switches to the Suites tab */
+  onOpenSuites?: () => void;
 }
 
 const RUN_STATUSES = [
@@ -39,7 +41,7 @@ function formatDuration(ms?: number): string {
   return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
 }
 
-export function TestRunsTab({ projectId, runs, totalCount, onRefresh, onLoadMore, onFilter }: TestRunsTabProps) {
+export function TestRunsTab({ projectId, runs, totalCount, onRefresh, onLoadMore, onFilter, onOpenSuites }: TestRunsTabProps) {
   const router = useRouter();
   const { pending, track } = usePending();
   const { busy: startingAgain, runAgain } = useRunAgain(projectId);
@@ -60,6 +62,7 @@ export function TestRunsTab({ projectId, runs, totalCount, onRefresh, onLoadMore
         icon={Play}
         title="No test runs yet"
         description="Run a test case from the Suites tab to watch results stream in here."
+        action={onOpenSuites && <Button onClick={onOpenSuites}>Open suites</Button>}
       />
     );
   }

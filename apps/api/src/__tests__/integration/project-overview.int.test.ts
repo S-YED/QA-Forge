@@ -86,8 +86,13 @@ describe('F5 project overview', () => {
   });
 
   it('puts the same health on the project list, and exact totals on the project', async () => {
-    const list = (await (await api('/projects', token)).json()) as { projects: { id: string; health: Record<string, unknown> | null }[] };
-    expect(list.projects.find((p) => p.id === projectId)!.health).toMatchObject({ passed_30d: 2, failed_30d: 3, last_status: 'error' });
+    const list = (await (await api('/projects', token)).json()) as {
+      projects: { id: string; case_count: number; health: Record<string, unknown> | null; test_suites?: unknown }[];
+    };
+    const mine = list.projects.find((p) => p.id === projectId)!;
+    expect(mine.health).toMatchObject({ passed_30d: 2, failed_30d: 3, last_status: 'error' });
+    expect(mine.case_count).toBe(3); // U1: counted across the project's suites
+    expect(mine.test_suites).toBeUndefined(); // the nested rows used for counting are not sent
 
     const detail = (await (await api(`/projects/${projectId}`, token)).json()) as { stats: unknown };
     expect(detail.stats).toEqual({ total_runs: 7, passed_runs: 3, failed_runs: 3 });

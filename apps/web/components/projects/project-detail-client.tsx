@@ -125,6 +125,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
     }
   }, [projectId]);
 
+  const openSuites = useCallback(() => setActiveTab('suites'), []);
   const filterRuns = useCallback((query: string) => void fetchRuns(1, query), [fetchRuns]);
   const filterBugs = useCallback((query: string) => void fetchBugs(1, query), [fetchBugs]);
 
@@ -254,7 +255,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
         </div>
 
         <TabsContent value="overview">
-          <ProjectOverviewTab projectId={projectId} overview={overview} />
+          <ProjectOverviewTab projectId={projectId} overview={overview} onOpenSuites={openSuites} />
         </TabsContent>
         <TabsContent value="suites">
           <TestSuitesTab projectId={projectId} suites={suites} lastResults={lastResults} baseUrl={project.base_url ?? undefined} onRefresh={fetchSuites} />
@@ -267,6 +268,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
             onRefresh={fetchRuns}
             onLoadMore={() => fetchRuns(runsPage + 1)}
             onFilter={filterRuns}
+            onOpenSuites={openSuites}
           />
         </TabsContent>
         <TabsContent value="bugs">
@@ -277,6 +279,7 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
             onRefresh={() => fetchBugs(1)}
             onLoadMore={() => fetchBugs(bugsPage + 1)}
             onFilter={filterBugs}
+            onOpenSuites={openSuites}
           />
         </TabsContent>
         <TabsContent value="recordings">
