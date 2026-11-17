@@ -72,9 +72,25 @@ test('a generated case runs in a real browser and passes, with screenshots', asy
   // the element appears before its image has loaded: wait for real pixels rather than reading the width once
   await expect.poll(() => shots.first().evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
 
+  // U2: the result in one sentence, and a screenshot viewer driven by the keyboard.
+  await expect(page.getByText(/^Passed: all \d+ steps in /)).toBeVisible();
+  const thumbs = page.getByRole('button', { name: /^Screenshot from step / });
+  const count = await thumbs.count();
+  expect(count).toBeGreaterThan(1);
+  await thumbs.first().click();
+  const viewer = page.getByRole('dialog');
+  await expect(viewer.getByText(`1 of ${count}`, { exact: true })).toBeVisible();
+  await expect(viewer.getByRole('button', { name: 'Previous' })).toBeDisabled();
+  await page.keyboard.press('ArrowRight');
+  await expect(viewer.getByText(`2 of ${count}`, { exact: true })).toBeVisible();
+  await viewer.getByRole('button', { name: 'Previous' }).click();
+  await expect(viewer.getByText(`1 of ${count}`, { exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(viewer).toBeHidden();
+
   // F2: "Run again" starts a new run of the same case, from a clean page, and it passes too.
   const firstRun = page.url();
-  await page.getByRole('button', { name: 'Run this test case again' }).click();
+  await page.getByRole('button', { name: 'Run again', exact: true }).click();
   await expect(page).not.toHaveURL(firstRun);
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]{36}$/);
   await expect(page.getByRole('heading', { name: 'Log in with the demo account' })).toBeVisible();
@@ -99,6 +115,11 @@ test('the planted coupon bug fails the run and files a bug', async ({ page }) =>
   await expect(page.getByText('Page address')).toBeVisible();
   await expect(page.getByText(/^http:\/\/127\.0\.0\.1:4100\//)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Copy details' })).toBeVisible();
+  // U2: the summary names the failed step and leads to it and to the bug.
+  await expect(page.getByText(/^Failed at step 14 of 14: /)).toBeVisible();
+  await page.getByRole('button', { name: 'Go to step 14' }).click();
+  await expect(page.locator('#step-14')).toBeFocused();
+  await expect(page.getByRole('link', { name: 'See the bug report' })).toHaveAttribute('href', '#bug-reports');
   await page.goto(projectUrl);
   await page.getByRole('tab', { name: /Bugs/ }).click();
   await expect(page.getByText(/Test failure at step 14/).first()).toBeVisible();

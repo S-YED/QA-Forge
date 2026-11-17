@@ -74,6 +74,17 @@ for (const [size, viewport] of Object.entries(VIEWPORTS)) {
         await check(page, `project: ${tab}`, problems);
       }
 
+      // The newest run of that project, when it has one: the run page is the busiest screen.
+      await page.getByRole('tab', { name: /Runs/ }).click();
+      const firstRun = page.getByRole('tabpanel').locator('li > button').first();
+      await expect(firstRun.or(page.getByText('No test runs yet'))).toBeVisible();
+      if (await firstRun.isVisible()) {
+        await firstRun.click();
+        await expect(page).toHaveURL(/\/runs\/[0-9a-f-]{36}$/);
+        await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+        await check(page, 'run page', problems);
+      }
+
       for (const path of ['/dashboard/settings/ai-keys', '/dashboard/settings/profile', '/dashboard/settings/integrations']) {
         await page.goto(path);
         await check(page, path, problems);

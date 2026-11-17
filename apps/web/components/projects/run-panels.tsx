@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Camera, Check, RotateCcw, TerminalSquare, X } from 'lucide-react';
+import { Camera, Check, ChevronLeft, ChevronRight, RotateCcw, TerminalSquare, X } from 'lucide-react';
 import type { TestStep } from '@qaforge/shared-types';
 import { stepsToPlaywright } from '@qaforge/shared-types';
 import { cn, downloadText, fileSlug } from '@/lib/utils';
 import { StatusBadge } from '@/components/shared/status-badge';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 
 // The display pieces of the run page: console, screenshot strip, steps list and the script download.
 // The live connection and replay logic stay in run-detail-client.tsx.
@@ -146,20 +148,31 @@ export function LiveTerminal({ lines, mode }: { lines: TerminalLine[]; mode: Vie
 
 // ── Screenshot Filmstrip Component ────────────────────────────────────────────
 
-export function ScreenshotFilmstrip({
-  steps,
-  onSelect,
-}: {
-  steps: (TestStep | LiveStep)[];
-  onSelect: (src: string) => void;
-}) {
-  const screenshotSteps = steps.filter(
-    (s) =>
-      ('screenshot_base64' in s && s.screenshot_base64) ||
-      ('screenshot_url' in s && s.screenshot_url),
-  );
+/** A step's screenshot, ready to show: live runs send base64, saved runs a signed address. */
+export interface Shot {
+  step: TestStep | LiveStep;
+  src: string;
+}
 
-  if (screenshotSteps.length === 0) {
+export function screenshotsOf(steps: (TestStep | LiveStep)[]): Shot[] {
+  return steps.flatMap((step) => {
+    const src =
+      'screenshot_base64' in step && step.screenshot_base64
+        ? `data:image/png;base64,${step.screenshot_base64}`
+        : ('screenshot_url' in step ? step.screenshot_url : '') || '';
+    return src ? [{ step, src }] : [];
+  });
+}
+
+/** "850ms", "4.2s", "1m 05s". */
+export function formatMs(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${Math.floor(ms / 60_000)}m ${String(Math.round((ms % 60_000) / 1000)).padStart(2, '0')}s`;
+}
+
+export function ScreenshotFilmstrip({ shots, onSelect }: { shots: Shot[]; onSelect: (index: number) => void }) {
+  if (shots.length === 0) {
     return (
       <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed bg-card px-4 py-8 text-sm text-muted-foreground">
         <Camera className="size-4" aria-hidden="true" />
@@ -172,19 +185,14 @@ export function ScreenshotFilmstrip({
     <div
       className="scrollbar-console flex gap-3 overflow-x-auto pb-2"
       style={{ scrollSnapType: 'x mandatory' }}
-      role="list"
+      role="group"
       aria-label="Test screenshots"
     >
-      {screenshotSteps.map((step) => {
-        const src =
-          'screenshot_base64' in step && step.screenshot_base64
-            ? `data:image/png;base64,${step.screenshot_base64}`
-            : ('screenshot_url' in step ? step.screenshot_url : '') || '';
-
+      {shots.map(({ step, src }, index) => {
         return (
           <button
             key={step.step_number}
-            onClick={() => onSelect(src)}
+            onClick={() => onSelect(index)}
             className="group relative shrink-0 overflow-hidden rounded-lg border bg-card transition-transform hover:-translate-y-0.5"
             style={{ scrollSnapAlign: 'start', height: '124px' }}
             aria-label={`Screenshot from step ${step.step_number}`}
@@ -196,6 +204,139 @@ export function ScreenshotFilmstrip({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/** U2: one screenshot at a time, with Previous and Next, the arrow keys, and Escape to close. */
+export function ScreenshotViewer({
+  shots,
+  index,
+  onIndex,
+  onClose,
+}: {
+  shots: Shot[];
+  /** null when closed */
+  index: number | null;
+  onIndex: (index: number) => void;
+  onClose: () => void;
+}) {
+  const shot = index === null ? null : shots[index];
+  const prev = () => index !== null && index > 0 && onIndex(index - 1);
+  const next = () => index !== null && index < shots.length - 1 && onIndex(index + 1);
+  return (
+    <Dialog open={!!shot} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        className="max-w-5xl gap-3 p-4 sm:p-5"
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowLeft') prev();
+          if (e.key === 'ArrowRight') next();
+        }}
+      >
+        {shot && index !== null && (
+          <>
+            <DialogTitle className="pr-8 text-sm font-semibold">
+              Step {shot.step.step_number}: {shot.step.instruction || shot.step.action}
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Screenshot {index + 1} of {shots.length}. The left and right arrow keys move between screenshots.
+            </DialogDescription>
+            <img
+              src={shot.src}
+              alt={`The page after step ${shot.step.step_number}`}
+              className="max-h-[70vh] w-full rounded-md border bg-muted object-contain"
+            />
+            <div className="flex items-center justify-between gap-3">
+              <Button variant="outline" size="sm" onClick={prev} disabled={index === 0}>
+                <ChevronLeft />
+                Previous
+              </Button>
+              <span className="font-mono text-xs text-muted-foreground">
+                {index + 1} of {shots.length}
+              </span>
+              <Button variant="outline" size="sm" onClick={next} disabled={index === shots.length - 1}>
+                Next
+                <ChevronRight />
+              </Button>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * U2: the result of a finished run in one sentence, with where to look next. Nothing while the run is going.
+ * A run the user stopped is not a fault, so it gets a plain note instead of a red box.
+ */
+export function RunSummary({
+  status,
+  errorMessage,
+  durationMs,
+  steps,
+  hasBug,
+}: {
+  status: string;
+  errorMessage: string | null | undefined;
+  durationMs: number | null | undefined;
+  steps: (TestStep | LiveStep)[];
+  hasBug: boolean;
+}) {
+  if (status === 'pending' || status === 'running') return null;
+  const failed = steps.find((s) => s.status === 'failed');
+  const took = durationMs != null ? ` in ${formatMs(durationMs)}` : '';
+
+  let tone: 'success' | 'destructive' | 'warning' | 'neutral';
+  let text: string;
+  if (errorMessage?.startsWith('Stopped by you')) {
+    tone = 'neutral';
+    text = errorMessage;
+  } else if (status === 'passed') {
+    tone = 'success';
+    text = `Passed: all ${steps.length} ${steps.length === 1 ? 'step' : 'steps'}${took}.`;
+  } else if (status === 'failed') {
+    tone = 'destructive';
+    const why = (failed && 'error_message' in failed && failed.error_message) || errorMessage || 'a check did not hold.';
+    text = failed ? `Failed at step ${failed.step_number} of ${steps.length}: ${why}` : `Failed: ${why}`;
+  } else if (status === 'error') {
+    tone = 'warning';
+    text = `Could not finish: ${errorMessage || 'the run ended with an error.'}`;
+  } else {
+    return null;
+  }
+
+  const goToStep = () => {
+    const el = failed && document.getElementById(`step-${failed.step_number}`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el?.focus({ preventScroll: true });
+  };
+
+  return (
+    <div
+      className={cn(
+        'mt-4 flex flex-col gap-2 rounded-lg border px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between',
+        tone === 'success' && 'border-success/30 bg-success/8 text-success',
+        tone === 'destructive' && 'border-destructive/30 bg-destructive/8 text-destructive',
+        tone === 'warning' && 'border-warning/30 bg-warning/8 text-warning',
+        tone === 'neutral' && 'bg-muted text-foreground',
+      )}
+    >
+      <p className="min-w-0 break-words font-medium">{text}</p>
+      {(failed || hasBug) && tone !== 'neutral' && (
+        <div className="flex shrink-0 flex-wrap gap-x-4 gap-y-1">
+          {failed && (
+            <button type="button" onClick={goToStep} className="font-medium underline underline-offset-2 hover:no-underline">
+              Go to step {failed.step_number}
+            </button>
+          )}
+          {hasBug && (
+            <a href="#bug-reports" className="font-medium underline underline-offset-2 hover:no-underline">
+              See the bug report
+            </a>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -302,6 +443,9 @@ function StepEvidence({ step }: { step: TestStep | LiveStep }) {
 
 /** The steps of a run, each with its state, timing and error. */
 export function StepsTimeline({ steps, mode }: { steps: (TestStep | LiveStep)[]; mode: ViewMode }) {
+  // U2: each step's time as a bar against the slowest step, so the slow one stands out.
+  const durationOf = (s: TestStep | LiveStep) => ('duration_ms' in s && typeof s.duration_ms === 'number' ? s.duration_ms : undefined);
+  const slowest = Math.max(0, ...steps.map((s) => durationOf(s) ?? 0));
   return (
     <>
       {steps.length === 0 ? (
@@ -313,8 +457,10 @@ export function StepsTimeline({ steps, mode }: { steps: (TestStep | LiveStep)[];
           {steps.map((step) => (
             <li
               key={step.step_number}
+              id={`step-${step.step_number}`}
+              tabIndex={-1}
               className={cn(
-                'rounded-lg border bg-card p-3 transition-colors',
+                'scroll-mt-24 rounded-lg border bg-card p-3 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 step.status === 'running' && 'border-info/50 bg-info/[0.04]',
               )}
             >
@@ -359,14 +505,20 @@ export function StepsTimeline({ steps, mode }: { steps: (TestStep | LiveStep)[];
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2">
-                  {'duration_ms' in step && step.duration_ms !== undefined && (
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {step.duration_ms}ms
-                    </span>
+                  {durationOf(step) !== undefined && (
+                    <span className="font-mono text-xs text-muted-foreground">{formatMs(durationOf(step)!)}</span>
                   )}
                   <StatusBadge status={step.status} showIcon={false} />
                 </div>
               </div>
+              {durationOf(step) !== undefined && slowest > 0 && (
+                <div className="ml-10 mt-2 h-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                  <div
+                    className={cn('h-full rounded-full', step.status === 'failed' ? 'bg-destructive/60' : 'bg-muted-foreground/40')}
+                    style={{ width: `${Math.max(2, (durationOf(step)! / slowest) * 100)}%` }}
+                  />
+                </div>
+              )}
               <StepEvidence step={step} />
             </li>
           ))}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Download, Play, RotateCcw, Bug, Square, X } from 'lucide-react';
+import { ArrowLeft, Download, Play, RotateCcw, Bug, Square } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
 import { CASE_DELETED, useRunAgain } from '@/lib/hooks/use-run-again';
 import { toastError } from '@/lib/toast-error';
@@ -17,7 +17,11 @@ import { Spinner } from '@/components/shared/spinner';
 import { RunDetailSkeleton } from '@/components/shared/page-skeletons';
 import {
   LiveTerminal,
+  RunSummary,
   ScreenshotFilmstrip,
+  ScreenshotViewer,
+  formatMs,
+  screenshotsOf,
   SectionLabel,
   StepsTimeline,
   downloadPlaywrightScript,
@@ -93,7 +97,8 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
   const [bugs, setBugs] = useState<RunDetailResponse['bugs']>([]);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<ViewMode>(null);
-  const [selectedScreenshot, setSelectedScreenshot] = useState<string | null>(null);
+  // U2: which screenshot the viewer shows (index into the run's screenshots), null when closed
+  const [shotIndex, setShotIndex] = useState<number | null>(null);
   const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([]);
   const [canReplay, setCanReplay] = useState(false);
   const socketRef = useRef<Socket | null>(null);
@@ -394,6 +399,7 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
 
   const testTitle = run.test_cases?.title || 'Test Run';
   const hasCompletedSteps = steps.some((s) => s.status === 'passed' || s.status === 'failed');
+  const shots = screenshotsOf(steps);
 
   return (
     <div className="space-y-7">
@@ -416,13 +422,7 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
                 {/* every run executes saved steps; "ai_driven" is a legacy mode value, not AI at run time */}
                 {run.mode === 'replay' ? 'Replay of recording' : 'Run'} · {run.browser || 'chromium'}
               </span>
-              {run.duration_ms != null && (
-                <span className="font-mono text-xs">
-                  {run.duration_ms < 1000
-                    ? `${run.duration_ms}ms`
-                    : `${(run.duration_ms / 1000).toFixed(1)}s`}
-                </span>
-              )}
+              {run.duration_ms != null && <span className="font-mono text-xs">{formatMs(run.duration_ms)}</span>}
             </div>
           </div>
 
@@ -441,7 +441,6 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
                 onClick={() => run.test_case_id && runAgain(run.test_case_id)}
                 disabled={!run.test_case_id || !!startingAgain}
                 title={run.test_case_id ? 'Start a new run of this test case' : CASE_DELETED}
-                aria-label="Run this test case again"
               >
                 {startingAgain ? <Spinner /> : <Play />}
                 {startingAgain ? 'Starting…' : 'Run again'}
@@ -467,7 +466,6 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
               onClick={exportScript}
               disabled={!hasCompletedSteps || exporting}
               title={hasCompletedSteps ? 'Download as Playwright TypeScript' : 'Run a test first'}
-              aria-label="Export as Playwright TypeScript"
             >
               {exporting ? <Spinner className="text-primary-foreground" /> : <Download />}
               {exporting ? 'Exporting…' : 'Export script'}
@@ -475,16 +473,15 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
           </div>
         </div>
 
-        {run.error_message &&
-          mode === null &&
-          (run.error_message.startsWith('Stopped by you') ? (
-            // A run the user stopped is not a fault: say so plainly, without the red error box.
-            <div className="mt-4 rounded-lg border bg-muted px-4 py-3 text-sm text-foreground">{run.error_message}</div>
-          ) : (
-            <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/8 px-4 py-3 text-sm text-destructive">
-              <span className="font-semibold">Error:</span> {run.error_message}
-            </div>
-          ))}
+        {mode === null && (
+          <RunSummary
+            status={run.status}
+            errorMessage={run.error_message}
+            durationMs={run.duration_ms}
+            steps={steps}
+            hasBug={bugs.length > 0}
+          />
+        )}
       </div>
 
       {/* ── Two-Column Layout: Steps + Terminal ────────────────────────────── */}
@@ -506,12 +503,12 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
       {/* ── Screenshot Filmstrip ──────────────────────────────────────────── */}
       <div>
         <SectionLabel>Screenshots</SectionLabel>
-        <ScreenshotFilmstrip steps={steps} onSelect={(src) => setSelectedScreenshot(src)} />
+        <ScreenshotFilmstrip shots={shots} onSelect={setShotIndex} />
       </div>
 
       {/* ── Auto-Created Bugs ─────────────────────────────────────────────── */}
       {bugs.length > 0 && (
-        <div>
+        <div id="bug-reports" className="scroll-mt-24">
           <SectionLabel count={bugs.length}>Bug reports</SectionLabel>
           <div className="space-y-2">
             {bugs.map((bug) => (
@@ -535,31 +532,7 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
         </div>
       )}
 
-      {/* ── Screenshot Lightbox ───────────────────────────────────────────── */}
-      {selectedScreenshot && (
-        <div
-          className="fixed inset-0 z-50 flex cursor-pointer items-center justify-center bg-black/80 p-4 duration-200 animate-in fade-in"
-          onClick={() => setSelectedScreenshot(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Screenshot preview"
-        >
-          <div className="relative mx-4 max-h-[90vh] max-w-4xl">
-            <img
-              src={selectedScreenshot}
-              alt="Step screenshot"
-              className="max-h-[90vh] w-auto rounded-lg border border-white/10 shadow-2xl"
-            />
-            <button
-              onClick={() => setSelectedScreenshot(null)}
-              className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white transition-colors hover:bg-black/80"
-              aria-label="Close preview"
-            >
-              <X className="size-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      <ScreenshotViewer shots={shots} index={shotIndex} onIndex={setShotIndex} onClose={() => setShotIndex(null)} />
     </div>
   );
 }
