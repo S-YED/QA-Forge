@@ -8,6 +8,8 @@ test('register a new account, then sign in with it', async ({ page, context }) =
 
   await page.goto('/login');
   await page.getByRole('link', { name: /Sign up/ }).click();
+  // The sign-up view is its own page now (DD-5): type only once its form is there, or the switch clears the fields.
+  await expect(page.getByRole('button', { name: 'Sign up' })).toBeVisible();
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
   await page.getByRole('button', { name: 'Sign up' }).click();
@@ -57,6 +59,7 @@ test('a forgotten password is reset from the emailed link, and the new one signs
   await page.goto('/login');
   await page.getByRole('link', { name: 'Forgot your password?' }).click();
   await expect(page.getByText('Reset your password')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Send reset password instructions' })).toBeVisible();
   await page.locator('input[type="email"]').fill(email);
   await page.getByRole('button', { name: 'Send reset password instructions' }).click();
   await expect(page.getByText('Check your email for the password reset link')).toBeVisible();

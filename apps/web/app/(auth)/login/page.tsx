@@ -86,7 +86,6 @@ export default function LoginPage({ searchParams }: { searchParams: Promise<{ vi
             },
           }}
           providers={[]}
-          key={view}
           view={view}
           showLinks={false}
           redirectTo={redirectTo}
