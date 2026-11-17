@@ -39,7 +39,8 @@ test('generate drafts without a key, approve some, and save only those', async (
   await page.getByLabel('Name').fill(project);
   await page.getByLabel('Base URL').fill(DEMO_SHOP);
   await page.getByRole('button', { name: 'Create project' }).last().click();
-  await page.getByRole('link', { name: new RegExp(project) }).click();
+  // .last(): a new account's first-run checklist (U1) also links to the project; the card comes after it
+  await page.getByRole('link', { name: new RegExp(project) }).last().click();
   // The list card shows the name too, so wait for the project's own page before keeping its URL.
   await expect(page).toHaveURL(/\/dashboard\/projects\/[0-9a-f-]{36}$/);
   await expect(page.getByRole('button', { name: 'AI generate' })).toBeVisible();
