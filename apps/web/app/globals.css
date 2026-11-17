@@ -39,11 +39,12 @@
     /* Semantic - own test state. green=pass red=fail blue=running amber=warn */
     --success: 0.45 0.12 155;
     --success-foreground: 0.99 0 0;
-    --warning: 0.50 0.12 70;
+    --warning: 0.46 0.12 70; /* was 0.50: amber "Error" badge on its 18% tint was 4.4:1 (U5) */
     --warning-foreground: 0.99 0 0;
-    --info: 0.55 0.15 248;
+    /* 0.45 (was 0.55): blue "Running" text on its own tint, on a tinted panel, was 3.6:1; now at least 4.5:1 (U5) */
+    --info: 0.45 0.15 248;
     --info-foreground: 0.99 0 0;
-    --destructive: 0.51 0.20 25;
+    --destructive: 0.48 0.20 25; /* was 0.51: red text on its 12% tint fell under 4.5:1 on a tinted panel (U5) */
     --destructive-foreground: 0.99 0 0;
 
     /* Sidebar - its own slightly-cool neutral layer */

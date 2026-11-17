@@ -68,6 +68,8 @@ OKLCH custom properties in `globals.css` as `L C H` triplets, wrapped by Tailwin
 | 2026-06-12 | Initial DESIGN.md codifying the dark/violet/glass system | Existing system was coherent but undocumented |
 | 2026-06-19 | **Full redesign → "Blueprint" (light + mineral-teal, dark console as hero).** Replaced the dark-violet-glow/glassmorphism/gradient-text system; rebuilt on shadcn/ui + Radix with OKLCH tokens, Hanken Grotesk + JetBrains Mono, light default + de-slopped "Instrument" dark variant. | Owner judged the prior UI "AI-slop"; the prior aesthetic *was* the saturated AI dev-tool template. Blueprint escapes both that reflex and the editorial-serif reflex. Explicit owner approval to deviate from the prior locked system. |
 
+| 2026-11-17 | Light semantic colours darkened for text on their own tints: `--info` L 0.55 → 0.45, `--warning` 0.50 → 0.46, `--destructive` 0.51 → 0.48 (same hue and chroma; `--success` 0.45 already passed). | The page-health check (axe) found a blue "Running" badge at 3.6:1 and an amber "Error" badge at 4.4:1. Worked out for the tints in use (8 to 18%) on card, canvas and a 10% tinted panel: every badge is now at least 4.5:1 (AA), and white text on the solid colours rose to 6.7:1 or more. |
+
 ### Notes
 - The prior `globals.css` utilities (`.glass-card`, `.glass-sidebar`, `.glow-*`, `.gradient-text*`, `.hero-gradient`, `animate-pulse-glow`/`shimmer`/`float`) were removed. Do not reintroduce them.
 - `GOAL.md` gates 1.6 / 3.2 were certified against the *old* DESIGN.md and remain as historical record; this file is the current source of truth.
