@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { apiClient } from '@/lib/api/client';
 import { useDemoMode } from '@/lib/hooks/use-demo-mode';
 import { toastError } from '@/lib/toast-error';
+import { useConfirm } from '@/components/shared/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -35,6 +36,7 @@ const NAME_RULE = /^[A-Z][A-Z0-9_]{0,63}$/;
 
 /** F4: values a project's steps can use as {{NAME}}. Secrets are write-only. */
 export function ProjectVariablesTab({ projectId, variables, available, onRefresh }: ProjectVariablesTabProps) {
+  const ask = useConfirm();
   const isDemo = useDemoMode();
   const path = `/api/projects/${projectId}/variables`;
   const [open, setOpen] = useState(false);
@@ -86,7 +88,13 @@ export function ProjectVariablesTab({ projectId, variables, available, onRefresh
   };
 
   const remove = async (v: ProjectVariable) => {
-    if (!confirm(`Delete ${v.name}? Steps that use {{${v.name}}} will stop running until it is added again.`)) return;
+    const yes = await ask({
+      title: `Delete ${v.name}?`,
+      description: `Steps that use {{${v.name}}} will stop running until it is added again.`,
+      confirmLabel: 'Delete variable',
+      destructive: true,
+    });
+    if (!yes) return;
     setDeleting(v.id);
     try {
       await apiClient.del(`${path}/${v.id}`);

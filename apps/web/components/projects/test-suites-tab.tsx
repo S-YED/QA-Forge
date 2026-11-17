@@ -10,6 +10,7 @@ import { cn, downloadText, fileSlug } from '@/lib/utils';
 import { useDemoMode } from '@/lib/hooks/use-demo-mode';
 import { toast } from 'sonner';
 import { toastError } from '@/lib/toast-error';
+import { useConfirm } from '@/components/shared/confirm-dialog';
 import { casesToCsv, suiteToPlaywright, type GeneratedTestCase, type TestSuite, type TestCase } from '@qaforge/shared-types';
 import { CaseDialog } from '@/components/projects/case-dialog';
 import { CaseList } from '@/components/projects/case-list';
@@ -55,6 +56,7 @@ interface SuiteDetailResponse {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function TestSuitesTab({ projectId, suites, lastResults, baseUrl, onRefresh }: TestSuitesTabProps) {
+  const ask = useConfirm();
   const router = useRouter();
   const isDemo = useDemoMode();
   const [expandedSuiteId, setExpandedSuiteId] = useState<string | null>(null);
@@ -210,7 +212,13 @@ export function TestSuitesTab({ projectId, suites, lastResults, baseUrl, onRefre
   };
 
   const handleDeleteCase = async (caseId: string, suiteId: string) => {
-    if (!confirm('Delete this test case and its run history? This cannot be undone.')) return;
+    const yes = await ask({
+      title: 'Delete this test case?',
+      description: 'Its run history is deleted too. This cannot be undone.',
+      confirmLabel: 'Delete test case',
+      destructive: true,
+    });
+    if (!yes) return;
     setBusy(`delete-case:${caseId}`);
     try {
       await apiClient.del(`/api/projects/${projectId}/test-suites/${suiteId}/test-cases/${caseId}`);
@@ -282,7 +290,13 @@ export function TestSuitesTab({ projectId, suites, lastResults, baseUrl, onRefre
   };
 
   const handleDeleteSuite = async (suiteId: string) => {
-    if (!confirm('Delete this suite and all its test cases? This action cannot be undone.')) return;
+    const yes = await ask({
+      title: 'Delete this suite?',
+      description: 'All its test cases are deleted too. This cannot be undone.',
+      confirmLabel: 'Delete suite',
+      destructive: true,
+    });
+    if (!yes) return;
     setBusy(`delete-suite:${suiteId}`);
     try {
       await apiClient.del(`/api/projects/${projectId}/test-suites/${suiteId}`);
@@ -536,7 +550,7 @@ export function TestSuitesTab({ projectId, suites, lastResults, baseUrl, onRefre
                       className="size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       onClick={() => handleDeleteSuite(suite.id)}
                       disabled={busy === `delete-suite:${suite.id}`}
-                      aria-label="Delete suite"
+                      aria-label={`Delete suite ${suite.name}`}
                       title="Delete suite"
                     >
                       {busy === `delete-suite:${suite.id}` ? <Spinner /> : <Trash2 className="size-4" />}

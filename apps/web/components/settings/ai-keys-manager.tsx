@@ -5,6 +5,7 @@ import { Plus, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api/client';
 import { toastError } from '@/lib/toast-error';
+import { useConfirm } from '@/components/shared/confirm-dialog';
 import { AddApiKeyModal } from '@/components/settings/add-api-key-modal';
 import type { ApiKeyResponse } from '@qaforge/shared-types';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,7 @@ interface AiKeysManagerProps {
 }
 
 export function AiKeysManager({ initialKeys }: AiKeysManagerProps) {
+  const ask = useConfirm();
   const [keys, setKeys] = useState<ApiKeyResponse[]>(initialKeys);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [validatingId, setValidatingId] = useState<string | null>(null);
@@ -53,6 +55,14 @@ export function AiKeysManager({ initialKeys }: AiKeysManagerProps) {
   };
 
   const handleDelete = async (id: string) => {
+    const provider = keys.find((k) => k.id === id)?.provider ?? 'this provider';
+    const yes = await ask({
+      title: `Delete your ${provider} key?`,
+      description: 'Generating test cases with it stops until you add a key again. The key itself is not shown again.',
+      confirmLabel: 'Delete key',
+      destructive: true,
+    });
+    if (!yes) return;
     setDeletingId(id);
     try {
       await apiClient.del(`/api/api-keys/${id}`);

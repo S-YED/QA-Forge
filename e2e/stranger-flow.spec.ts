@@ -351,8 +351,8 @@ test('a project token starts a suite run from outside the app, and stops working
 
   await page.goto(projectUrl);
   await page.getByRole('tab', { name: /Automation/ }).click();
-  page.once('dialog', (d) => void d.accept());
   await page.getByRole('button', { name: 'Delete token E2E build' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete token' }).click(); // U4: the app's own confirm box
   await expect(page.getByText('Token deleted')).toBeVisible();
   expect((await request.post(`${API}/api/ci/suites/${suiteId}/run`, { headers: auth })).status()).toBe(401);
 });
@@ -382,7 +382,8 @@ test('a suite can be scheduled, paused and unscheduled', async ({ page }) => {
   await expect(page.getByText('Paused', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: `Change the schedule of ${suite}` }).click();
-  await page.getByRole('button', { name: 'Remove schedule' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Remove schedule' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Remove schedule' }).click(); // U4: asked first
   await expect(page.getByText('Schedule removed')).toBeVisible();
   await expect(page.getByRole('button', { name: `Schedule ${suite}`, exact: true })).toBeVisible();
 });
@@ -412,8 +413,8 @@ test('a Slack address can be saved without ever being shown again, and removed',
   await expect(page.getByLabel('Replace the address')).toHaveValue('');
   expect(await page.content()).not.toContain('e2e-synthetic-address');
 
-  page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Remove', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Turn off Slack notices' }).click();
   await expect(page.getByText('Slack notices turned off')).toBeVisible();
   await expect(page.getByLabel('Slack incoming-webhook address')).toBeVisible();
 });
@@ -546,8 +547,9 @@ test('the case editor keeps up with the keyboard and asks before losing changes'
   await expect(page.getByLabel('Step 5 description')).toHaveCount(0);
 
   // Closing with changes asks first; saying no keeps the editor and what was typed.
-  page.once('dialog', (d) => d.dismiss());
   await page.keyboard.press('Escape');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Keep editing' }).click();
+  await expect(page.getByRole('alertdialog')).toBeHidden();
   await expect(page.getByLabel('Step 3 description')).toHaveValue('Click "Log in"');
 
   // Ctrl+Enter saves; the empty fourth step is left out.
@@ -559,8 +561,8 @@ test('the case editor keeps up with the keyboard and asks before losing changes'
 
   // An edit asks before closing too; yes discards it.
   await page.getByLabel('Title').fill('U3 changed');
-  page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Edit U3 keyboard case' })).toBeVisible();
 });
@@ -605,6 +607,39 @@ test('record a login by clicking and typing in the live viewport, then replay it
   await page.getByRole('button', { name: /Compile & replay/ }).click();
   await expect(page).toHaveURL(/\/runs\//, { timeout: 30_000 });
   await expect(page.getByText('All steps passed')).toBeVisible({ timeout: 90_000 });
+});
+
+test("deleting asks in the app's own box: Cancel keeps it, the delete button removes it", async ({ page }) => {
+  // U4: no browser confirm boxes. Playwright dismisses a native one, so with one nothing below would be deleted.
+  await page.goto(projectUrl);
+  await page.getByRole('button', { name: 'New suite' }).click();
+  await page.getByLabel(/Suite name/).fill('U4 throwaway');
+  await page.getByRole('dialog').getByRole('button', { name: 'Create suite' }).click();
+  await expect(page.getByText('Suite created')).toBeVisible();
+  await page.getByText('U4 throwaway', { exact: true }).first().click();
+  await page.getByRole('button', { name: 'Add case' }).click();
+  await page.getByLabel('Title').fill('U4 case');
+  await page.getByLabel('Step 1 description').fill('Open /login');
+  await page.getByRole('button', { name: 'Create case' }).click();
+  const row = page.getByRole('button', { name: 'Delete U4 case' });
+  await expect(row).toBeVisible();
+
+  await row.click();
+  const ask = page.getByRole('alertdialog');
+  await expect(ask.getByText('Delete this test case?')).toBeVisible();
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(ask).toBeHidden();
+  await expect(row).toBeVisible(); // Cancel kept it
+
+  await row.click();
+  await ask.getByRole('button', { name: 'Delete test case' }).click();
+  await expect(page.getByText('Test case deleted')).toBeVisible();
+  await expect(row).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Delete suite U4 throwaway' }).click();
+  await ask.getByRole('button', { name: 'Delete suite' }).click();
+  await expect(page.getByText('Suite deleted')).toBeVisible();
+  await expect(page.getByText('U4 throwaway', { exact: true })).toHaveCount(0);
 });
 
 test('a link to a recording, run or suite run that is not there says so and goes back to the project', async ({ page }) => {

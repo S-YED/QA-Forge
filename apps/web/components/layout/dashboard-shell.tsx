@@ -5,6 +5,7 @@ import { Menu } from 'lucide-react';
 import { Sidebar } from './sidebar';
 import { DemoBanner } from './demo-banner';
 import { Logo } from '@/components/brand/logo';
+import { ConfirmProvider } from '@/components/shared/confirm-dialog';
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -29,7 +30,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </header>
 
         <main className="flex-1 overflow-x-hidden">
-          <div className="mx-auto w-full max-w-7xl px-5 py-7 lg:px-8 lg:py-9">{children}</div>
+          <div className="mx-auto w-full max-w-7xl px-5 py-7 lg:px-8 lg:py-9">
+            <ConfirmProvider>{children}</ConfirmProvider>
+          </div>
         </main>
       </div>
     </div>

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { apiClient } from '@/lib/api/client';
 import { useDemoMode } from '@/lib/hooks/use-demo-mode';
 import { toastError } from '@/lib/toast-error';
+import { useConfirm } from '@/components/shared/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { SuiteSchedules } from '@/components/projects/suite-schedules';
 import { SlackNotifications } from '@/components/projects/slack-notifications';
@@ -73,6 +74,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 
 /** F8: project tokens for build systems, and the snippet that uses one. */
 export function ProjectAutomationTab({ projectId, suites }: ProjectAutomationTabProps) {
+  const ask = useConfirm();
   const isDemo = useDemoMode();
   const path = `/api/projects/${projectId}/tokens`;
   const [tokens, setTokens] = useState<ProjectToken[] | null>(null);
@@ -131,7 +133,13 @@ export function ProjectAutomationTab({ projectId, suites }: ProjectAutomationTab
   };
 
   const remove = async (t: ProjectToken) => {
-    if (!confirm(`Delete the token "${t.name}"? Any build that uses it will stop being able to run suites.`)) return;
+    const yes = await ask({
+      title: `Delete the token "${t.name}"?`,
+      description: 'Any build that uses it will stop being able to run suites.',
+      confirmLabel: 'Delete token',
+      destructive: true,
+    });
+    if (!yes) return;
     setDeleting(t.id);
     try {
       await apiClient.del(`${path}/${t.id}`);

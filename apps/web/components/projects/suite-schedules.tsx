@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { apiClient } from '@/lib/api/client';
 import { useDemoMode } from '@/lib/hooks/use-demo-mode';
 import { toastError } from '@/lib/toast-error';
+import { keepOpenForConfirm, useConfirm } from '@/components/shared/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/shared/spinner';
@@ -36,6 +37,7 @@ const describe = (s: Schedule) =>
 
 /** F9: one schedule per suite, daily or weekly at an hour in the viewer's timezone. */
 export function SuiteSchedules({ projectId, suites }: { projectId: string; suites: { id: string; name: string }[] }) {
+  const ask = useConfirm();
   const isDemo = useDemoMode();
   const path = `/api/projects/${projectId}/schedules`;
   const [schedules, setSchedules] = useState<Schedule[] | null>(null);
@@ -99,6 +101,13 @@ export function SuiteSchedules({ projectId, suites }: { projectId: string; suite
 
   const remove = async () => {
     if (!editing) return;
+    const yes = await ask({
+      title: 'Remove this schedule?',
+      description: 'The suite stops running on its own. Runs already finished stay.',
+      confirmLabel: 'Remove schedule',
+      destructive: true,
+    });
+    if (!yes) return;
     setBusy('remove');
     try {
       await apiClient.del(`${path}/${editing.id}`);
@@ -188,7 +197,7 @@ export function SuiteSchedules({ projectId, suites }: { projectId: string; suite
           if (!o) setOpen(false);
         }}
       >
-        <DialogContent>
+        <DialogContent onInteractOutside={keepOpenForConfirm}>
           <DialogHeader>
             <DialogTitle>Schedule {editing?.name}</DialogTitle>
             <DialogDescription>Times are in {timezone.replace(/_/g, ' ')}.</DialogDescription>

@@ -11,7 +11,9 @@ export function Toaster(props: ToasterProps) {
   return (
     <Sonner
       theme={theme}
-      position="bottom-right"
+      // U4: row actions (Run, Delete, Rename) and dialog buttons sit at the right edge; notices there covered them.
+      position="bottom-center"
+      visibleToasts={2}
       toastOptions={{
         classNames: {
           toast:

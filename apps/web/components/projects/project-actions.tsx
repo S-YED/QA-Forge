@@ -6,6 +6,7 @@ import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api/client';
 import { toastError } from '@/lib/toast-error';
+import { useConfirm } from '@/components/shared/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,6 +34,7 @@ interface ProjectActionsProps {
 
 /** Edit or delete the project (the API supported both; the UI had no way to reach them). */
 export function ProjectActions({ project, onSaved }: ProjectActionsProps) {
+  const ask = useConfirm();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -67,7 +69,13 @@ export function ProjectActions({ project, onSaved }: ProjectActionsProps) {
   };
 
   const remove = async () => {
-    if (!confirm(`Delete "${project.name}" with all its suites, test cases, runs and bugs? This cannot be undone.`)) return;
+    const yes = await ask({
+      title: `Delete "${project.name}"?`,
+      description: 'All its suites, test cases, runs and bugs are deleted too. This cannot be undone.',
+      confirmLabel: 'Delete project',
+      destructive: true,
+    });
+    if (!yes) return;
     setDeleting(true);
     try {
       await apiClient.del(`/api/projects/${project.id}`);

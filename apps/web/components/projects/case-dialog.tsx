@@ -17,6 +17,7 @@ import {
 } from '@/components/projects/step-row';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/shared/spinner';
+import { keepOpenForConfirm, useConfirm } from '@/components/shared/confirm-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -51,6 +52,7 @@ function draftSteps(tc: TestCase | null): DraftStep[] {
 
 /** Create or edit a test case. Mount with a fresh `key` each time it opens so the form starts from `editing`. */
 export function CaseDialog({ projectId, suiteId, editing, open, onClose, onSaved }: CaseDialogProps) {
+  const ask = useConfirm();
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState(editing?.title ?? '');
   const [description, setDescription] = useState(editing?.description ?? '');
@@ -89,8 +91,11 @@ export function CaseDialog({ projectId, suiteId, editing, open, onClose, onSaved
   const snapshot = JSON.stringify([title, description, expected, priority, type, steps]);
   const [initial] = useState(snapshot);
   const dirty = snapshot !== initial;
-  const requestClose = () => {
-    if (!dirty || confirm('Discard your changes to this test case?')) onClose();
+  const requestClose = async () => {
+    const yes =
+      !dirty ||
+      (await ask({ title: 'Discard your changes to this test case?', confirmLabel: 'Discard changes', cancelLabel: 'Keep editing', destructive: true }));
+    if (yes) onClose();
   };
   useEffect(() => {
     if (!open || !dirty) return;
@@ -155,6 +160,7 @@ export function CaseDialog({ projectId, suiteId, editing, open, onClose, onSaved
     >
       <DialogContent
         className="max-h-[90vh] overflow-y-auto sm:max-w-3xl"
+        onInteractOutside={keepOpenForConfirm}
         onKeyDown={(e) => {
           if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;
           e.preventDefault();

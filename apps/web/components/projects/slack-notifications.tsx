@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { apiClient } from '@/lib/api/client';
 import { useDemoMode } from '@/lib/hooks/use-demo-mode';
 import { toastError } from '@/lib/toast-error';
+import { useConfirm } from '@/components/shared/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -21,6 +22,7 @@ const PREFIX = 'https://hooks.slack.com/services/';
 
 /** F10: post to a Slack channel when a suite run of this project ends with failures. The address is write-only. */
 export function SlackNotifications({ projectId }: { projectId: string }) {
+  const ask = useConfirm();
   const isDemo = useDemoMode();
   const path = `/api/projects/${projectId}/notifications`;
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
@@ -67,8 +69,14 @@ export function SlackNotifications({ projectId }: { projectId: string }) {
       'Could not save the Slack address',
     );
   const test = () => act('test', () => apiClient.post(`${path}/slack/test`, {}), 'Test message sent. Check the channel.', 'Slack did not take the test message');
-  const remove = () => {
-    if (!confirm('Stop posting to Slack for this project? The saved address is deleted.')) return;
+  const remove = async () => {
+    const yes = await ask({
+      title: 'Stop posting to Slack for this project?',
+      description: 'The saved address is deleted.',
+      confirmLabel: 'Turn off Slack notices',
+      destructive: true,
+    });
+    if (!yes) return;
     return act('remove', () => apiClient.del(`${path}/slack`), 'Slack notices turned off', 'Could not remove the Slack address');
   };
 
