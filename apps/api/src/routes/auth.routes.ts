@@ -8,6 +8,7 @@ import { demoGuard } from '../middleware/demo-guard.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
 import { env } from '../config/env.js';
+import logger from '../utils/logger.js';
 
 const router: IRouter = Router();
 
@@ -23,10 +24,20 @@ router.post('/demo', demoAuthLimiter, async (_req, res, next) => {
       env.SUPABASE_ANON_KEY,
     );
 
-    const { data, error } = await anonClient.auth.signInWithPassword({
-      email: 'demo@qaforge.dev',
-      password: 'DemoPassword123!',
-    });
+    const demo = { email: 'demo@qaforge.dev', password: 'DemoPassword123!' };
+    let { data, error } = await anonClient.auth.signInWithPassword(demo);
+
+    if (error || !data.session) {
+      // SEC-4: every visitor gets a session for the same account, and Supabase Auth lets a user change their own
+      // password or email, so one visitor could lock out everyone after them. Put the account back, then try again.
+      const { data: profile } = await supabase.from('profiles').select('id').eq('is_demo', true).maybeSingle();
+      if (profile) {
+        const { error: restoreError } = await supabase.auth.admin.updateUserById(profile.id, { ...demo, email_confirm: true });
+        if (restoreError) logger.error({ event: 'demo:restore_failed', error: restoreError.message });
+        else logger.warn({ event: 'demo:restored', reason: error?.message ?? 'no session' });
+        ({ data, error } = await anonClient.auth.signInWithPassword(demo));
+      }
+    }
 
     if (error || !data.session) {
       return next(

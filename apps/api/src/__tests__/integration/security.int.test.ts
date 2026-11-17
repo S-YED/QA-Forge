@@ -43,6 +43,28 @@ async function withBobProject(name: string, fn: (projectId: string, token: strin
   }
 }
 
+describe('SEC-4 the shared demo account heals itself', () => {
+  it('a visitor who changes the demo password does not lock out the next visitor', async () => {
+    const first = (await (await api('/auth/demo', '', 'POST')).json()) as { access_token: string };
+    // Any signed-in user may change their own password through Supabase Auth; the demo session is handed to everyone.
+    const changed = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method: 'PUT',
+      headers: { apikey: ANON_KEY, Authorization: `Bearer ${first.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: 'changed-by-a-visitor-123' }),
+    });
+    expect(changed.status).toBe(200);
+    try {
+      const next = await api('/auth/demo', '', 'POST');
+      expect(next.status).toBe(200);
+      expect(((await next.json()) as { access_token?: string }).access_token).toBeTruthy();
+    } finally {
+      // Leave the seed password whatever happened, so later tests and the local demo keep working.
+      const { data } = await supabase.from('profiles').select('id').eq('is_demo', true).single();
+      await supabase.auth.admin.updateUserById(data!.id, { password: USERS.demo.password });
+    }
+  });
+});
+
 describe('DD-1 a bad request is answered as one, not as a server error', () => {
   it('says 400 for a body that is not JSON, 413 for one too large, 403 for a site that may not call the API', async () => {
     const { token } = await signIn(USERS.bob);
