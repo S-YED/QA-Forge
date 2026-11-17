@@ -7,7 +7,8 @@
  * SEC-2: AI optimize cannot read/overwrite another user's test case (IDOR).
  * CON-1: test-case writes enforce the shared step contract with field-level 400s.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { supabase } from '../../config/supabase.js';
 import { ANON_KEY, SUPABASE_URL, USERS, signIn, useApi } from './helpers.js';
 
 const api = useApi();
@@ -41,6 +42,20 @@ async function withBobProject(name: string, fn: (projectId: string, token: strin
     await api(`/projects/${created.project.id}`, bob.token, 'DELETE');
   }
 }
+
+describe('CR-2 one sign-in check per request', () => {
+  it('checks the token once for a route nested under /projects', async () => {
+    await withBobProject('auth-once', async (projectId, token) => {
+      const getUser = vi.spyOn(supabase.auth, 'getUser');
+      try {
+        expect((await api(`/projects/${projectId}/test-suites`, token)).status).toBe(200);
+        expect(getUser).toHaveBeenCalledTimes(1);
+      } finally {
+        getUser.mockRestore();
+      }
+    });
+  });
+});
 
 describe('SEC-1 profiles column lockdown', () => {
   it('rejects a user promoting themselves to admin and keeps RLS isolation', async () => {

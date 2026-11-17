@@ -43,6 +43,12 @@ export async function authenticate(
   _res: Response,
   next: NextFunction,
 ): Promise<void> {
+  // A request to /api/projects/:id/... passes the /api/projects mount first and is already checked there;
+  // checking again cost one more Supabase Auth round trip and profile read per mount (CR-2).
+  if (req.user) {
+    next();
+    return;
+  }
   try {
     const authHeader = req.headers.authorization;
 
