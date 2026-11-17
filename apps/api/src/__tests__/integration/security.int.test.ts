@@ -43,7 +43,7 @@ async function withBobProject(name: string, fn: (projectId: string, token: strin
   }
 }
 
-describe('SEC-4 the shared demo account heals itself', () => {
+describe('SEC-5 the shared demo account heals itself', () => {
   it('a visitor who changes the demo password does not lock out the next visitor', async () => {
     const first = (await (await api('/auth/demo', '', 'POST')).json()) as { access_token: string };
     // Any signed-in user may change their own password through Supabase Auth; the demo session is handed to everyone.

@@ -28,7 +28,7 @@ router.post('/demo', demoAuthLimiter, async (_req, res, next) => {
     let { data, error } = await anonClient.auth.signInWithPassword(demo);
 
     if (error || !data.session) {
-      // SEC-4: every visitor gets a session for the same account, and Supabase Auth lets a user change their own
+      // SEC-5: every visitor gets a session for the same account, and Supabase Auth lets a user change their own
       // password or email, so one visitor could lock out everyone after them. Put the account back, then try again.
       const { data: profile } = await supabase.from('profiles').select('id').eq('is_demo', true).maybeSingle();
       if (profile) {

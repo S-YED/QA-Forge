@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { NewPasswordForm } from '@/components/settings/new-password-form';
 
-/** G1: change your password while signed in. The shared demo account keeps its password (see SEC-4). */
+/** G1: change your password while signed in. The shared demo account keeps its password (see SEC-5). */
 export function PasswordCard({ isDemo }: { isDemo: boolean }) {
   return (
     <Card className="max-w-lg">
