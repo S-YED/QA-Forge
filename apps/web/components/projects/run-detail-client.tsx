@@ -32,7 +32,7 @@ import {
 
 interface RunDetailResponse {
   test_run: TestRun & {
-    test_cases?: { title: string; steps: unknown[] } | null;
+    test_cases?: { title: string; steps: unknown[]; suite_id?: string } | null;
     projects?: { base_url: string } | null;
   };
   steps: TestStep[];
@@ -480,6 +480,11 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
             durationMs={run.duration_ms}
             steps={steps}
             hasBug={bugs.length > 0}
+            editHref={
+              run.test_case_id && run.test_cases?.suite_id
+                ? `/dashboard/projects/${projectId}?suite=${run.test_cases.suite_id}&edit=${run.test_case_id}`
+                : undefined
+            }
           />
         )}
       </div>

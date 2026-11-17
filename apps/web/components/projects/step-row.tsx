@@ -38,6 +38,21 @@ export const newDraftStep = (): DraftStep => ({ action: '', instruction: '', sel
 
 export const isBlankStep = (s: DraftStep) => !s.action && !s.instruction.trim() && !s.selector.trim() && !s.value;
 
+/** U3: pasted text as steps, one per non-empty line, each read as a sentence; list markers ("1.", "Step 2:", "-") are dropped. */
+export function stepsFromText(text: string): DraftStep[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*(?:(?:step\s*)?\d+\s*[.):]|[-*•])\s+/i, '').trim())
+    .filter(Boolean)
+    .map((instruction) => {
+      const parsed = parseStepSentence(instruction);
+      return { instruction, action: parsed?.action ?? '', selector: parsed?.selector ?? '', value: parsed?.value ?? '' };
+    });
+}
+
+/** The id of a step's sentence field, so the editor can move focus to it. */
+export const stepInputId = (n: number) => `case-step-${n}`;
+
 /** Actions whose element is optional (press a key on the page, scroll the page). */
 const OPTIONAL_TARGET: StepAction[] = ['press', 'scroll'];
 
@@ -95,9 +110,23 @@ interface StepRowProps {
   onMoveUp?: () => void;
   /** Absent on the last step. */
   onMoveDown?: () => void;
+  /** U3: Enter in the sentence field. */
+  onEnter?: () => void;
+  /** U3: several lines pasted into the sentence field, as steps. */
+  onPasteLines?: (steps: DraftStep[]) => void;
 }
 
-export function StepRow({ index, step, errors = {}, onChange, onRemove, onMoveUp, onMoveDown }: StepRowProps) {
+export function StepRow({
+  index,
+  step,
+  errors = {},
+  onChange,
+  onRemove,
+  onMoveUp,
+  onMoveDown,
+  onEnter,
+  onPasteLines,
+}: StepRowProps) {
   const n = index + 1;
   const info = step.action ? STEP_ACTION_FIELDS[step.action] : null;
   const showTarget = !!info && (info.selector || OPTIONAL_TARGET.includes(step.action as StepAction));
@@ -126,8 +155,21 @@ export function StepRow({ index, step, errors = {}, onChange, onRemove, onMoveUp
         <span className="mt-2.5 w-5 shrink-0 select-none font-mono text-xs text-muted-foreground">{n}.</span>
         <div className="flex-1 space-y-1">
           <Input
+            id={stepInputId(n)}
             value={step.instruction}
             onChange={(e) => onSentence(e.target.value)}
+            onKeyDown={(e) => {
+              // Ctrl/Cmd+Enter is left to bubble up: it saves the case
+              if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.nativeEvent.isComposing) return;
+              e.preventDefault();
+              onEnter?.();
+            }}
+            onPaste={(e) => {
+              const lines = stepsFromText(e.clipboardData.getData('text'));
+              if (lines.length < 2 || !onPasteLines) return; // one line pastes as usual
+              e.preventDefault();
+              onPasteLines(lines);
+            }}
             placeholder={n === 1 ? 'e.g. Open /login' : 'e.g. Click "Sign in"   or   Type "ada@example.com" into Email'}
             aria-label={`Step ${n} description`}
             aria-invalid={!!errors.instruction}

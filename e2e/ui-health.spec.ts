@@ -23,6 +23,9 @@ function watch(page: Page) {
 
 async function check(page: Page, name: string, problems: string[]) {
   await page.waitForLoadState('networkidle');
+  // Next streams <title> in after the body starts, so wait for it rather than let the scanner catch the gap;
+  // a page that never gets a title still fails here.
+  await expect(page, `${name}: document title`).toHaveTitle(/\S/);
   await expect(page.locator('.animate-pulse').first()).toBeHidden({ timeout: 20_000 }).catch(() => {});
   // The document, and the main content area too: it clips its overflow, so content wider than the screen
   // does not widen the document but still gets pushed sideways when something in it takes focus.

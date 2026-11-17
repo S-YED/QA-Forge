@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { type StepAction, type TestCase } from '@qaforge/shared-types';
@@ -10,6 +10,7 @@ import {
   isBlankStep,
   newDraftStep,
   stepErrors,
+  stepInputId,
   toSavedStep,
   type DraftStep,
   type StepErrors,
@@ -67,6 +68,37 @@ export function CaseDialog({ projectId, suiteId, editing, open, onClose, onSaved
     setSteps(next);
   };
 
+  // U3: typing speed. Focus moves after React has drawn the step it points at.
+  const focusStep = (idx: number) => requestAnimationFrame(() => document.getElementById(stepInputId(idx + 1))?.focus());
+  // Enter: on to the next step, adding one after the last unless the last is still empty.
+  const enterOn = (idx: number) => {
+    if (idx === steps.length - 1) {
+      if (isBlankStep(steps[idx])) return;
+      setSteps([...steps, newDraftStep()]);
+    }
+    focusStep(idx + 1);
+  };
+  // Several pasted lines: they replace an empty step, else go after it.
+  const pasteAt = (idx: number, lines: DraftStep[]) => {
+    const replace = isBlankStep(steps[idx]) ? 1 : 0;
+    setSteps([...steps.slice(0, idx + 1 - replace), ...lines, ...steps.slice(idx + 1)]);
+    focusStep(idx - replace + lines.length);
+  };
+
+  // U3: closing with changes asks first, in the app and when leaving the page.
+  const snapshot = JSON.stringify([title, description, expected, priority, type, steps]);
+  const [initial] = useState(snapshot);
+  const dirty = snapshot !== initial;
+  const requestClose = () => {
+    if (!dirty || confirm('Discard your changes to this test case?')) onClose();
+  };
+  useEffect(() => {
+    if (!open || !dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [open, dirty]);
+
   const save = async () => {
     if (!title.trim()) return;
 
@@ -118,10 +150,17 @@ export function CaseDialog({ projectId, suiteId, editing, open, onClose, onSaved
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) onClose();
+        if (!o) requestClose();
       }}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent
+        className="max-h-[90vh] overflow-y-auto sm:max-w-3xl"
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;
+          e.preventDefault();
+          if (!saving) void save();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{editing ? 'Edit test case' : 'Create test case'}</DialogTitle>
           <DialogDescription>
@@ -205,6 +244,7 @@ export function CaseDialog({ projectId, suiteId, editing, open, onClose, onSaved
               Examples: Open /login · Type &quot;ada@example.com&quot; into Email · Click &quot;Sign in&quot; · Check page
               address contains /dashboard · Check &quot;Welcome&quot; is shown. For a login or other saved value, add it
               under Variables and write it as {'{{NAME}}'}, such as Type &quot;{'{{PASSWORD}}'}&quot; into Password.
+              Pasting several lines adds a step for each; Enter starts the next step and Ctrl+Enter saves.
             </p>
             <div className="space-y-2">
               {steps.map((step, idx) => (
@@ -218,6 +258,8 @@ export function CaseDialog({ projectId, suiteId, editing, open, onClose, onSaved
                   onRemove={steps.length > 1 ? () => setSteps(steps.filter((_, i) => i !== idx)) : undefined}
                   onMoveUp={idx > 0 ? () => moveStep(idx, idx - 1) : undefined}
                   onMoveDown={idx < steps.length - 1 ? () => moveStep(idx, idx + 1) : undefined}
+                  onEnter={() => enterOn(idx)}
+                  onPasteLines={(lines) => pasteAt(idx, lines)}
                 />
               ))}
             </div>
@@ -235,7 +277,7 @@ export function CaseDialog({ projectId, suiteId, editing, open, onClose, onSaved
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={requestClose}>
             Cancel
           </Button>
           <Button type="button" onClick={save} disabled={saving || !title.trim()}>

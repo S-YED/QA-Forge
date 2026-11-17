@@ -114,6 +114,27 @@ export function TestSuitesTab({ projectId, suites, lastResults, baseUrl, onRefre
     }
   };
 
+  // U3: a run page's "Edit the test case" links here with ?suite=…&edit=…: open that suite and the editor.
+  // The query is cleared at once, so a reload or a return to this tab (which remounts it) does not reopen it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const suiteId = params.get('suite');
+    const caseId = params.get('edit');
+    if (!suiteId || !caseId) return;
+    window.history.replaceState(null, '', window.location.pathname);
+    setExpandedSuiteId(suiteId);
+    setLoadingDetail(true);
+    loadSuite(suiteId)
+      .then((detail) => {
+        setSuiteDetail(detail);
+        const tc = detail.test_cases.find((c) => c.id === caseId);
+        if (tc) openCaseDialog(suiteId, tc);
+        else toast.error('That test case no longer exists');
+      })
+      .catch((err) => toastError('Could not open the test case', err))
+      .finally(() => setLoadingDetail(false));
+  }, []); // only on arrival
+
   // F6: search test cases across every suite. `results` is null while the box is empty (the suites show instead).
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FoundCase[] | null>(null);

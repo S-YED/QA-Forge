@@ -120,6 +120,12 @@ test('the planted coupon bug fails the run and files a bug', async ({ page }) =>
   await page.getByRole('button', { name: 'Go to step 14' }).click();
   await expect(page.locator('#step-14')).toBeFocused();
   await expect(page.getByRole('link', { name: 'See the bug report' })).toHaveAttribute('href', '#bug-reports');
+  // U3: and to the case, open in the editor; the link's query is cleared so a reload does not reopen it.
+  await page.getByRole('link', { name: 'Edit the test case' }).click();
+  await expect(page.getByRole('dialog').getByLabel('Title')).toHaveValue('Coupon SAVE10 takes 10% off the total');
+  await expect(page).toHaveURL(projectUrl);
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
   await page.goto(projectUrl);
   await page.getByRole('tab', { name: /Bugs/ }).click();
   await expect(page.getByText(/Test failure at step 14/).first()).toBeVisible();
@@ -510,6 +516,53 @@ test('cases can be searched, duplicated, reordered and moved, and runs and bugs 
   await expect(page.getByText('No bugs match these filters.')).toBeVisible();
   await page.getByLabel('Search bugs').fill('test failure');
   await expect(page.getByRole('tabpanel').locator('li').first()).toBeVisible();
+});
+
+test('the case editor keeps up with the keyboard and asks before losing changes', async ({ page }) => {
+  // U3, in the suite the F6 test made (nothing after this runs it).
+  await page.goto(projectUrl);
+  await page.getByText('F6 target', { exact: true }).first().click();
+  await page.getByRole('button', { name: 'Add case' }).click();
+  await page.getByLabel('Title').fill('U3 keyboard case');
+  await page.getByLabel('Step 1 description').fill('Open /login');
+  await page.getByLabel('Step 1 description').press('Enter');
+  await expect(page.getByLabel('Step 2 description')).toBeFocused();
+
+  // Several pasted lines become a step each, list numbers dropped, each read as a sentence.
+  await page.getByLabel('Step 2 description').evaluate((el) => {
+    const data = new DataTransfer();
+    data.setData('text/plain', '1. Type "demo@qaforge.dev" into Email\n2. Click "Log in"\n');
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await expect(page.getByLabel('Step 2 description')).toHaveValue('Type "demo@qaforge.dev" into Email');
+  await expect(page.getByLabel('Step 2 value')).toHaveValue('demo@qaforge.dev');
+  await expect(page.getByLabel('Step 3 element')).toHaveValue('Log in');
+  await expect(page.getByLabel('Step 3 description')).toBeFocused();
+
+  // Enter on the last step adds one; Enter on an empty last step adds no more.
+  await page.keyboard.press('Enter');
+  await expect(page.getByLabel('Step 4 description')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByLabel('Step 5 description')).toHaveCount(0);
+
+  // Closing with changes asks first; saying no keeps the editor and what was typed.
+  page.once('dialog', (d) => d.dismiss());
+  await page.keyboard.press('Escape');
+  await expect(page.getByLabel('Step 3 description')).toHaveValue('Click "Log in"');
+
+  // Ctrl+Enter saves; the empty fourth step is left out.
+  await page.getByLabel('Title').press('Control+Enter');
+  await expect(page.getByText('Test case created')).toBeVisible();
+  await page.getByRole('button', { name: 'Edit U3 keyboard case' }).click();
+  await expect(page.getByLabel('Step 3 description')).toHaveValue('Click "Log in"');
+  await expect(page.getByLabel('Step 4 description')).toHaveCount(0);
+
+  // An edit asks before closing too; yes discards it.
+  await page.getByLabel('Title').fill('U3 changed');
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Edit U3 keyboard case' })).toBeVisible();
 });
 
 test('record a login by clicking and typing in the live viewport, then replay it green', async ({ page, context }) => {

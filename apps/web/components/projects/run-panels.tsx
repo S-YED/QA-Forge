@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Camera, Check, ChevronLeft, ChevronRight, RotateCcw, TerminalSquare, X } from 'lucide-react';
 import type { TestStep } from '@qaforge/shared-types';
 import { stepsToPlaywright } from '@qaforge/shared-types';
@@ -276,12 +277,15 @@ export function RunSummary({
   durationMs,
   steps,
   hasBug,
+  editHref,
 }: {
   status: string;
   errorMessage: string | null | undefined;
   durationMs: number | null | undefined;
   steps: (TestStep | LiveStep)[];
   hasBug: boolean;
+  /** U3: opens the case in the editor on the project page; absent when the case was deleted. */
+  editHref?: string;
 }) {
   if (status === 'pending' || status === 'running') return null;
   const failed = steps.find((s) => s.status === 'failed');
@@ -323,7 +327,7 @@ export function RunSummary({
       )}
     >
       <p className="min-w-0 break-words font-medium">{text}</p>
-      {(failed || hasBug) && tone !== 'neutral' && (
+      {(failed || hasBug || editHref) && tone !== 'neutral' && (
         <div className="flex shrink-0 flex-wrap gap-x-4 gap-y-1">
           {failed && (
             <button type="button" onClick={goToStep} className="font-medium underline underline-offset-2 hover:no-underline">
@@ -334,6 +338,11 @@ export function RunSummary({
             <a href="#bug-reports" className="font-medium underline underline-offset-2 hover:no-underline">
               See the bug report
             </a>
+          )}
+          {editHref && (
+            <Link href={editHref} className="font-medium underline underline-offset-2 hover:no-underline">
+              Edit the test case
+            </Link>
           )}
         </div>
       )}

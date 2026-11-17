@@ -80,7 +80,7 @@ router.get(
     try {
       const { data: run, error } = await supabase
         .from('test_runs')
-        .select('*, test_cases(title, steps), projects(base_url)')
+        .select('*, test_cases(title, steps, suite_id), projects(base_url)')
         .eq('id', req.params.id)
         .eq('project_id', req.params.projectId)
         .eq('user_id', req.user.id)
