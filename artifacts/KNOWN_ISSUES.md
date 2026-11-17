@@ -16,13 +16,13 @@ ticket is **Verified** in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 | LOW | CI is pinned to `ubuntu-24.04`: on 17 Nov `ubuntu-latest` became 26.04, where this Playwright version cannot install Chromium. Move on when a Playwright upgrade supports 26.04 | CI-1 |
 | MED | F10 Slack notice: a real message arriving in a real Slack channel has not been seen yet (settings verified in production; sending tested with Slack replaced). Integrations page keeps "Soon" until it has (owner: connect a test channel) | F10 |
 | LOW | Several success notices in a row stack over the bottom-right row buttons for a few seconds | U4 |
-| LOW | Stop pressed in the instant a run is being picked up can close its row as "Stopped" while the browser still runs that case to the end (the stop route closes runs not yet in this process's in-flight list; seen in the 17 Nov code review, not observed) | F1 |
-| LOW | Each replay of a recording adds another "Replay of recording: ..." case to the "Replayed Session Tests" suite | — |
+| LOW | Stop pressed in the instant a run is being picked up can close its row as "Stopped" while the browser still runs that case to the end (the stop route closes runs not yet in this process's in-flight list; seen in the 17 Nov code review, not observed) | G9 |
+| LOW | Each replay of a recording adds another "Replay of recording: ..." case to the "Replayed Session Tests" suite | G8 |
 | MED | Password reset in production needs Supabase Auth (URL Configuration) to allow `https://qa-forge-gamma.vercel.app/reset-password`; until then the emailed link falls back to the site address (owner) | DD-5 |
-| LOW | No way to change your password while signed in (the reset email works), and no way to delete your account | — |
-| LOW | Recordings cannot be deleted: no API route and no button | — |
-| LOW | Child suites can be made through the API but the app never shows them or their cases | — |
-| LOW | Bugs cannot be filed by hand or opened on their own in the app (the API can); a bug opens its run | — |
-| LOW | Small API edges from the 17 Nov probe: a step blocked by the address guard files a bug against the app; a suite run on a project with no base address starts and errors case by case; assigning a bug to an unknown person says "Bug not found"; hand-written cases have no cap on tags | — |
-| LOW | A run page open for over an hour keeps its first sign-in token on the live connection, so a reconnect after that may be refused (read in the code, not reproduced) | — |
+| LOW | No way to change your password while signed in (the reset email works), and no way to delete your account | G1, G2 |
+| LOW | Recordings cannot be deleted: no API route and no button | G3 |
+| LOW | Child suites can be made through the API but the app never shows them or their cases | G4 |
+| LOW | Bugs cannot be filed by hand or opened on their own in the app (the API can); a bug opens its run | G5 |
+| LOW | Small API edges from the 17 Nov probe: a step blocked by the address guard files a bug against the app; a suite run on a project with no base address starts and errors case by case; assigning a bug to an unknown person says "Bug not found"; hand-written cases have no cap on tags | G6 |
+| LOW | A run page open for over an hour keeps its first sign-in token on the live connection, so a reconnect after that may be refused (read in the code, not reproduced) | G7 |
 | LOW | Docker Desktop on this Windows host can hang with WSL (6 to 8 Nov; fixed by a reboot). `pnpm check-setup` now detects and explains it | — |
