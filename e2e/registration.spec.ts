@@ -38,6 +38,63 @@ test('register a new account, then sign in with it', async ({ page, context }) =
   await expect(page.getByRole('tab', { name: /Suites/ })).toHaveAttribute('aria-selected', 'true');
 });
 
+test('a forgotten password is reset from the emailed link, and the new one signs in', async ({ page, context, request }) => {
+  const email = `e2e-reset-${Date.now()}@qaforge.dev`; // ponytail: one throwaway local user per run, like the test above
+  const signIn = async (password: string) => {
+    await page.goto('/login');
+    await page.locator('input[type="email"]').fill(email);
+    await page.locator('input[type="password"]').fill(password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+  };
+
+  await page.goto('/login?view=sign_up');
+  await page.locator('input[type="email"]').fill(email);
+  await page.locator('input[type="password"]').fill('Old-Pass-123!');
+  await page.getByRole('button', { name: 'Sign up' }).click();
+  await expect(page).toHaveURL(/\/dashboard\/projects/);
+  await context.clearCookies();
+
+  await page.goto('/login');
+  await page.getByRole('link', { name: 'Forgot your password?' }).click();
+  await expect(page.getByText('Reset your password')).toBeVisible();
+  await page.locator('input[type="email"]').fill(email);
+  await page.getByRole('button', { name: 'Send reset password instructions' }).click();
+  await expect(page.getByText('Check your email for the password reset link')).toBeVisible();
+
+  // Local Supabase keeps outgoing mail in its test inbox (Mailpit) instead of sending it.
+  const mail = process.env.E2E_MAIL_URL ?? 'http://127.0.0.1:54324';
+  let link = '';
+  await expect
+    .poll(async () => {
+      const found = (await (await request.get(`${mail}/api/v1/search?query=${encodeURIComponent(`to:"${email}"`)}`)).json()) as { messages: { ID: string }[] };
+      if (!found.messages.length) return '';
+      const message = (await (await request.get(`${mail}/api/v1/message/${found.messages[0].ID}`)).json()) as { Text: string };
+      link = /https?:\/\/\S+/.exec(message.Text)?.[0] ?? '';
+      return link;
+    })
+    .toContain('type=recovery');
+
+  // DD-5: the link used to sign in once and drop the person on Projects with no way to set a password.
+  await page.goto(link);
+  await expect(page).toHaveURL(/\/reset-password/);
+  await page.getByLabel('New password').fill('New-Pass-456!');
+  await page.getByRole('button', { name: 'Set new password' }).click();
+  await expect(page).toHaveURL(/\/dashboard\/projects/);
+
+  await context.clearCookies();
+  await signIn('Old-Pass-123!');
+  await expect(page.getByText('Invalid login credentials')).toBeVisible();
+  await signIn('New-Pass-456!');
+  await expect(page).toHaveURL(/\/dashboard\/projects/);
+});
+
+test('a reset link that no longer works says so and offers a new one', async ({ page }) => {
+  await page.goto('/reset-password');
+  await expect(page.getByText('This reset link no longer works')).toBeVisible();
+  await page.getByRole('link', { name: 'Send a new link' }).click();
+  await expect(page.getByText('Reset your password')).toBeVisible();
+});
+
 test('"Create free account" opens the sign-up form', async ({ page }) => {
   await page.goto('/landing');
   await page.getByRole('link', { name: 'Create free account' }).first().click();

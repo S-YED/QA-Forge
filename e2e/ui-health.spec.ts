@@ -51,7 +51,7 @@ for (const [size, viewport] of Object.entries(VIEWPORTS)) {
       const page = await context.newPage();
       const problems = watch(page);
 
-      for (const path of ['/landing', '/login', '/login?view=sign_up', '/does-not-exist']) {
+      for (const path of ['/landing', '/login', '/login?view=sign_up', '/login?view=forgotten_password', '/reset-password', '/does-not-exist']) {
         await page.goto(path);
         await check(page, path, problems);
       }
