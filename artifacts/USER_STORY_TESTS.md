@@ -12,7 +12,7 @@ local production build (`localhost:3005`); **Suite** = the named automated test.
 | Sign up with an email and land on Projects | Suite: E2E registration | Works |
 | Wrong password is refused with a message | Browser | Works ("Invalid login credentials") |
 | Forgot my password: get a link, set a new one, sign in with it | Browser (local test inbox), then E2E | **Was broken**: the link signed you in once and there was no page to set a password. Fixed in DD-5 |
-| Change my password while signed in | Code | **Gap**: no form in Settings (the reset email works as a workaround) |
+| Change my password while signed in | Code | Was a gap. Built in G1 |
 | Signed out, open the dashboard | Browser | Works: sent to sign-in |
 | Sign out | Browser | Works |
 | Edit my name and avatar, and clear them | Browser, Probe | **Was broken**: clearing said "updated" but kept the old value. Fixed in DD-2 |
@@ -42,8 +42,8 @@ local production build (`localhost:3005`); **Suite** = the named automated test.
 | Three runs at once (limit is two) | Probe | Two pass, the third ends with "Too many concurrent runs" |
 | Delete the case while its run is running | Probe | The run ends (failed at the step that times out) |
 | Run on a project with no base address | Probe | Ends at once with "Project has no base URL configured" |
-| Suite run on a project with no base address | Probe | Starts and each case then ends with that error (could be refused up front; low) |
-| A step that opens `javascript:` or a private address | Probe | Blocked, but recorded as a failed step with a bug filed against the app (low) |
+| Suite run on a project with no base address | Probe | Started and each case then ended with that error. Fixed in G6: refused up front (400) |
+| A step that opens `javascript:` or a private address | Probe | Blocked, but recorded as a failed step with a bug filed against the app. Fixed in G6: the run ends as error, no bug |
 | Open a run or suite run link that does not exist | Browser | Works: message and back to the project |
 | Filters with unknown values, negative pages, huge page sizes | Probe | Refused or clamped |
 
@@ -52,8 +52,8 @@ local production build (`localhost:3005`); **Suite** = the named automated test.
 | Story | How tested | Result |
 |---|---|---|
 | Change a bug's status; invalid status | Probe, Suite | Works; invalid refused |
-| Assign a bug to a person who does not exist | Probe | Refused, but with "Bug not found" (misleading; low) |
-| File a bug by hand; open a bug on its own | Code | **Gap**: the API can, the app cannot. A bug opens its run |
+| Assign a bug to a person who does not exist | Probe | Refused with "Bug not found". Fixed in G6: 400 "No such person" |
+| File a bug by hand; open a bug on its own | Code | Was a gap. Built in G5: a bug panel and "File a bug" |
 
 ## Recordings
 
@@ -63,7 +63,7 @@ local production build (`localhost:3005`); **Suite** = the named automated test.
 | Open a recording link that does not exist | Browser | **Was broken**: an empty page. Fixed in DD-4 |
 | Stop, reload, reconnect, leave without Stop, Stop after an API restart | Suite (integration) | Fixed in CR-1 |
 | Replay a recording with no actions | Probe | Refused with a message |
-| Delete a recording | Probe, Code | **Gap**: no route and no button |
+| Delete a recording | Probe, Code | Was a gap. Built in G3 |
 
 ## The API as a whole
 
