@@ -50,23 +50,20 @@ async function injectRecorderScript(
     value?: string;
     url: string;
     timestamp: number;
-  }) => void
+  }) => void | Promise<void>
 ) {
-  await page.exposeFunction('emitRecordedAction', async (action: {
+  // One action at a time, in the order the page reported them (REC-ORDER): a field's typed value and the click
+  // that blurred it arrive together, and saving them side by side let the click's row be announced first.
+  let previous: Promise<void> = Promise.resolve();
+  await page.exposeFunction('emitRecordedAction', (action: {
     type: string;
     selector?: string;
     value?: string;
     url: string;
   }) => {
-    // This will be called from the browser runtime context
-    const pageUrl = page.url();
-
-    // Call callback back to main handler
-    onAction({
-      ...action,
-      url: pageUrl,
-      timestamp: Date.now(),
-    });
+    // Called from the page; where and when are taken now, not when this action's turn comes.
+    const recorded = { ...action, url: page.url(), timestamp: Date.now() };
+    previous = previous.then(() => onAction(recorded)).catch(() => {});
   });
 
   // Some TypeScript runners (tsx/esbuild keepNames) wrap named functions in __name(...); the script below is sent
