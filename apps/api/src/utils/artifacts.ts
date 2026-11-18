@@ -21,6 +21,23 @@ export async function signArtifacts(values: (string | null | undefined)[]): Prom
   return values.map((v) => (!v ? null : isArtifactPath(v) ? (signed.get(v) ?? null) : v));
 }
 
+/** Every screenshot path the user's runs stored (G2: read before the rows cascade away with the account). */
+export async function screenshotsOfUser(userId: string): Promise<string[]> {
+  const paths: string[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('test_steps')
+      .select('id, screenshot_url, test_runs!inner(user_id)')
+      .eq('test_runs.user_id', userId)
+      .not('screenshot_url', 'is', null)
+      .order('id')
+      .range(from, from + 999);
+    if (error) throw new Error(`Could not list the account's screenshots: ${error.message}`);
+    paths.push(...data.map((s) => s.screenshot_url as string).filter(isArtifactPath));
+    if (data.length < 1000) return paths;
+  }
+}
+
 /** Sign the screenshot_urls of each bug (rows from `bugs`). */
 export async function signBugScreenshots<T extends { screenshot_urls?: string[] | null }>(bugs: T[]): Promise<T[]> {
   const flat = bugs.flatMap((b) => b.screenshot_urls ?? []);

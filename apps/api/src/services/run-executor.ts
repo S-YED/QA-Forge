@@ -25,6 +25,16 @@ export function stopRun(testRunId: string): boolean {
   return true;
 }
 
+/** Stop those of these runs this process is executing and wait (bounded) until each has ended (G2). */
+export async function stopRuns(testRunIds: string[], timeoutMs = 15_000): Promise<void> {
+  const runs = testRunIds.flatMap((id) => inFlight.get(id) ?? []);
+  runs.forEach((r) => r.controller.abort(STOPPED));
+  await Promise.race([
+    Promise.allSettled(runs.map((r) => r.done)),
+    new Promise((resolve) => setTimeout(resolve, timeoutMs).unref()),
+  ]);
+}
+
 /**
  * Boot-time recovery: a run left `pending`/`running` by a previous process can never finish.
  * ponytail: assumes a single API instance (TD-3). With several instances this would reap

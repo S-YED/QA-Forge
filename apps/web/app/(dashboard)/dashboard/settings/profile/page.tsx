@@ -1,6 +1,7 @@
 import { createServerSupabaseClient, getUser } from '@/lib/supabase/server';
 import { ProfileForm } from '@/components/settings/profile-form';
 import { PasswordCard } from '@/components/settings/password-card';
+import { DeleteAccountCard } from '@/components/settings/delete-account-card';
 import { PageHeader } from '@/components/shared/page-header';
 import { Card } from '@/components/ui/card';
 import type { Profile } from '@qaforge/shared-types';
@@ -50,6 +51,7 @@ export default async function ProfilePage() {
         <>
           <ProfileForm profile={profile} />
           <PasswordCard isDemo={!!profile.is_demo} />
+          <DeleteAccountCard isDemo={!!profile.is_demo} />
         </>
       ) : (
         <Card className="max-w-lg p-6 text-center text-sm text-muted-foreground">

@@ -117,6 +117,34 @@ test('a signed-in person changes their password in Settings, and only the new on
   }
 });
 
+test('a person deletes their account in Settings after confirming, and can no longer sign in', async ({ page }) => {
+  // G2. A fresh account, deleted through the page.
+  const email = `e2e-delete-${Date.now()}@qaforge.dev`;
+  await page.goto('/login?view=sign_up');
+  await expect(page.getByRole('button', { name: 'Sign up' })).toBeVisible();
+  await page.locator('input[type="email"]').fill(email);
+  await page.locator('input[type="password"]').fill('Delete-Me-123!');
+  await page.getByRole('button', { name: 'Sign up' }).click();
+  await expect(page).toHaveURL(/\/dashboard\/projects/);
+
+  await page.goto('/dashboard/settings/profile');
+  const box = page.getByRole('alertdialog');
+  await page.getByRole('button', { name: 'Delete account' }).click();
+  await box.getByRole('button', { name: 'Cancel' }).click();
+  await expect(box).toBeHidden();
+  await expect(page).toHaveURL(/\/dashboard\/settings\/profile/);
+
+  await page.getByRole('button', { name: 'Delete account' }).click();
+  await box.getByRole('button', { name: 'Delete account' }).click();
+  await expect(page).toHaveURL(/\/login/);
+  await expect(page.getByText('Your account was deleted')).toBeVisible();
+
+  await page.locator('input[type="email"]').fill(email);
+  await page.locator('input[type="password"]').fill('Delete-Me-123!');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByText('Invalid login credentials')).toBeVisible();
+});
+
 test('a reset link that no longer works says so and offers a new one', async ({ page }) => {
   await page.goto('/reset-password');
   await expect(page.getByText('This reset link no longer works')).toBeVisible();
