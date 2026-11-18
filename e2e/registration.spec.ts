@@ -145,6 +145,18 @@ test('a person deletes their account in Settings after confirming, and can no lo
   await expect(page.getByText('Invalid login credentials')).toBeVisible();
 });
 
+test('the demo shows a sub-suite under its parent, with its cases', async ({ page }) => {
+  // G4. The seed nests "Login Flows" inside "Authentication"; the app used to hide it and its cases.
+  await page.goto('/demo');
+  await expect(page).toHaveURL(/\/dashboard\/projects$/, { timeout: 30_000 });
+  await page.getByRole('link', { name: /E-Commerce Platform/ }).first().click();
+  await page.getByRole('tab', { name: /Suites/ }).click();
+  const child = page.getByRole('button', { name: /^Login Flows/ }); // its Run, Export, Rename and Delete buttons name it too
+  await expect(child).toContainText('Inside Authentication');
+  await child.click();
+  await expect(page.getByText('Successful login with valid credentials')).toBeVisible();
+});
+
 test('a reset link that no longer works says so and offers a new one', async ({ page }) => {
   await page.goto('/reset-password');
   await expect(page.getByText('This reset link no longer works')).toBeVisible();

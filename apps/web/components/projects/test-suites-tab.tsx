@@ -91,8 +91,10 @@ export function TestSuitesTab({ projectId, suites, lastResults, baseUrl, onRefre
   } | null>(null);
   const [applyingOptimize, setApplyingOptimize] = useState(false);
 
-  // Root-level suites (no parent)
+  // Root-level suites (no parent), each followed by its sub-suites (G4: one level deep, made by the API or the seed).
+  // ponytail: a sub-suite is run on its own; "Run suite" on the parent runs only the parent's cases.
   const rootSuites = suites.filter((s) => !s.parent_suite_id);
+  const shownSuites = rootSuites.flatMap((root) => [root, ...suites.filter((s) => s.parent_suite_id === root.id)]);
 
   const loadSuite = (suiteId: string) =>
     apiClient.get<SuiteDetailResponse>(`/api/projects/${projectId}/test-suites/${suiteId}`);
@@ -461,12 +463,13 @@ export function TestSuitesTab({ projectId, suites, lastResults, baseUrl, onRefre
         />
       ) : (
         <div className="space-y-3">
-          {rootSuites.map((suite) => {
+          {shownSuites.map((suite) => {
             const isExpanded = expandedSuiteId === suite.id;
             const caseCount = suite.test_cases?.[0]?.count ?? 0;
+            const parent = rootSuites.find((r) => r.id === suite.parent_suite_id);
 
             return (
-              <div key={suite.id} className="overflow-hidden rounded-lg border bg-card">
+              <div key={suite.id} className={cn('overflow-hidden rounded-lg border bg-card', parent && 'ml-4 sm:ml-8')}>
                 {/* Suite header */}
                 {/* on a phone the name gets its own row and the controls sit under it */}
                 <div className="flex flex-wrap items-center justify-between gap-x-2 sm:flex-nowrap sm:pr-3">
@@ -485,6 +488,9 @@ export function TestSuitesTab({ projectId, suites, lastResults, baseUrl, onRefre
                       <span className="block truncate text-sm font-semibold text-foreground">
                         {suite.name}
                       </span>
+                      {parent && (
+                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">Inside {parent.name}</span>
+                      )}
                       {suite.description && (
                         <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                           {suite.description}
