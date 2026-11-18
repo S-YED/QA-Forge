@@ -29,7 +29,7 @@ local production build (`localhost:3005`); **Suite** = the named automated test.
 | Delete a project while its suite run is running, with a schedule and a CI token | Probe | Works: the run ends, the token stops (401), the API stays up |
 | Delete a project: are its screenshots removed too? | Code (while building G2), then Suite (integration) | **Was a gap**: the rows went, the screenshots stayed in storage and a run in progress went on. Fixed in G10 |
 | Suites: empty name, nesting deeper than one level, a suite as its own parent | Probe | Refused |
-| Child suites | Probe, Code | **Gap**: the API creates them but the app never shows them or their cases |
+| Child suites | Probe, Code, then Suite (E2E) | **Was a gap**: the API (and the demo seed) made them, the app never showed them or their cases. Fixed in G4: shown under their parent; each runs its own cases |
 | Write a case: unknown action, missing value, over 100 steps (tried 300), 501-character title, numeric tags | Probe | Refused with field messages |
 | 500 tags of 1,000 characters each on a hand-written case | Probe | Accepted (AI drafts are capped at 20 tags of 50; hand-written cases have no cap; low) |
 | A case whose steps repeat a step number (an AI draft can do this) | Probe | Runs and passes |
