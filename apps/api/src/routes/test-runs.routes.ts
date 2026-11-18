@@ -122,7 +122,8 @@ const createRunSchema = z.object({
   // A run always executes a saved (reviewed) test case; run-time AI generation was removed (EXE-1).
   test_case_id: z.guid(),
   mode: z.enum(['ai_driven', 'manual_recording', 'replay']),
-  browser: z.enum(['chromium', 'firefox', 'webkit']).optional().default('chromium'),
+  // G11: production installs Chromium only, so another browser would only fail at launch (recordings: DD-3).
+  browser: z.literal('chromium').optional().default('chromium'),
 });
 
 // `demoRunLimiter` caps demo-user runs at 5/hour (defense-in-depth behind

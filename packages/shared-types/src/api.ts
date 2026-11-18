@@ -84,7 +84,8 @@ export interface CreateTestRunRequest {
   mode: TestRunMode;
   /** Runs always execute a saved test case (EXE-1) */
   test_case_id: string;
-  browser?: 'chromium' | 'firefox' | 'webkit';
+  /** Chromium only: production installs no other browser (G11) */
+  browser?: 'chromium';
 }
 
 // ── AI Generation (MVP-2) ────────────────────────────────────────────────────

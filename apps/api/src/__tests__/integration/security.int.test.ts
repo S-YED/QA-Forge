@@ -314,6 +314,25 @@ async function projectWithRuns(token: string, baseUrl: string) {
   return { projectId, suiteId, runs: [finished, inProgress] };
 }
 
+describe('G11 runs are Chromium only', () => {
+  it('refuses a run in a browser production cannot start; a run naming none is Chromium', async () => {
+    await withBobProject('g11', async (projectId, token) => {
+      const suite = ((await (await api(`/projects/${projectId}/test-suites`, token, 'POST', { name: 's' })).json()) as { suite: { id: string } }).suite;
+      const tc = ((await (await api(`/projects/${projectId}/test-suites/${suite.id}/test-cases`, token, 'POST', {
+        title: 'c',
+        steps: [{ step_number: 1, action: 'assert_visible', instruction: 'Heading', selector: 'h1' }],
+      })).json()) as { test_case: { id: string } }).test_case;
+      for (const browser of ['firefox', 'webkit']) {
+        const refused = await api(`/projects/${projectId}/test-runs`, token, 'POST', { test_case_id: tc.id, mode: 'ai_driven', browser });
+        expect(refused.status, browser).toBe(400);
+      }
+      const run = await api(`/projects/${projectId}/test-runs`, token, 'POST', { test_case_id: tc.id, mode: 'ai_driven' });
+      expect(run.status).toBe(201);
+      expect(((await run.json()) as { test_run: { browser: string } }).test_run.browser).toBe('chromium');
+    });
+  });
+});
+
 describe('G10 deleting a project', () => {
   it('stops its run in progress and removes its screenshots', async () => {
     const bob = await signIn(USERS.bob);
