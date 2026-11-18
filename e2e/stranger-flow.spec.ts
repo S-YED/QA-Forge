@@ -673,7 +673,9 @@ test('a bug opens on its own with its evidence, and one can be filed by hand', a
   await page.getByRole('button', { name: /Test failure at step 14/ }).first().click();
   const sheet = page.getByRole('dialog');
   await expect(sheet.getByRole('heading', { name: 'What happened' })).toBeVisible();
-  // The panel's text is inset from its edge, not flush against it (production check, 18 Nov)
+  // The panel's text is inset from its edge, not flush against it (production check, 18 Nov). Measured once the
+  // panel has slid in: mid-animation the two boxes come from different frames.
+  await sheet.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
   const [panelBox, headingBox] = await Promise.all([sheet.boundingBox(), sheet.getByRole('heading', { name: 'What happened' }).boundingBox()]);
   expect(headingBox!.x - panelBox!.x).toBeGreaterThanOrEqual(16);
   await expect(sheet.getByText(/\$108\.00/).first()).toBeVisible();
