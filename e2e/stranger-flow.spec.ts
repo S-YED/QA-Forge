@@ -1,7 +1,7 @@
 // QA-3: the stranger flow, in the browser, with no AI key:
 // sign in → project on the demo shop → local demo drafts → approve → run → passed with
 // screenshots → planted bug → failed with a bug → manual slow case → refresh mid-run stays live.
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
 
 const DEMO_SHOP = 'http://127.0.0.1:4100/';
 const project = `E2E demo shop ${Date.now()}`;
@@ -157,6 +157,35 @@ test('a manual case from the step editor stays live through a refresh mid-run', 
   await expect(page.getByText('Live', { exact: true })).toBeVisible();
   await expect(page.getByText('Open the login page', { exact: true })).toBeVisible();
   await expect(page.getByText(/Couldn't find anything showing "Spring sale" on \/login/).first()).toBeVisible({ timeout: 60_000 });
+});
+
+test('a run page that loses its connection reconnects with the current sign-in, not the first one', async ({ page, context }) => {
+  // G7: the live connection kept the token the page opened with, so a reconnect after it expired (an hour) was refused.
+  const sent: string[] = [];
+  const sockets: WebSocketRoute[] = [];
+  await page.routeWebSocket(/\/socket\.io\//, (ws) => {
+    const server = ws.connectToServer();
+    sockets.push(ws);
+    ws.onMessage((message) => {
+      const connect = /^40(?:\/[^,]*,)?(\{.*\})$/.exec(String(message)); // socket.io CONNECT with its auth
+      if (connect) sent.push(JSON.parse(connect[1]).token);
+      server.send(message);
+    });
+  });
+
+  await runCase(page, 'E2E slow case');
+  await expect(page.getByText('Live', { exact: true })).toBeVisible();
+  await expect.poll(() => sent.length).toBe(1);
+
+  // Signing in again elsewhere in the browser leaves a newer token in the session than the page connected with.
+  const other = await context.newPage();
+  await signIn(other);
+  await other.close();
+  sockets.at(-1)!.close(); // the connection drops; socket.io reconnects on its own
+  await expect(page.getByText('Reconnected, catching up')).toBeVisible({ timeout: 15_000 });
+  expect(sent).toHaveLength(2);
+  // compared, not printed: a failure must not write a token into the CI log
+  expect(sent[1] === sent[0], 'the reconnect sent the token the page opened with').toBe(false);
 });
 
 test('a running test can be stopped', async ({ page }) => {

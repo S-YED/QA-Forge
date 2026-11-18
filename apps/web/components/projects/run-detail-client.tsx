@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Download, Play, RotateCcw, Bug, Square } from 'lucide-react';
-import { apiClient } from '@/lib/api/client';
+import { apiClient, socketAuth } from '@/lib/api/client';
 import { CASE_DELETED, useRunAgain } from '@/lib/hooks/use-run-again';
 import { toastError } from '@/lib/toast-error';
 import { createClient } from '@/lib/supabase/client';
@@ -239,7 +239,7 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
     const socket = socketIO(apiUrl, {
-      auth: { token: session.access_token },
+      auth: socketAuth,
       transports: ['websocket', 'polling'],
     });
 

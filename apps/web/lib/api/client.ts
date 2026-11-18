@@ -32,6 +32,16 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 /**
+ * The live connection's `auth` (G7). socket.io calls it on every connection attempt, so a reconnect sends the session's
+ * current token (refreshed by Supabase), not the one the page opened with, which expires after an hour.
+ */
+export function socketAuth(cb: (data: { token?: string }) => void): void {
+  void createClient()
+    .auth.getSession()
+    .then(({ data }) => cb({ token: data.session?.access_token }));
+}
+
+/**
  * Flatten the API's validation details (a Zod `format()` tree) into readable lines,
  * e.g. { steps: { 2: { value: { _errors: ['Required'] } } } } → "Step 3 value: Required".
  */

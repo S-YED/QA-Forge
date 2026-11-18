@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Square, Play, RotateCcw, TriangleAlert, Globe, Crosshair } from 'lucide-react';
-import { apiClient } from '@/lib/api/client';
+import { apiClient, socketAuth } from '@/lib/api/client';
 import { createClient } from '@/lib/supabase/client';
 import { io as socketIO, type Socket } from 'socket.io-client';
 import { toast } from 'sonner';
@@ -128,7 +128,7 @@ export function RecordingPortal({ projectId, sessionId }: RecordingPortalProps) 
 
         const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
         const socket = socketIO(apiUrl, {
-          auth: { token: authSession.access_token },
+          auth: socketAuth,
           transports: ['websocket', 'polling'],
         });
 
