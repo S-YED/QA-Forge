@@ -16,7 +16,6 @@ ticket is **Verified** in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 | LOW | CI is pinned to `ubuntu-24.04`: on 17 Nov `ubuntu-latest` became 26.04, where this Playwright version cannot install Chromium. Move on when a Playwright upgrade supports 26.04 | CI-1 |
 | MED | F10 Slack notice: a real message arriving in a real Slack channel has not been seen yet (settings verified in production; sending tested with Slack replaced). Integrations page keeps "Soon" until it has (owner: connect a test channel) | F10 |
 | MED | Password reset in production needs Supabase Auth (URL Configuration) to allow `https://qa-forge-gamma.vercel.app/reset-password`; until then the emailed link falls back to the site address (owner) | DD-5 |
-| LOW | Deleting a project leaves its runs' screenshots in storage: the rows cascade, but no foreign key reaches storage (no one can open them; they are kept). Deleting the account removes them (G2) | G10 |
 | LOW | Child suites can be made through the API but the app never shows them or their cases | G4 |
 | LOW | A run page open for over an hour keeps its first sign-in token on the live connection, so a reconnect after that may be refused (read in the code, not reproduced) | G7 |
 | LOW | Docker Desktop on this Windows host can hang with WSL (6 to 8 Nov; fixed by a reboot). `pnpm check-setup` now detects and explains it | — |

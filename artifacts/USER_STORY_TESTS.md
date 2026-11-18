@@ -27,7 +27,7 @@ local production build (`localhost:3005`); **Suite** = the named automated test.
 | Create a project; bad names and `javascript:`/`file:` addresses refused | Probe | Works |
 | Open a malformed, unknown or another user's project link | Browser, Probe | Works: back to Projects; the API answers 400/404 |
 | Delete a project while its suite run is running, with a schedule and a CI token | Probe | Works: the run ends, the token stops (401), the API stays up |
-| Delete a project: are its screenshots removed too? | Code (while building G2) | **Gap**: the rows go, the screenshots stay in storage (G10) |
+| Delete a project: are its screenshots removed too? | Code (while building G2), then Suite (integration) | **Was a gap**: the rows went, the screenshots stayed in storage and a run in progress went on. Fixed in G10 |
 | Suites: empty name, nesting deeper than one level, a suite as its own parent | Probe | Refused |
 | Child suites | Probe, Code | **Gap**: the API creates them but the app never shows them or their cases |
 | Write a case: unknown action, missing value, over 100 steps (tried 300), 501-character title, numeric tags | Probe | Refused with field messages |
