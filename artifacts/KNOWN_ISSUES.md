@@ -13,6 +13,8 @@ ticket is **Verified** in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 | MED | SSRF guard: WebKit may bypass the proxy for loopback (up-front URL checks still apply). Prod: keep `ALLOW_PRIVATE_HOSTS` unset | SEC-3 (ceiling, TD-8) |
 | LOW | 21 `no-explicit-any` lint warnings in `apps/api`; Next.js ESLint plugin not configured | CI-1 |
 | LOW | Test files compile into `apps/api/dist` (inert, but shipped) | P1 |
+| LOW | CI pulls the local Supabase images from public ECR without signing in; on 18 Nov (a5724b7, push run) the pull failed with "toomanyrequests: Data limit exceeded" before any test ran, and a re-run of the job was the way out. If it recurs: cache the images in CI or sign in to ECR | CI-1 |
+| LOW | Copy: a case with one step reads "1 steps" on the Suites tab (seen in production, 18 Nov) | U5 |
 | LOW | CI is pinned to `ubuntu-24.04`: on 17 Nov `ubuntu-latest` became 26.04, where this Playwright version cannot install Chromium. Move on when a Playwright upgrade supports 26.04 | CI-1 |
 | MED | F10 Slack notice: a real message arriving in a real Slack channel has not been seen yet (settings verified in production; sending tested with Slack replaced). Integrations page keeps "Soon" until it has (owner: connect a test channel) | F10 |
 | MED | Password reset in production needs Supabase Auth (URL Configuration) to allow `https://qa-forge-gamma.vercel.app/reset-password`; until then the emailed link falls back to the site address (owner) | DD-5 |
