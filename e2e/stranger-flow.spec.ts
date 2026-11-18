@@ -177,7 +177,10 @@ test('a run page that loses its connection reconnects with the current sign-in, 
   await expect(page.getByText('Live', { exact: true })).toBeVisible();
   await expect.poll(() => sent.length).toBe(1);
 
-  // Signing in again elsewhere in the browser leaves a newer token in the session than the page connected with.
+  // Signing in again elsewhere in the browser leaves a newer token in the session than the page connected with. The
+  // cookies go first: with the session still in them, /login sends a signed-in visitor straight to Projects, which
+  // once cut the sign-in off and left no newer token to send.
+  await context.clearCookies();
   const other = await context.newPage();
   await signIn(other);
   await other.close();
