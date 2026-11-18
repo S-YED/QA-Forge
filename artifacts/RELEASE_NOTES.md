@@ -73,12 +73,11 @@ errors (DD-1), profile fields that would not clear (DD-2), Firefox and WebKit re
 a missing recording opening an empty page (DD-4), a password reset with nowhere to set the password (DD-5), API edge
 cases (G6), duplicate replay cases (G8), a Stop race (G9), screenshots left behind by project deletion (G10), a bug
 panel without padding, "1 steps" and similar counts, an Integrations page that called live features "planned", hidden
-project tabs on phones (U5, U6), and landing copy that claimed Firefox and WebKit runs (U7). U5 to U7 are verified locally and reach production with the next push.
+project tabs on phones (U5, U6), and landing copy that claimed Firefox and WebKit runs (U7). U5 to U7 are verified in production (U7 for the landing page; the demo part waits for DEMO-1).
 
 ## Known limitations
 
-- **Chromium only.** Runs and recordings use Chromium. The run API still accepts `firefox` and `webkit` as a browser
-  value although production cannot run them (G11, open).
+- **Chromium only.** Runs and recordings use Chromium; the API refuses any other browser (DD-3 production; G11 local, reaching production with the next push).
 - **Slack**: a real message in a real channel has not been seen yet; the Integrations page keeps "Soon" until it has
   (F10).
 - **Password reset in production** needs the Supabase Auth URL setting below; until then the emailed link goes to the

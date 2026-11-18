@@ -11,7 +11,6 @@ ticket is **Verified** in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 | LOW | Production latency: authenticated API calls take 0.5–2 s because Railway and Supabase (Sydney) are far apart; Vercel is pinned to syd1, Railway region still to move to Southeast Asia (user action) | UX-3 |
 | MED | Seeds still target syedkm.com/example.com, not the demo shop (README/setup guide fixed in DOC-1) | DEMO-1 |
 | MED | SSRF guard: WebKit may bypass the proxy for loopback (up-front URL checks still apply). Prod: keep `ALLOW_PRIVATE_HOSTS` unset | SEC-3 (ceiling, TD-8) |
-| LOW | The run API still accepts `firefox` and `webkit` as a browser, which production cannot run; no page offers them | G11 |
 | LOW | 21 `no-explicit-any` lint warnings in `apps/api`; Next.js ESLint plugin not configured | CI-1 |
 | LOW | Test files compile into `apps/api/dist` (inert, but shipped) | P1 |
 | LOW | CI pulled the local Supabase images from public ECR, which refused anonymous pulls twice on 18 Nov ("toomanyrequests: Data limit exceeded", before any test ran; re-runs passed). Since 3b4fe2d CI pulls from GitHub's registry: both runs of 6d8480a pulled cleanly; 2f5214f adds a step listing the images, to show the registry. Remove this row once that list shows ghcr.io | CI-1 |
