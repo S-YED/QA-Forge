@@ -122,6 +122,9 @@ jobs:
         env:
           SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
 
+      - name: Show which registry the Supabase images came from
+        run: docker images --format '{{.Repository}}:{{.Tag}}' | grep supabase | sort
+
       - name: Integration tests
         run: pnpm --filter @qaforge/api test:integration
 
