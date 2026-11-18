@@ -164,6 +164,14 @@ test('a reset link that no longer works says so and offers a new one', async ({ 
   await expect(page.getByText('Reset your password')).toBeVisible();
 });
 
+test('the landing page lists what the product does, and no browser it cannot run', async ({ page }) => {
+  // U7. It claimed Firefox and WebKit runs (production runs Chromium only) and left out suite runs and the overview.
+  await page.goto('/landing');
+  await expect(page.getByRole('heading', { name: 'Whole suites, on a schedule or from CI' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Project health at a glance' })).toBeVisible();
+  await expect(page.getByText(/Firefox|WebKit/)).toHaveCount(0);
+});
+
 test('"Create free account" opens the sign-up form', async ({ page }) => {
   await page.goto('/landing');
   await page.getByRole('link', { name: 'Create free account' }).first().click();

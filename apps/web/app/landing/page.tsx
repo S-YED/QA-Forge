@@ -5,6 +5,8 @@ import {
   MonitorPlay,
   Bug,
   ShieldCheck,
+  CalendarClock,
+  Activity,
   ArrowRight,
   TerminalSquare,
   type LucideIcon,
@@ -15,7 +17,7 @@ import { Button } from '@/components/ui/button';
 export const metadata: Metadata = {
   title: 'QA Forge - AI test automation you can watch run',
   description:
-    'Describe a test in plain English. AI writes the Playwright script. Watch it execute live, step by step, with screenshots and auto-filed bugs.',
+    'Describe a test in plain English and AI drafts the steps. Watch it run live in a real browser, step by step, with screenshots and auto-filed bugs.',
 };
 
 const features: { icon: LucideIcon; title: string; description: string }[] = [
@@ -23,25 +25,37 @@ const features: { icon: LucideIcon; title: string; description: string }[] = [
     icon: Sparkles,
     title: 'AI test generation',
     description:
-      'Describe what to test in plain English. A multi-model engine (GPT-4o, Claude, Gemini) writes complete Playwright cases - selectors, assertions, and edge cases - in seconds.',
+      'Describe what to test in plain English and get test cases to review: steps, the elements they use, and checks. Bring your own OpenAI, Anthropic, Gemini or OpenRouter key; nothing is saved until you approve it.',
   },
   {
     icon: MonitorPlay,
     title: 'Live browser execution',
     description:
-      'Watch every test run in real time over WebSocket. Each click, assertion, and screenshot streams to your dashboard across Chromium, Firefox, and WebKit.',
+      'Watch every run step by step in a real Chromium browser. Each click, check, and screenshot arrives on the run page as it happens. Stop a run at any time, or run it again.',
   },
   {
     icon: Bug,
     title: 'Automatic bug reports',
     description:
-      'When a test fails, QA Forge files a structured bug with the failing step, screenshot, error message, and environment context. Zero manual triage.',
+      'When a step fails, QA Forge files a bug with the failing step, its screenshot, the page address, console errors, and failed requests, linked to the run that found it.',
+  },
+  {
+    icon: CalendarClock,
+    title: 'Whole suites, on a schedule or from CI',
+    description:
+      'Run a whole suite case by case, every day or week on a schedule, or from GitHub Actions with a project token. Each suite run shows its totals and links to every case.',
+  },
+  {
+    icon: Activity,
+    title: 'Project health at a glance',
+    description:
+      'Each project shows its pass rate over 30 days, runs per day, what is failing now, and which cases keep flipping between passing and failing.',
   },
   {
     icon: ShieldCheck,
     title: 'Secure by construction',
     description:
-      'AES-256-GCM encryption for every API key. Row-Level Security on every table. Live JWT validation and built-in rate limiting on each request.',
+      'AES-256-GCM encryption for every API key and secret variable. Row-Level Security on every table. A live sign-in check and rate limits on each request, and runs cannot open private network addresses.',
   },
 ];
 
@@ -54,21 +68,21 @@ const steps = [
   },
   {
     number: '02',
-    title: 'AI generates the cases',
-    description: 'The multi-model engine writes comprehensive Playwright scripts in seconds.',
-    example: '→ 6 cases · selectors · assertions · edge cases',
+    title: 'AI drafts the cases',
+    description: 'Your own AI key drafts the steps and checks. You review each case and keep the ones you want.',
+    example: '→ 6 drafts · steps · checks · approve or discard',
   },
   {
     number: '03',
     title: 'Watch them run live',
-    description: 'Execute against any URL and watch every step stream in over WebSocket.',
+    description: 'Run one case or a whole suite against any public address and watch every step arrive live.',
     example: '→ live screenshots · per-step timing · verdict',
   },
 ];
 
 const techStack = [
   'Playwright',
-  'OpenAI GPT-4o',
+  'OpenAI',
   'Claude',
   'Gemini',
   'OpenRouter',
@@ -156,8 +170,8 @@ export default function LandingPage() {
               QA that thinks like an engineer.
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-              Describe a test in plain English. AI writes the Playwright script. Watch every step
-              execute live - with screenshots, timings, and bugs filed automatically.
+              Describe a test in plain English and AI drafts the steps. Watch every step run live in a
+              real browser - with screenshots, timings, and bugs filed automatically.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Button size="lg" asChild>
@@ -259,7 +273,7 @@ export default function LandingPage() {
               See a test write itself and run.
             </h2>
             <p className="mt-4 text-lg leading-relaxed text-console-muted">
-              No credit card. No setup. Open the demo and watch Playwright execute, step by step.
+              No credit card. No setup. Open the read-only demo and look around a working project: its suites, runs, screenshots, and bugs.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Button size="lg" asChild>
