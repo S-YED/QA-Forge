@@ -55,7 +55,7 @@ export function BugDetailSheet({ projectId, bugId, onClose }: { projectId: strin
 
   return (
     <Sheet open={!!bugId} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="overflow-y-auto">
+      <SheetContent className="overflow-y-auto p-6">
         {!bug ? (
           <div className="flex flex-1 items-center justify-center" role="status" aria-label="Loading the bug">
             <Spinner />
