@@ -17,7 +17,7 @@ local production build (`localhost:3005`); **Suite** = the named automated test.
 | Sign out | Browser | Works |
 | Edit my name and avatar, and clear them | Browser, Probe | **Was broken**: clearing said "updated" but kept the old value. Fixed in DD-2 |
 | Raise my own role | Probe (a tester account) | Refused: role unchanged |
-| Delete my account | Code | **Gap**: not offered |
+| Delete my account | Code, then Suite (integration, E2E) | Was a gap. Built in G2: everything goes, including screenshots and a run in progress; the demo is refused |
 | Demo visitor cannot change anything | Probe, Browser | **Was broken** for the profile: any visitor could rename the shared demo account. Fixed in DD-2. Every other write answers 403 |
 
 ## Projects, suites and cases
@@ -27,6 +27,7 @@ local production build (`localhost:3005`); **Suite** = the named automated test.
 | Create a project; bad names and `javascript:`/`file:` addresses refused | Probe | Works |
 | Open a malformed, unknown or another user's project link | Browser, Probe | Works: back to Projects; the API answers 400/404 |
 | Delete a project while its suite run is running, with a schedule and a CI token | Probe | Works: the run ends, the token stops (401), the API stays up |
+| Delete a project: are its screenshots removed too? | Code (while building G2) | **Gap**: the rows go, the screenshots stay in storage (G10) |
 | Suites: empty name, nesting deeper than one level, a suite as its own parent | Probe | Refused |
 | Child suites | Probe, Code | **Gap**: the API creates them but the app never shows them or their cases |
 | Write a case: unknown action, missing value, over 100 steps (tried 300), 501-character title, numeric tags | Probe | Refused with field messages |
