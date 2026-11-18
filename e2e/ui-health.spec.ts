@@ -72,6 +72,11 @@ for (const [size, viewport] of Object.entries(VIEWPORTS)) {
       expect(href).toBeTruthy();
       await page.goto(href!);
       await check(page, 'project: suites', problems);
+      // U6: every project tab is on screen; on a phone the row used to scroll, hiding the last three past the edge
+      for (const tab of await page.getByRole('tab').all()) {
+        const box = await tab.boundingBox();
+        if (!box || box.x + box.width > viewport.width) problems.push(`project: tab "${await tab.innerText()}" is off screen`);
+      }
       for (const tab of ['Overview', 'Runs', 'Bugs', 'Recordings', 'Variables', 'Automation']) {
         await page.getByRole('tab', { name: new RegExp(tab) }).click();
         await check(page, `project: ${tab}`, problems);

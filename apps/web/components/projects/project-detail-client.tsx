@@ -238,8 +238,8 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)} className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* the tabs are wider than a phone: the row scrolls inside itself instead of pushing the page sideways */}
-          <TabsList className="max-w-full justify-start overflow-x-auto [&>*]:shrink-0">
+          {/* the tabs are wider than a phone: the row wraps so every tab stays in sight (U6; it used to scroll, hiding three) */}
+          <TabsList className="h-auto max-w-full flex-wrap justify-start">
             {tabs.map((tab) => (
               <TabsTrigger key={tab.id} value={tab.id}>
                 {tab.label}
