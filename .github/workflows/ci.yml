@@ -115,8 +115,12 @@ jobs:
           pnpm --filter @qaforge/playwright-runner exec playwright install --with-deps chromium
 
       # The same one command a stranger runs: Supabase, migrations + seed, env files, checks.
+      # The Supabase images come from GitHub's registry: the default, public ECR, refused anonymous pulls twice on
+      # 18 Nov ("toomanyrequests: Data limit exceeded"). Same images and versions (checked on ghcr.io).
       - name: Bootstrap
         run: pnpm bootstrap
+        env:
+          SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
 
       - name: Integration tests
         run: pnpm --filter @qaforge/api test:integration
