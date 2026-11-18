@@ -77,6 +77,5 @@ local production build (`localhost:3005`); **Suite** = the named automated test.
 ## Not tested here
 
 - Real email delivery in production (needs the Supabase Auth URL settings to allow `/reset-password`, see DD-5).
-- A run page left open for over an hour: the live connection keeps its first sign-in token, so a reconnect after
-  the token expires may be refused. Read in the code, not reproduced.
+- A run page left open for over an hour: fixed in G7 and tested by forcing a reconnect after a newer sign-in; a real hour-old token was not waited out.
 - Real Slack delivery (F10, owner).
