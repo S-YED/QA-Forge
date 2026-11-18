@@ -9,9 +9,8 @@ import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
 import { env } from '../config/env.js';
 import logger from '../utils/logger.js';
-import { ARTIFACT_BUCKET, screenshotsOfUser } from '../utils/artifacts.js';
-import { STOPPED, stopRuns } from '../services/run-executor.js';
-import { closeRecordingSession } from '../websocket/handlers/recording.handler.js';
+import { removeScreenshots } from '../utils/artifacts.js';
+import { windDown } from '../services/wind-down.js';
 
 const router: IRouter = Router();
 
@@ -127,35 +126,13 @@ router.put(
 router.delete('/me', authenticate, demoGuard, async (req, res, next) => {
   try {
     const userId = req.user.id;
-    // Nothing of the account may still be working when it goes: queued runs are closed so no suite run starts them,
-    // running ones are stopped and waited for (they upload screenshots as they go), live recordings are closed.
-    // ponytail: a schedule firing in this instant can still start a suite run; its rows cascade away with the account.
-    await supabase
-      .from('test_runs')
-      .update({ status: 'error', error_message: STOPPED, completed_at: new Date().toISOString() })
-      .eq('user_id', userId)
-      .eq('status', 'pending');
-    const [{ data: running }, { data: recordings }] = await Promise.all([
-      supabase.from('test_runs').select('id').eq('user_id', userId).eq('status', 'running'),
-      supabase.from('recorded_sessions').select('id').eq('user_id', userId).eq('status', 'recording'),
-    ]);
-    await Promise.all([
-      stopRuns((running ?? []).map((r) => r.id)),
-      ...(recordings ?? []).map((r) => closeRecordingSession(r.id)),
-    ]);
-
-    const screenshots = await screenshotsOfUser(userId);
+    const screenshots = await windDown('user_id', userId);
     const { error } = await supabase.auth.admin.deleteUser(userId);
     if (error) {
       logger.error({ event: 'account:delete_failed', userId, error: error.message });
       return next(new AppError('INTERNAL_ERROR', 500, 'Could not delete your account. Try again.'));
     }
-
-    // The account is gone either way: a storage hiccup only leaves files no one can reach, and is logged.
-    for (let i = 0; i < screenshots.length; i += 1000) {
-      const { error: removeError } = await supabase.storage.from(ARTIFACT_BUCKET).remove(screenshots.slice(i, i + 1000));
-      if (removeError) logger.warn({ event: 'account:screenshots_left', userId, error: removeError.message });
-    }
+    await removeScreenshots(screenshots);
     logger.info({ event: 'account:deleted', userId, screenshots: screenshots.length });
     res.status(204).end();
   } catch (err) {

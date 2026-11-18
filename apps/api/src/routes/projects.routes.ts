@@ -4,6 +4,8 @@ import { httpUrl, validate } from '../middleware/validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { supabase } from '../config/supabase.js';
 import { isTimezone } from '../services/schedules.js';
+import { windDown } from '../services/wind-down.js';
+import { removeScreenshots } from '../utils/artifacts.js';
 
 // All routes in this router are pre-protected by `authenticate` applied in app.ts.
 
@@ -185,17 +187,21 @@ router.delete(
   validate(uuidParamsSchema, 'params'),
   async (req, res, next) => {
     try {
-      const { data, error } = await supabase
+      const { data: project } = await supabase
         .from('projects')
-        .delete()
+        .select('id')
         .eq('id', req.params.id)
         .eq('user_id', req.user.id)
-        .select()
-        .single();
-
-      if (error || !data) {
+        .maybeSingle();
+      if (!project) {
         return next(new AppError('NOT_FOUND', 404, 'Project not found'));
       }
+
+      // G10: like deleting the account, nothing of the project may still be working, and its screenshots go too.
+      const screenshots = await windDown('project_id', project.id);
+      const { error } = await supabase.from('projects').delete().eq('id', project.id).eq('user_id', req.user.id);
+      if (error) return next(error);
+      await removeScreenshots(screenshots);
 
       res.status(200).json({ success: true });
     } catch (err) {

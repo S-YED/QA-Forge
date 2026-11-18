@@ -21,20 +21,28 @@ export async function signArtifacts(values: (string | null | undefined)[]): Prom
   return values.map((v) => (!v ? null : isArtifactPath(v) ? (signed.get(v) ?? null) : v));
 }
 
-/** Every screenshot path the user's runs stored (G2: read before the rows cascade away with the account). */
-export async function screenshotsOfUser(userId: string): Promise<string[]> {
+/** Every screenshot path stored by the runs of a user or a project (G2, G10: read before the rows cascade away). */
+export async function screenshotsOfRuns(column: 'user_id' | 'project_id', id: string): Promise<string[]> {
   const paths: string[] = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase
       .from('test_steps')
-      .select('id, screenshot_url, test_runs!inner(user_id)')
-      .eq('test_runs.user_id', userId)
+      .select(`id, screenshot_url, test_runs!inner(${column})`)
+      .eq(`test_runs.${column}`, id)
       .not('screenshot_url', 'is', null)
       .order('id')
       .range(from, from + 999);
-    if (error) throw new Error(`Could not list the account's screenshots: ${error.message}`);
+    if (error) throw new Error(`Could not list the screenshots: ${error.message}`);
     paths.push(...data.map((s) => s.screenshot_url as string).filter(isArtifactPath));
     if (data.length < 1000) return paths;
+  }
+}
+
+/** Remove screenshots whose rows are gone. A storage hiccup only leaves files no one can reach, so it is logged. */
+export async function removeScreenshots(paths: string[]): Promise<void> {
+  for (let i = 0; i < paths.length; i += 1000) {
+    const { error } = await supabase.storage.from(ARTIFACT_BUCKET).remove(paths.slice(i, i + 1000));
+    if (error) logger.warn({ event: 'screenshots:left_behind', count: paths.slice(i, i + 1000).length, error: error.message });
   }
 }
 

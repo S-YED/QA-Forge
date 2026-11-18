@@ -276,59 +276,93 @@ describe('CON-1 test-case writes enforce the step contract', () => {
   });
 });
 
+/** Serves a page with a heading on 127.0.0.1 for the duration of `fn`. */
+async function withFixturePage(fn: (baseUrl: string) => Promise<void>) {
+  const page = http.createServer((_req, res) => res.writeHead(200, { 'Content-Type': 'text/html' }).end('<h1>Hello fixture</h1>'));
+  await new Promise<void>((r) => page.listen(0, '127.0.0.1', r));
+  try {
+    await fn(`http://127.0.0.1:${(page.address() as AddressInfo).port}/`);
+  } finally {
+    await new Promise<void>((r) => page.close(() => r()));
+  }
+}
+
+/** Screenshots stored for each run. */
+const screenshotsOf = (runIds: string[]) =>
+  Promise.all(runIds.map(async (id) => ((await supabase.storage.from('test-artifacts').list(`screenshots/${id}`)).data ?? []).length));
+
+/**
+ * A project with one finished run and one still in progress (its second step waits for an element that never comes),
+ * each with a screenshot stored (G2, G10).
+ */
+async function projectWithRuns(token: string, baseUrl: string) {
+  const projectId = ((await (await api('/projects', token, 'POST', { name: 'runs', base_url: baseUrl })).json()) as { project: { id: string } }).project.id;
+  const suiteId = ((await (await api(`/projects/${projectId}/test-suites`, token, 'POST', { name: 's' })).json()) as { suite: { id: string } }).suite.id;
+  const newCase = async (steps: unknown[]) =>
+    ((await (await api(`/projects/${projectId}/test-suites/${suiteId}/test-cases`, token, 'POST', { title: `c${Date.now()}`, steps })).json()) as { test_case: { id: string } }).test_case.id;
+  const startRun = async (caseId: string) =>
+    ((await (await api(`/projects/${projectId}/test-runs`, token, 'POST', { test_case_id: caseId, mode: 'ai_driven' })).json()) as { test_run: { id: string } }).test_run.id;
+  const detail = async (runId: string) => (await (await api(`/projects/${projectId}/test-runs/${runId}`, token)).json()) as { test_run: { status: string }; steps: unknown[] };
+  const heading = { step_number: 1, action: 'assert_text', instruction: 'Heading', selector: 'h1', value: 'Hello' };
+
+  const finished = await startRun(await newCase([heading]));
+  for (let i = 0; i < 120 && ['pending', 'running'].includes((await detail(finished)).test_run.status); i++) await new Promise((r) => setTimeout(r, 250));
+  const inProgress = await startRun(await newCase([heading, { step_number: 2, action: 'assert_visible', instruction: 'Never there', selector: '#never' }]));
+  for (let i = 0; i < 120 && (await detail(inProgress)).steps.length < 1; i++) await new Promise((r) => setTimeout(r, 250));
+  expect((await detail(inProgress)).test_run.status).toBe('running');
+  expect(await screenshotsOf([finished, inProgress])).toEqual([1, 1]);
+  return { projectId, suiteId, runs: [finished, inProgress] };
+}
+
+describe('G10 deleting a project', () => {
+  it('stops its run in progress and removes its screenshots', async () => {
+    const bob = await signIn(USERS.bob);
+    await withFixturePage(async (baseUrl) => {
+      const { projectId, runs } = await projectWithRuns(bob.token, baseUrl);
+      expect((await api(`/projects/${projectId}`, bob.token, 'DELETE')).status).toBe(200);
+      expect(stopRun(runs[1])).toBe(false);
+      expect(await screenshotsOf(runs)).toEqual([0, 0]);
+      expect((await supabase.from('test_runs').select('id').eq('project_id', projectId)).data).toEqual([]);
+    });
+  }, 90_000);
+});
+
 describe('G2 delete your own account', () => {
   it('deletes the account, its data and screenshots, stopping a run in progress; touches no one else; refuses the demo', async () => {
-    const page = http.createServer((_req, res) => res.writeHead(200, { 'Content-Type': 'text/html' }).end('<h1>Hello fixture</h1>'));
-    await new Promise<void>((r) => page.listen(0, '127.0.0.1', r));
     const user = { email: `g2-${Date.now()}@qaforge.dev`, password: 'Password123!' };
     const { data: created, error: createError } = await supabase.auth.admin.createUser({ ...user, email_confirm: true });
     expect(createError).toBeNull();
     const userId = created.user!.id;
     try {
-      const { token } = await signIn(user);
-      const bob = await signIn(USERS.bob);
-      const bobProjects = async () => (await supabase.from('projects').select('id', { count: 'exact', head: true }).eq('user_id', bob.id)).count;
-      const bobBefore = await bobProjects();
+      await withFixturePage(async (baseUrl) => {
+        const { token } = await signIn(user);
+        const bob = await signIn(USERS.bob);
+        const bobProjects = async () => (await supabase.from('projects').select('id', { count: 'exact', head: true }).eq('user_id', bob.id)).count;
+        const bobBefore = await bobProjects();
 
-      const projectId = ((await (await api('/projects', token, 'POST', { name: 'g2', base_url: `http://127.0.0.1:${(page.address() as AddressInfo).port}/` })).json()) as { project: { id: string } }).project.id;
-      const suiteId = ((await (await api(`/projects/${projectId}/test-suites`, token, 'POST', { name: 's' })).json()) as { suite: { id: string } }).suite.id;
-      const newCase = async (steps: unknown[]) =>
-        ((await (await api(`/projects/${projectId}/test-suites/${suiteId}/test-cases`, token, 'POST', { title: `c${Date.now()}`, steps })).json()) as { test_case: { id: string } }).test_case.id;
-      const startRun = async (caseId: string) =>
-        ((await (await api(`/projects/${projectId}/test-runs`, token, 'POST', { test_case_id: caseId, mode: 'ai_driven' })).json()) as { test_run: { id: string } }).test_run.id;
-      const detail = async (runId: string) => (await (await api(`/projects/${projectId}/test-runs/${runId}`, token)).json()) as { test_run: { status: string }; steps: unknown[] };
-      const screenshots = async (runId: string) => ((await supabase.storage.from('test-artifacts').list(`screenshots/${runId}`)).data ?? []).length;
-      const heading = { step_number: 1, action: 'assert_text', instruction: 'Heading', selector: 'h1', value: 'Hello' };
+        const { projectId, suiteId, runs } = await projectWithRuns(token, baseUrl);
+        const secret = ((await (await api(`/projects/${projectId}/tokens`, token, 'POST', { name: 'ci' })).json()) as { secret: string }).secret;
 
-      // One finished run, and one in progress: its second step waits for an element that never comes.
-      const finished = await startRun(await newCase([heading]));
-      for (let i = 0; i < 120 && ['pending', 'running'].includes((await detail(finished)).test_run.status); i++) await new Promise((r) => setTimeout(r, 250));
-      const inProgress = await startRun(await newCase([heading, { step_number: 2, action: 'assert_visible', instruction: 'Never there', selector: '#never' }]));
-      for (let i = 0; i < 120 && (await detail(inProgress)).steps.length < 1; i++) await new Promise((r) => setTimeout(r, 250));
-      expect((await detail(inProgress)).test_run.status).toBe('running');
-      expect([await screenshots(finished), await screenshots(inProgress)]).toEqual([1, 1]);
-      const secret = ((await (await api(`/projects/${projectId}/tokens`, token, 'POST', { name: 'ci' })).json()) as { secret: string }).secret;
+        expect((await api('/auth/me', token, 'DELETE')).status).toBe(204);
 
-      expect((await api('/auth/me', token, 'DELETE')).status).toBe(204);
+        // The run in progress was stopped and waited for, so neither run left a screenshot behind.
+        expect(stopRun(runs[1])).toBe(false);
+        expect(await screenshotsOf(runs)).toEqual([0, 0]);
+        expect((await supabase.auth.admin.getUserById(userId)).data.user).toBeNull();
+        for (const [table, column] of [['profiles', 'id'], ['projects', 'user_id'], ['test_runs', 'user_id'], ['project_tokens', 'user_id']]) {
+          expect((await supabase.from(table).select('id').eq(column, userId)).data, table).toEqual([]);
+        }
+        // Its session and its CI token open nothing any more; no one else's data went with it.
+        expect((await api('/auth/me', token)).status).toBe(401);
+        expect((await api(`/ci/suites/${suiteId}/run`, secret, 'POST', {})).status).toBe(401);
+        expect(await bobProjects()).toBe(bobBefore);
 
-      // The run in progress was stopped and waited for, so neither run left a screenshot behind.
-      expect(stopRun(inProgress)).toBe(false);
-      expect([await screenshots(finished), await screenshots(inProgress)]).toEqual([0, 0]);
-      expect((await supabase.auth.admin.getUserById(userId)).data.user).toBeNull();
-      for (const [table, column] of [['profiles', 'id'], ['projects', 'user_id'], ['test_runs', 'user_id'], ['project_tokens', 'user_id']]) {
-        expect((await supabase.from(table).select('id').eq(column, userId)).data, table).toEqual([]);
-      }
-      // Its session and its CI token open nothing any more; no one else's data went with it.
-      expect((await api('/auth/me', token)).status).toBe(401);
-      expect((await api(`/ci/suites/${suiteId}/run`, secret, 'POST', {})).status).toBe(401);
-      expect(await bobProjects()).toBe(bobBefore);
-
-      // The demo account is shared by every visitor: it cannot be deleted.
-      const demo = await signIn(USERS.demo);
-      expect((await api('/auth/me', demo.token, 'DELETE')).status).toBe(403);
+        // The demo account is shared by every visitor: it cannot be deleted.
+        const demo = await signIn(USERS.demo);
+        expect((await api('/auth/me', demo.token, 'DELETE')).status).toBe(403);
+      });
     } finally {
       await supabase.auth.admin.deleteUser(userId); // no-op once the test has deleted it
-      await new Promise<void>((r) => page.close(() => r()));
     }
   }, 90_000);
 });
