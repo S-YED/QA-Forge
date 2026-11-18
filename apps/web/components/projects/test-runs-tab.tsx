@@ -135,7 +135,7 @@ export function TestRunsTab({ projectId, runs, totalCount, onRefresh, onLoadMore
       {totalCount > runs.length && (
         <div className="flex flex-col items-center gap-2">
           <p className="text-xs text-muted-foreground">
-            Showing {runs.length} of {totalCount} runs
+            Showing {runs.length} of {totalCount} {totalCount === 1 ? 'run' : 'runs'}
           </p>
           <Button variant="outline" size="sm" onClick={track('more', onLoadMore)} disabled={!!pending}>
             {pending === 'more' && <Spinner />}

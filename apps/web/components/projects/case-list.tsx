@@ -72,7 +72,7 @@ export function CaseList({ projectId, cases, moveTargets, onDuplicate, onMove, l
               <SeverityBadge severity={tc.priority} />
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                 <ListChecks className="size-3.5" />
-                {tc.steps?.length ?? 0} steps
+                {tc.steps?.length ?? 0} {tc.steps?.length === 1 ? 'step' : 'steps'}
               </span>
               {tc.tags?.map((tag) => (
                 <Badge key={tag} variant="secondary">

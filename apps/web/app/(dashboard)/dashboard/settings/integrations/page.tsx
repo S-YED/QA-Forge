@@ -12,8 +12,8 @@ export default function IntegrationsPage() {
 
       <EmptyState
         icon={Plug}
-        title="Coming soon"
-        description="Integrations with Jira, GitHub, Slack, and other tools are planned for a future release. Stay tuned."
+        title="Set up on each project"
+        description="Slack notices when a suite run fails, and tokens that let a build such as GitHub Actions run your suites, are under Automation on each project page. Filing bugs into Jira or GitHub is not available yet."
       />
     </div>
   );

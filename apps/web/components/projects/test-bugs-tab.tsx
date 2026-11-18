@@ -172,7 +172,7 @@ export function TestBugsTab({ projectId, bugs, totalCount, onRefresh, onLoadMore
       {totalCount > bugs.length && (
         <div className="flex flex-col items-center gap-2">
           <p className="text-xs text-muted-foreground">
-            Showing {bugs.length} of {totalCount} bugs
+            Showing {bugs.length} of {totalCount} {totalCount === 1 ? 'bug' : 'bugs'}
           </p>
           <Button variant="outline" size="sm" onClick={track('more', onLoadMore)} disabled={!!pending}>
             {pending === 'more' && <Spinner />}
