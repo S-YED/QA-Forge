@@ -24,6 +24,19 @@ export const BUG_STATUSES = [
  * G5: one bug on its own, with what a developer asks for first: what happened, what should have, how to get
  * there, and (for a bug a run filed) the page address, console errors and failed requests (F7) and the screenshot.
  */
+/** CR-6: seeded bugs store their steps as JSON ([{"step":1,"description":"..."}]); show those as numbered lines. */
+function readableSteps(text: string | null | undefined): string | null | undefined {
+  try {
+    const steps: unknown = JSON.parse(text ?? '');
+    if (Array.isArray(steps) && steps.length && steps.every((s) => typeof s?.description === 'string')) {
+      return steps.map((s: { step?: number; description: string }, i) => `${s.step ?? i + 1}. ${s.description}`).join('\n');
+    }
+  } catch {
+    // plain text, shown as written
+  }
+  return text;
+}
+
 export function BugDetailSheet({ projectId, bugId, onClose }: { projectId: string; bugId: string | null; onClose: () => void }) {
   const [bug, setBug] = useState<Bug | null>(null);
 
@@ -48,7 +61,7 @@ export function BugDetailSheet({ projectId, bugId, onClose }: { projectId: strin
     ? [
         ['What happened', bug.actual_behavior],
         ['What should happen', bug.expected_behavior],
-        ['Steps to reproduce', bug.steps_to_reproduce],
+        ['Steps to reproduce', readableSteps(bug.steps_to_reproduce)],
         ['Details', bug.description],
       ]
     : [];

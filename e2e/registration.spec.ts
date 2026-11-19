@@ -162,6 +162,18 @@ test('the demo shows a sub-suite under its parent, with its cases', async ({ pag
   await expect(page.getByText('Successful login with valid credentials')).toBeVisible();
 });
 
+test('a seeded demo bug shows its steps to reproduce as numbered lines, not JSON (CR-6)', async ({ page }) => {
+  await page.goto('/demo');
+  await expect(page).toHaveURL(/\/dashboard\/projects$/, { timeout: 30_000 });
+  await page.getByRole('link', { name: /E-Commerce Platform/ }).first().click();
+  await page.getByRole('tab', { name: /Bugs/ }).click();
+  await page.getByRole('button', { name: /Login error message not displayed on Firefox/ }).first().click();
+  const sheet = page.getByRole('dialog');
+  await expect(sheet.getByRole('heading', { name: 'Steps to reproduce' })).toBeVisible();
+  await expect(sheet.getByText(/^1\. Navigate to \/login using Firefox$/m)).toBeVisible();
+  await expect(sheet.getByText(/"step"/)).toHaveCount(0);
+});
+
 test('a reset link that no longer works says so and offers a new one', async ({ page }) => {
   await page.goto('/reset-password');
   await expect(page.getByText('This reset link no longer works')).toBeVisible();
