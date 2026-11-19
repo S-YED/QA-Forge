@@ -6,6 +6,7 @@ import { supabase } from '../config/supabase.js';
 import { TestCaseStepsSchema, describeStep } from '@qaforge/shared-types';
 import { closeRecordingSession } from '../websocket/handlers/recording.handler.js';
 import { executeTestOrchestration } from '../services/run-executor.js';
+import { isNotMigrated } from '../services/suite-runs.js';
 
 // Router handles requests nested under /projects/:projectId/recorded-sessions
 const router: IRouter = Router({ mergeParams: true });
@@ -301,13 +302,21 @@ router.post('/:id/replay', validate(uuidParamsSchema, 'params'), async (req, res
     const marker = `Automated compile of recorded session ${session.id}`;
     const now = new Date().toISOString();
 
-    const { data: earlier } = await supabase
-      .from('test_cases')
-      .select('id, test_suites!inner(project_id)')
-      .eq('description', marker)
-      .eq('test_suites.project_id', projectId)
-      .limit(1)
-      .maybeSingle();
+    // CR-12: found by its link to the recording (migration 32), which Duplicate never copies. Before that migration
+    // is applied, by the description as before, oldest first.
+    const linked = await supabase.from('test_cases').select('id').eq('recorded_session_id', session.id).maybeSingle();
+    const migrated = !isNotMigrated(linked.error);
+    if (migrated && linked.error) return next(linked.error);
+    const { data: earlier } = migrated
+      ? linked
+      : await supabase
+          .from('test_cases')
+          .select('id, test_suites!inner(project_id)')
+          .eq('description', marker)
+          .eq('test_suites.project_id', projectId)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
 
     const { data: testCase, error: caseError } = earlier
       ? await supabase.from('test_cases').update({ steps, updated_at: now }).eq('id', earlier.id).select().single()
@@ -317,6 +326,7 @@ router.post('/:id/replay', validate(uuidParamsSchema, 'params'), async (req, res
             suite_id: suiteId,
             title: caseTitle,
             description: marker,
+            ...(migrated && { recorded_session_id: session.id }),
             steps,
             is_ai_generated: false,
             source: 'manual',

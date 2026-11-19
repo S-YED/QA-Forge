@@ -212,7 +212,8 @@ router.post('/:id/duplicate', validate(uuidParamsSchema, 'params'), async (req, 
     // id is left for the database to assign
     const { data: testCase, error } = await supabase
       .from('test_cases')
-      .insert({ ...original, id: undefined, title: `${String(original.title).slice(0, 493)} (copy)`, created_at: now, updated_at: now })
+      // CR-12: a copy is never the recording's own case (left out, so it is null; also before migration 32)
+      .insert({ ...original, id: undefined, recorded_session_id: undefined, title: `${String(original.title).slice(0, 493)} (copy)`, created_at: now, updated_at: now })
       .select()
       .single();
     if (error || !testCase) return next(error ?? new AppError('INTERNAL_ERROR', 500, 'Failed to duplicate test case'));

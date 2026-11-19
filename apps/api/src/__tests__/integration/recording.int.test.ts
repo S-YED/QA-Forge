@@ -310,6 +310,33 @@ describe('A4 recording from the workbench viewport', () => {
     expect(count).toBe(1);
   }, 60_000);
 
+  it('a replay refreshes only its own case, never a duplicated copy, even after the original was renamed (CR-12)', async () => {
+    const created = await api(`/projects/${projectId}/recorded-sessions`, alice.token, 'POST', { name: 'replayed after a copy', base_url: `${demoUrl}/login` });
+    const sessionId = ((await created.json()) as { recorded_session: { id: string } }).recorded_session.id;
+    await supabase.from('recorded_sessions').update({ status: 'completed' }).eq('id', sessionId);
+    const action = (n: number, selector: string) =>
+      supabase.from('session_actions').insert({ session_id: sessionId, action_number: n, action_type: 'click', selector, url: `${demoUrl}/login`, timestamp_ms: 10 * n, metadata: {} });
+    await action(1, 'Log in');
+    const replay = async () =>
+      ((await (await api(`/projects/${projectId}/recorded-sessions/${sessionId}/replay`, alice.token, 'POST', {})).json()) as { test_case: { id: string } });
+
+    const original = (await replay()).test_case.id;
+    const { data: row } = await supabase.from('test_cases').select('suite_id, steps').eq('id', original).single();
+    const casePath = (id: string) => `/projects/${projectId}/test-suites/${row!.suite_id}/test-cases/${id}`;
+    // The person copies the case to make a variant and edits the copy; they also rename the original.
+    const copy = ((await (await api(`${casePath(original)}/duplicate`, alice.token, 'POST', {})).json()) as { test_case: { id: string } }).test_case.id;
+    const edited = [{ step_number: 1, action: 'navigate', instruction: 'Open the edited page', value: '/edited' }];
+    expect((await api(casePath(copy), alice.token, 'PUT', { steps: edited })).status).toBe(200);
+    expect((await api(casePath(original), alice.token, 'PUT', { description: 'My login check' })).status).toBe(200);
+
+    await action(2, 'Sign up'); // the recording grew
+    expect((await replay()).test_case.id).toBe(original);
+    const { data: after } = await supabase.from('test_cases').select('id, steps').in('id', [original, copy]);
+    const steps = (id: string) => after!.find((c) => c.id === id)!.steps as { instruction: string }[];
+    expect(steps(copy).map((s) => s.instruction)).toEqual(['Open the edited page']); // the copy kept its edits
+    expect(steps(original).length).toBe((row!.steps as unknown[]).length + 1); // the original took the new action
+  }, 60_000);
+
   it('the owner deletes a recording with its actions; nobody else can', async () => {
     const created = await api(`/projects/${projectId}/recorded-sessions`, alice.token, 'POST', { name: 'to delete', base_url: `${demoUrl}/login` });
     const sessionId = ((await created.json()) as { recorded_session: { id: string } }).recorded_session.id;
