@@ -49,8 +49,8 @@ are planned for 28 to 31 December ([roadmap](../docs/DECEMBER_2026_ROADMAP.md), 
 ### Accounts
 
 - Sign up, sign in, sign out; change your name and avatar, and clear them. (DD-2; production)
-- **Forgot password** sends a link to a page where you set a new one. (DD-5; production, but see the Supabase setting
-  below)
+- **Forgot password** sends a link to a page where you set a new one. (DD-5; production, and Supabase allows the
+  link's page since 19 November, but see email delivery below)
 - **Change your password** in Settings, Profile. (G1; production)
 - **Delete your account** and everything in it, including screenshots and any run in progress. (G2; CI, and in
   production the route, the card and the demo's note were checked without deleting an account)
@@ -77,11 +77,12 @@ project tabs on phones (U5, U6), and landing copy that claimed Firefox and WebKi
 
 ## Known limitations
 
-- **Chromium only.** Runs and recordings use Chromium; the API refuses any other browser (DD-3 production; G11 local, reaching production with the next push).
+- **Chromium only.** Runs and recordings use Chromium; the API refuses any other browser (DD-3 and G11; production).
 - **Slack**: a real message in a real channel has not been seen yet; the Integrations page keeps "Soon" until it has
   (F10).
-- **Password reset in production** needs the Supabase Auth URL setting below; until then the emailed link goes to the
-  site address (DD-5).
+- **Email in production** (sign-up confirmation, password reset) goes through Supabase's built-in mail, which reaches
+  only the project team's addresses, 2 messages an hour; until custom SMTP is set up, a stranger cannot finish
+  sign-up (G12).
 - **The demo** has projects, suites, runs, screenshots, a bug and a recording, but no suite runs, and its seed data
   still targets outside sites rather than the demo shop (DEMO-1).
 - **Running a parent suite** runs only its own cases; each sub-suite has its own Run button (G4, open question).
@@ -94,8 +95,8 @@ project tabs on phones (U5, U6), and landing copy that claimed Firefox and WebKi
 
 ## Before the release (owner)
 
-1. In Supabase Auth, URL Configuration, allow `https://qa-forge-gamma.vercel.app/reset-password` as a redirect URL
-   (DD-5).
+1. Set up custom SMTP in Supabase Auth (an email provider and a sending domain), then sign up and reset a password with
+   an address outside the team (G12). The reset redirect URL is allowed since 19 November (DD-5).
 2. Add billing to Railway before the trial ends, about 10 December (REL-3).
 3. Move the Railway service to the Southeast Asia region (UX-3).
 4. Rotate the keys created in June.
