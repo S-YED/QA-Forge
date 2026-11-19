@@ -37,6 +37,8 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   // Kept after closing so the text does not vanish during the close animation.
   const [options, setOptions] = useState<ConfirmOptions | null>(null);
   const answer = useRef<((yes: boolean) => void) | null>(null);
+  // CR-11: the box has no Radix trigger to return focus to, so remember what had focus when the question was asked.
+  const askedFrom = useRef<HTMLElement | null>(null);
 
   const settle = useCallback((yes: boolean) => {
     answer.current?.(yes);
@@ -51,6 +53,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
 
   const ask = useCallback<Ask>((next) => {
     answer.current?.(false); // a second question cancels the first
+    askedFrom.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     return new Promise<boolean>((resolve) => {
       answer.current = resolve;
       setOptions(next);
@@ -67,6 +70,10 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           <DialogOverlay className="z-[60]" />
           <DialogPrimitive.Content
             role="alertdialog"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              if (askedFrom.current?.isConnected) askedFrom.current.focus();
+            }}
             className="fixed left-1/2 top-1/2 z-[70] grid w-full max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 border bg-popover p-6 shadow-xl duration-200 focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg"
           >
             <DialogHeader>

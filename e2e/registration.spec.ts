@@ -138,6 +138,8 @@ test('a person deletes their account in Settings after confirming, and can no lo
   await page.getByRole('button', { name: 'Delete account' }).click();
   await box.getByRole('button', { name: 'Cancel' }).click();
   await expect(box).toBeHidden();
+  // CR-11: focus goes back to the button that asked, as the browser's own confirm() did, not to the top of the page.
+  await expect(page.getByRole('button', { name: 'Delete account' })).toBeFocused();
 
   // CR-10: a question left open when the page changes is cancelled, never answered over the next page. Reached by
   // in-app links, so Back stays in the app (the dashboard layout, and the box with it, stays mounted).
