@@ -44,11 +44,13 @@ afterAll(async () => {
   await new Promise<void>((r) => target.close(() => r()));
 });
 
-/** A suite with one case per entry, created in order. */
-async function suiteOf(name: string, cases: unknown[][]): Promise<string> {
-  const suite = (await (await api(`/projects/${projectId}/test-suites`, token, 'POST', { name })).json()) as { suite: { id: string } };
+/** A suite (inside `parent` when given) with one case per entry, created in order and titled `<prefix> 1`, `<prefix> 2`... */
+async function suiteOf(name: string, cases: unknown[][], { parent, prefix = 'case' }: { parent?: string; prefix?: string } = {}): Promise<string> {
+  const suite = (await (await api(`/projects/${projectId}/test-suites`, token, 'POST', { name, parent_suite_id: parent })).json()) as {
+    suite: { id: string };
+  };
   for (const [i, steps] of cases.entries()) {
-    const created = await api(`/projects/${projectId}/test-suites/${suite.suite.id}/test-cases`, token, 'POST', { title: `case ${i + 1}`, steps });
+    const created = await api(`/projects/${projectId}/test-suites/${suite.suite.id}/test-cases`, token, 'POST', { title: `${prefix} ${i + 1}`, steps });
     expect(created.status).toBe(201);
     await new Promise((r) => setTimeout(r, 5)); // distinct created_at, so the suite order is defined
   }
@@ -140,4 +142,41 @@ describe('F3 run a whole suite', () => {
     expect((await api(batchPath(`${batch.id}/cancel`), alice.token, 'POST', {})).status).toBe(404);
     expect((await waitForBatch(batch.id)).counts.passed).toBe(1); // her attempts changed nothing
   }, 60_000);
+
+  it('G4: a parent suite runs its own cases, then each sub-suite in turn; a sub-suite still runs alone', async () => {
+    const parent = await suiteOf('parent', [PASS], { prefix: 'parent' });
+    const first = await suiteOf('first child', [PASS, PASS], { parent, prefix: 'first' });
+    await suiteOf('second child', [PASS], { parent, prefix: 'second' });
+
+    const started = await api(batchPath(), token, 'POST', { suite_id: parent });
+    expect(started.status).toBe(201);
+    const { batch, run_ids } = (await started.json()) as { batch: { id: string }; run_ids: string[] };
+    const done = await waitForBatch(batch.id);
+    expect(done.runs.map((r) => r.test_cases?.title)).toEqual(['parent 1', 'first 1', 'first 2', 'second 1']);
+    expect(done.runs.map((r) => r.id)).toEqual(run_ids);
+    expect(done.counts.passed).toBe(4);
+    expect(done.batch.suite_id).toBe(parent);
+
+    const alone = (await (await api(batchPath(), token, 'POST', { suite_id: first })).json()) as { batch: { id: string }; run_ids: string[] };
+    expect(alone.run_ids).toHaveLength(2);
+    await waitForBatch(alone.batch.id);
+  }, 120_000);
+
+  it('G4: a parent with no cases of its own runs its sub-suites, and the 50-case cap counts them', async () => {
+    const folder = await suiteOf('folder', []);
+    await suiteOf('only child', [PASS], { parent: folder, prefix: 'child' });
+    const started = await api(batchPath(), token, 'POST', { suite_id: folder });
+    expect(started.status).toBe(201);
+    await waitForBatch(((await started.json()) as { batch: { id: string } }).batch.id);
+
+    // 26 cases in a parent and 25 in its sub-suite: 51 together is over the cap, so nothing starts.
+    const big = await suiteOf('big parent', []);
+    const bigChild = await suiteOf('big child', [], { parent: big });
+    const rows = (suiteId: string, n: number) => Array.from({ length: n }, (_, i) => ({ suite_id: suiteId, title: `bulk ${i + 1}`, steps: PASS }));
+    const { error } = await supabase.from('test_cases').insert([...rows(big, 26), ...rows(bigChild, 25)]);
+    expect(error).toBeNull();
+    const refused = await api(batchPath(), token, 'POST', { suite_id: big });
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as { error: { message: string } }).error.message).toMatch(/limited to 50 test cases/);
+  }, 120_000);
 });

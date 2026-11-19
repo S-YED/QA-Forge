@@ -20,7 +20,7 @@ const dbError = (error: { code?: string } | null, fallback: string) =>
   isNotMigrated(error) ? notMigrated() : (error ?? new AppError('INTERNAL_ERROR', 500, fallback));
 
 /**
- * Queue one run per case of the suite and start executing them in order. The caller has already
+ * Queue one run per case of the suite and its sub-suites and start executing them in order. The caller has already
  * established that `userId` may act on `projectId`; the suite must belong to that project.
  */
 export async function startSuiteRun(
@@ -43,17 +43,31 @@ export async function startSuiteRun(
     throw new AppError('BAD_REQUEST', 400, "Set the project's base URL before running a suite: every case starts there");
   }
 
-  const { data: cases, error: casesError } = await supabase
-    .from('test_cases')
+  // G4: a parent's run includes its sub-suites (one level deep: the API refuses deeper nesting), so a green run
+  // never hides cases that did not run. Order: the parent's own cases, then each sub-suite's, as the Suites tab lists them.
+  const { data: subSuites, error: subError } = await supabase
+    .from('test_suites')
     .select('id')
-    .eq('suite_id', suite.id)
+    .eq('parent_suite_id', suite.id)
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true });
+  if (subError) throw subError;
+  const suiteIds = [suite.id, ...(subSuites ?? []).map((s) => s.id)];
+
+  const { data: found, error: casesError } = await supabase
+    .from('test_cases')
+    .select('id, suite_id')
+    .in('suite_id', suiteIds)
     .order('created_at', { ascending: true })
     .limit(MAX_CASES + 1);
   if (casesError) throw casesError;
-  if (!cases?.length) throw new AppError('BAD_REQUEST', 400, 'This suite has no test cases to run');
-  if (cases.length > MAX_CASES) {
-    throw new AppError('BAD_REQUEST', 400, `A suite run is limited to ${MAX_CASES} test cases; this suite has more`);
+  if (!found?.length) throw new AppError('BAD_REQUEST', 400, 'This suite has no test cases to run');
+  if (found.length > MAX_CASES) {
+    const scope = suiteIds.length > 1 ? 'this suite and its sub-suites have' : 'this suite has';
+    throw new AppError('BAD_REQUEST', 400, `A suite run is limited to ${MAX_CASES} test cases; ${scope} more`);
   }
+  // A stable sort keeps each suite's cases in created order.
+  const cases = [...found].sort((a, b) => suiteIds.indexOf(a.suite_id) - suiteIds.indexOf(b.suite_id));
 
   const { data: batch, error: batchError } = await supabase
     .from('run_batches')

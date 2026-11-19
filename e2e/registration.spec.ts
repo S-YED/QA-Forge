@@ -153,6 +153,11 @@ test('the demo shows a sub-suite under its parent, with its cases', async ({ pag
   await page.getByRole('tab', { name: /Suites/ }).click();
   const child = page.getByRole('button', { name: /^Login Flows/ }); // its Run, Export, Rename and Delete buttons name it too
   await expect(child).toContainText('Inside Authentication');
+  // Running the parent runs its sub-suite too, and its button says how many cases that is.
+  await expect(page.getByRole('button', { name: 'Run suite Authentication' })).toHaveAttribute(
+    'title',
+    'Run all 3 test cases, including 2 in its sub-suite, one after another',
+  );
   await child.click();
   await expect(page.getByText('Successful login with valid credentials')).toBeVisible();
 });

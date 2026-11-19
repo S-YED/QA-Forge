@@ -55,6 +55,16 @@ interface SuiteDetailResponse {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** G4: what "Run suite" will run, counted before starting; a parent's run includes its sub-suites. */
+function runSuiteTitle(own: number, inSubSuites: number, subSuites: number): string {
+  if (own + inSubSuites === 0) return 'Add a test case first';
+  if (inSubSuites === 0) return 'Run every test case in this suite, one after another';
+  const where = `in its sub-suite${subSuites === 1 ? '' : 's'}`;
+  return own === 0
+    ? `Run the ${inSubSuites} test ${inSubSuites === 1 ? 'case' : 'cases'} ${where}, one after another`
+    : `Run all ${own + inSubSuites} test cases, including ${inSubSuites} ${where}, one after another`;
+}
+
 export function TestSuitesTab({ projectId, suites, lastResults, baseUrl, onRefresh }: TestSuitesTabProps) {
   const ask = useConfirm();
   const router = useRouter();
@@ -92,7 +102,7 @@ export function TestSuitesTab({ projectId, suites, lastResults, baseUrl, onRefre
   const [applyingOptimize, setApplyingOptimize] = useState(false);
 
   // Root-level suites (no parent), each followed by its sub-suites (G4: one level deep, made by the API or the seed).
-  // ponytail: a sub-suite is run on its own; "Run suite" on the parent runs only the parent's cases.
+  // "Run suite" on a parent runs its own cases, then each sub-suite's (G4); a sub-suite can also run on its own.
   const rootSuites = suites.filter((s) => !s.parent_suite_id);
   const shownSuites = rootSuites.flatMap((root) => [root, ...suites.filter((s) => s.parent_suite_id === root.id)]);
 
@@ -467,6 +477,8 @@ export function TestSuitesTab({ projectId, suites, lastResults, baseUrl, onRefre
             const isExpanded = expandedSuiteId === suite.id;
             const caseCount = suite.test_cases?.[0]?.count ?? 0;
             const parent = rootSuites.find((r) => r.id === suite.parent_suite_id);
+            const children = suites.filter((s) => s.parent_suite_id === suite.id);
+            const inSubSuites = children.reduce((n, s) => n + (s.test_cases?.[0]?.count ?? 0), 0);
 
             return (
               <div key={suite.id} className={cn('overflow-hidden rounded-lg border bg-card', parent && 'ml-4 sm:ml-8')}>
@@ -508,9 +520,9 @@ export function TestSuitesTab({ projectId, suites, lastResults, baseUrl, onRefre
                       size="sm"
                       className="h-8"
                       onClick={() => handleRunSuite(suite.id)}
-                      disabled={caseCount === 0 || busy?.startsWith('run')}
+                      disabled={caseCount + inSubSuites === 0 || busy?.startsWith('run')}
                       aria-label={`Run suite ${suite.name}`}
-                      title={caseCount === 0 ? 'Add a test case first' : 'Run every test case in this suite, one after another'}
+                      title={runSuiteTitle(caseCount, inSubSuites, children.length)}
                     >
                       {busy === `run-suite:${suite.id}` ? <Spinner /> : <Play />}
                       <span className="hidden sm:inline">{busy === `run-suite:${suite.id}` ? 'Starting…' : 'Run suite'}</span>
