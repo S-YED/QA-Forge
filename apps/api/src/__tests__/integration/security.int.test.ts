@@ -116,6 +116,30 @@ describe('SEC-5 the shared demo account heals itself', () => {
       await supabase.auth.admin.updateUserById(data!.id, { password: USERS.demo.password });
     }
   });
+
+  it('CR-4: a sign-in that fails for another reason (a rate limit, an outage) does not reset the account', async () => {
+    // Resetting the password signs out every demo session, so it must only happen when the password really changed.
+    const realFetch = globalThis.fetch;
+    const reset = vi.spyOn(supabase.auth.admin, 'updateUserById');
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.includes('/auth/v1/token') && url.includes('grant_type=password')) {
+        const body = { code: 'over_request_rate_limit', error_code: 'over_request_rate_limit', message: 'Request rate limit reached' };
+        return new Response(JSON.stringify(body), {
+          status: 429,
+          headers: { 'Content-Type': 'application/json', 'x-supabase-api-version': '2024-01-01' },
+        });
+      }
+      return realFetch(input, init);
+    }) as typeof fetch;
+    try {
+      expect((await api('/auth/demo', '', 'POST')).status).toBe(500);
+      expect(reset).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = realFetch;
+      reset.mockRestore();
+    }
+  });
 });
 
 describe('DD-1 a bad request is answered as one, not as a server error', () => {
