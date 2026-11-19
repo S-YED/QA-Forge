@@ -78,6 +78,8 @@ beforeAll(async () => {
     hits.push(`${req.headers.host} ${req.url}`);
     const port = (server.address() as AddressInfo).port;
     if (req.url === '/hop') return void res.writeHead(302, { Location: `http://localhost:${port}/next` }).end();
+    if (req.url === '/hop-https') return void res.writeHead(302, { Location: `https://localhost:${port}/next` }).end();
+    if (req.url === '/dead') return void res.writeHead(302, { Location: 'http://no-such-host.invalid/' }).end();
     const body = PAGES[req.url ?? '']?.replaceAll('{PORT}', String(port));
     res.writeHead(body ? 200 : 404, { 'Content-Type': 'text/html' }).end(body ?? 'not found');
   });
@@ -285,6 +287,15 @@ describe('SSRF guard', () => {
 
     expect(hits.some((h) => h.includes('/hop'))).toBe(true); // the guard let the allowed hop through...
     expect(hits.filter((h) => h.startsWith('localhost'))).toEqual([]); // ...but nothing reached the other host
+  }, 60_000);
+
+  it('a blocked HTTPS hop is blocked like an HTTP one, and a host that does not exist is a failure of the app (CR-16)', async () => {
+    const tunnel = await runTest({ baseUrl, stepTimeoutMs: 5_000, steps: [s(1, 'navigate', { value: '/hop-https' })] });
+    expect(tunnel.status).toBe('error'); // cannot run here: no bug against the app
+    expect(tunnel.steps[0].error_message).toMatch(/^Blocked: Refusing to open localhost: .*private/);
+
+    const dead = await runTest({ baseUrl, stepTimeoutMs: 5_000, steps: [s(1, 'navigate', { value: '/dead' }), s(2, 'assert_visible', { selector: 'h1' })] });
+    expect(dead.status).toBe('failed'); // the app links somewhere that does not exist: that is the app's bug
   }, 60_000);
 });
 

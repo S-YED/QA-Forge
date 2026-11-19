@@ -1,7 +1,7 @@
 import type { Browser, BrowserContext, Locator, Page, Response } from 'playwright';
 import { TestCaseStepsSchema, TestStepStatus, type TestCaseStep } from '@qaforge/shared-types';
 import { locateTarget } from './locate.js';
-import { BLOCKED_HEADER, BlockedTargetError, assertAllowedTarget, launchGuardedBrowser } from './target-guard.js';
+import { BLOCKED_HEADER, BlockedTargetError, assertAllowedTarget, launchGuardedBrowser, refusedTunnel } from './target-guard.js';
 
 export { BlockedTargetError, assertAllowedTarget, launchGuardedBrowser } from './target-guard.js';
 export { looksLikeSelector } from './locate.js';
@@ -90,6 +90,17 @@ function throwIfBlocked(response: Response | null) {
   if (reason) throw new BlockedTargetError(`Blocked: ${reason}`);
 }
 
+/** Open `url`; a target the guard refused is a BlockedTargetError: plain HTTP by its header, HTTPS by the tunnel (CR-16). */
+async function gotoGuarded(page: Page, url: string) {
+  try {
+    throwIfBlocked(await page.goto(url, { waitUntil: 'domcontentloaded' }));
+  } catch (err) {
+    const reason = refusedTunnel(page.context().browser());
+    if (reason && /ERR_TUNNEL_CONNECTION_FAILED/.test(String(err))) throw new BlockedTargetError(`Blocked: ${reason}`);
+    throw err;
+  }
+}
+
 /** Poll until `check` is true or the timeout passes (assertions that may settle after an action). */
 async function waitUntil(page: Page, timeoutMs: number, check: () => Promise<boolean>, failure: () => Promise<string>) {
   const deadline = Date.now() + timeoutMs;
@@ -115,7 +126,7 @@ async function executeStep(
 
   switch (step.action) {
     case 'navigate':
-      throwIfBlocked(await page.goto(await resolveTarget(value, baseUrl, allowedPrivateHosts), { waitUntil: 'domcontentloaded' }));
+      await gotoGuarded(page, await resolveTarget(value, baseUrl, allowedPrivateHosts));
       return;
     case 'click':
       await (await loc()).click();
@@ -261,7 +272,7 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
     });
 
     try {
-      throwIfBlocked(await page.goto(baseUrl, { waitUntil: 'domcontentloaded' }));
+      await gotoGuarded(page, baseUrl);
     } catch (err) {
       return finish('error', `Could not open base URL ${baseUrl}: ${readableError(err)}`);
     }

@@ -58,7 +58,7 @@ export async function assertAllowedTarget(rawUrl: string, allowedPrivateHosts: r
  * Local forward proxy that checks every destination and connects to the vetted IP itself,
  * so redirects, subresources, WebSockets and DNS rebinding can't reach internal addresses.
  */
-async function startGuardProxy(allowedPrivateHosts: readonly string[]): Promise<http.Server> {
+async function startGuardProxy(allowedPrivateHosts: readonly string[], onRefusedTunnel: (reason: string) => void): Promise<http.Server> {
   const server = http.createServer(async (req, res) => {
     // Plain HTTP: the request line carries the absolute URL.
     try {
@@ -77,7 +77,9 @@ async function startGuardProxy(allowedPrivateHosts: readonly string[]): Promise<
       req.pipe(upstream);
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
-      res.writeHead(403, { [BLOCKED_HEADER]: reason, 'Content-Type': 'text/plain' }).end(reason);
+      // CR-16: only a refusal by the guard is "blocked"; a host that does not resolve is the app's problem (502).
+      if (err instanceof BlockedTargetError) res.writeHead(403, { [BLOCKED_HEADER]: reason, 'Content-Type': 'text/plain' }).end(reason);
+      else res.writeHead(502, { 'Content-Type': 'text/plain' }).end(reason);
     }
   });
   // HTTPS and WebSockets arrive as CONNECT host:port tunnels.
@@ -95,7 +97,12 @@ async function startGuardProxy(allowedPrivateHosts: readonly string[]): Promise<
       upstream.on('error', () => client.destroy());
       client.on('close', () => upstream.destroy());
     } catch (err) {
-      client.end(`HTTP/1.1 403 Forbidden\r\n${BLOCKED_HEADER}: ${err instanceof Error ? err.message : err}\r\n\r\n`);
+      const reason = err instanceof Error ? err.message : String(err);
+      // CR-16: Chromium reports a refused tunnel only as ERR_TUNNEL_CONNECTION_FAILED, so the reason is kept for the runner.
+      if (err instanceof BlockedTargetError) {
+        onRefusedTunnel(reason);
+        client.end(`HTTP/1.1 403 Forbidden\r\n${BLOCKED_HEADER}: ${reason}\r\n\r\n`);
+      } else client.end('HTTP/1.1 502 Bad Gateway\r\n\r\n');
     }
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -103,6 +110,10 @@ async function startGuardProxy(allowedPrivateHosts: readonly string[]): Promise<
 }
 
 const BROWSERS = { chromium, firefox, webkit };
+
+/** CR-16: why the guard last refused an HTTPS tunnel for this browser, if it did. */
+const refusedTunnels = new WeakMap<Browser, string>();
+export const refusedTunnel = (browser: Browser | null | undefined): string | undefined => (browser ? refusedTunnels.get(browser) : undefined);
 
 /**
  * Launch a headless browser whose traffic all goes through the guard proxy.
@@ -116,7 +127,8 @@ export async function launchGuardedBrowser(
 ): Promise<Browser> {
   if (allowedPrivateHosts.includes('*')) return BROWSERS[name].launch({ headless: true });
 
-  const proxy = await startGuardProxy(allowedPrivateHosts);
+  let launched: Browser | undefined;
+  const proxy = await startGuardProxy(allowedPrivateHosts, (reason) => launched && refusedTunnels.set(launched, reason));
   const options: LaunchOptions = {
     headless: true,
     proxy: { server: `http://127.0.0.1:${(proxy.address() as AddressInfo).port}`, bypass: '<-loopback>' },
@@ -124,6 +136,7 @@ export async function launchGuardedBrowser(
   };
   try {
     const browser = await BROWSERS[name].launch(options);
+    launched = browser;
     browser.on('disconnected', () => proxy.close());
     return browser;
   } catch (err) {
