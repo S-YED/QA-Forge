@@ -10,17 +10,24 @@ import { STOPPED, stopRuns } from './run-executor.js';
  * ponytail: a schedule firing in this instant can still start a suite run; its rows cascade away with the rest.
  */
 export async function windDown(column: 'user_id' | 'project_id', id: string): Promise<string[]> {
-  await supabase
+  // CR-14: running rows are closed too, as the Stop routes do: a run claimed but not yet in flight (the G9 window) then
+  // finds itself over and never starts its browser; those in flight are stopped below. A failed query stops the deletion
+  // (it throws) rather than letting live runs upload screenshots after their paths were listed.
+  const { data: closed, error: closeError } = await supabase
     .from('test_runs')
     .update({ status: 'error', error_message: STOPPED, completed_at: new Date().toISOString() })
     .eq(column, id)
-    .eq('status', 'pending');
-  const [{ data: running }, { data: recordings }] = await Promise.all([
-    supabase.from('test_runs').select('id').eq(column, id).eq('status', 'running'),
-    supabase.from('recorded_sessions').select('id').eq(column, id).eq('status', 'recording'),
-  ]);
+    .in('status', ['pending', 'running'])
+    .select('id');
+  if (closeError) throw closeError;
+  const { data: recordings, error: recordingsError } = await supabase
+    .from('recorded_sessions')
+    .select('id')
+    .eq(column, id)
+    .eq('status', 'recording');
+  if (recordingsError) throw recordingsError;
   await Promise.all([
-    stopRuns((running ?? []).map((r) => r.id)),
+    stopRuns((closed ?? []).map((r) => r.id)), // only the ones executing here have anything to stop
     ...(recordings ?? []).map((r) => closeRecordingSession(r.id)),
   ]);
   return screenshotsOfRuns(column, id);

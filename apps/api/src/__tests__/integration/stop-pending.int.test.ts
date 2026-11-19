@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import app from '../../app.js';
 import { supabase } from '../../config/supabase.js';
 import { createSocketServer } from '../../websocket/socket-server.js';
+import { windDown } from '../../services/wind-down.js';
 import { USERS, signIn } from './helpers.js';
 
 let server: http.Server;
@@ -63,5 +64,17 @@ describe('CR-9 Stop on a run that is not executing', () => {
     expect((await api(`/projects/${projectId}/test-runs/${run!.id}/cancel`, 'POST', {})).status).toBe(202);
     const complete = await Promise.race([ended, new Promise<null>((r) => setTimeout(() => r(null), 5_000))]);
     expect(complete).toMatchObject({ status: 'error', error_message: 'Stopped by you before it finished.' });
+  }, 30_000);
+
+  it('CR-14: deleting the project closes a run that is running but not executing here yet', async () => {
+    // The G9 window: the executor has claimed the row (running) but is not in flight; it must find the run over.
+    const { data: run } = await supabase
+      .from('test_runs')
+      .insert({ project_id: projectId, user_id: userId, test_case_id: caseId, mode: 'ai_driven', status: 'running', browser: 'chromium' })
+      .select('id')
+      .single();
+    await windDown('project_id', projectId);
+    const { data: after } = await supabase.from('test_runs').select('status, error_message').eq('id', run!.id).single();
+    expect(after).toEqual({ status: 'error', error_message: 'Stopped by you before it finished.' });
   }, 30_000);
 });
