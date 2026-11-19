@@ -27,6 +27,9 @@ const schema = z.object({
   ALLOW_PRIVATE_HOSTS: z.string().default(''),
   /** `true`: users with no AI key get the fixed local demo test cases (not AI) for apps/demo-app. */
   AI_LOCAL_DEMO: z.enum(['true', 'false']).default('false'),
+  /** DEMO-1: the hosted demo shop. Set, the demo account gets a "Demo shop" project for it with a daily suite run
+   *  (services/demo-shop.ts); unset, nothing is added. Locally: http://127.0.0.1:4100/ */
+  DEMO_SHOP_URL: z.string().url().optional(),
   /** Reverse proxies in front of the API (Railway: 1), so rate limits count the real client address and not
    *  the proxy's. Defaults to 1 in production, 0 elsewhere. Never set it higher than the real number: each
    *  extra hop trusted lets a client forge its address. */
@@ -61,5 +64,6 @@ export const env = {
   REDIS_URL: data.REDIS_URL,
   ALLOWED_PRIVATE_HOSTS: data.ALLOW_PRIVATE_HOSTS.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
   AI_LOCAL_DEMO: data.AI_LOCAL_DEMO === 'true',
+  DEMO_SHOP_URL: data.DEMO_SHOP_URL,
   TRUST_PROXY_HOPS: Number(data.TRUST_PROXY_HOPS ?? (data.NODE_ENV === 'production' ? 1 : 0)),
 } as const;

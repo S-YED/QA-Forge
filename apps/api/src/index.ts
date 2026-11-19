@@ -10,6 +10,7 @@ import { env } from './config/env.js';
 import logger from './utils/logger.js';
 import { reapInterruptedRuns, shutdownRuns } from './services/run-executor.js';
 import { startScheduler } from './services/schedules.js';
+import { ensureDemoShop } from './services/demo-shop.js';
 
 const server = http.createServer(app);
 
@@ -32,6 +33,9 @@ logger.info('🔌 Socket.io server attached');
 
 // F9: start due scheduled suite runs, checked once a minute.
 const stopScheduler = startScheduler(io);
+
+// DEMO-1: the demo account's demo shop project and its daily suite run, once DEMO_SHOP_URL is set.
+ensureDemoShop().catch((err) => logger.error({ event: 'demo:shop_failed', error: err instanceof Error ? err.message : String(err) }));
 
 // EXE-2: on deploy/stop, cancel in-flight runs so they end as `error` instead of staying `running`.
 const shutdown = async (signal: string) => {
