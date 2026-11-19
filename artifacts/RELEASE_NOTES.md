@@ -21,7 +21,8 @@ are planned for 28 to 31 December ([roadmap](../docs/DECEMBER_2026_ROADMAP.md), 
 - **Variables and secrets.** `{{NAME}}` in a step is filled in at run time; secret values never appear in steps, logs,
   bugs or exported scripts. (F4; production)
 - **Organise.** Search cases by title or step, duplicate, move between suites, reorder steps; filter runs and bugs by
-  status and date. Sub-suites appear under their parent suite. (F6, G4; production)
+  status and date. Sub-suites appear under their parent suite, and running the parent runs them too. (F6, G4;
+  production; running with sub-suites: local)
 - **Export** a case or a whole suite as a Playwright file, or a suite as a spreadsheet. (F11; production)
 
 ### Run tests
@@ -83,9 +84,10 @@ project tabs on phones (U5, U6), and landing copy that claimed Firefox and WebKi
 - **Email in production** (sign-up confirmation, password reset) goes through Supabase's built-in mail, which reaches
   only the project team's addresses, 2 messages an hour; until custom SMTP is set up, a stranger cannot finish
   sign-up (G12).
-- **The demo** has projects, suites, runs, screenshots, a bug and a recording, but no suite runs, and its seed data
-  still targets outside sites rather than the demo shop (DEMO-1).
-- **Running a parent suite** runs only its own cases; each sub-suite has its own Run button (G4, open question).
+- **The demo** in production still shows only seeded runs from June. A "Demo shop" project that is tested every
+  morning (eleven cases pass, a planted coupon bug fails) is built and verified locally, and appears once the shop is
+  online and `DEMO_SHOP_URL` is set (DEMO-1).
+- **Repeated failures** file a new bug on every run: a nightly schedule with a failing case opens a bug a night (G13).
 - **Speed**: signed-in pages take 0.5 to 2 s per API call because the API (Railway) and the database (Sydney) are far
   apart (UX-3).
 - **Address guard ceiling**: WebKit may bypass the browser-level guard for loopback addresses; production does not
@@ -101,4 +103,5 @@ project tabs on phones (U5, U6), and landing copy that claimed Firefox and WebKi
 3. Move the Railway service to the Southeast Asia region (UX-3).
 4. Rotate the keys created in June.
 5. Connect a real Slack test channel so the first real notice can be seen (F10).
-6. Decide the demo seed data (DEMO-1), and whether running a parent suite should include its sub-suites (G4).
+6. Put the demo shop online and set `DEMO_SHOP_URL` on Railway (DEMO-1). Decided on 19 November: the demo tests the
+   demo shop with a daily suite run (DEMO-1, 1A and 2A), and running a parent suite includes its sub-suites (G4).
