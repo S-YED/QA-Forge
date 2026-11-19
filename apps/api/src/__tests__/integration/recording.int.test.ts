@@ -235,13 +235,16 @@ describe('A4 recording from the workbench viewport', () => {
       try {
         await next(s, 'connect');
         s.emit('recording:join', { session_id: sessionId });
-        let started = false;
-        s.on('recording:started', () => (started = true));
         s.emit('recording:start', { session_id: sessionId });
         await new Promise((r) => setTimeout(r, ms));
         await closeRecordingSession(sessionId); // as a delete (or its project's or account's) does
-        await new Promise((r) => setTimeout(r, 5_000));
-        expect(started).toBe(false); // before: the launch went on, kept its browser and armed a 15-minute idle timer
+        await new Promise((r) => setTimeout(r, 4_000)); // any launch still under way has finished by now
+        // A browser still alive for this session answers a click with a fresh frame; a closed one cannot.
+        let frames = 0;
+        s.on('recording:frame', () => frames++);
+        s.emit('recording:input', { session_id: sessionId, kind: 'click', x: 10, y: 10 });
+        await new Promise((r) => setTimeout(r, 3_000));
+        expect(frames).toBe(0); // before: the launch went on, kept its browser and armed a 15-minute idle timer
       } finally {
         s.close();
       }
