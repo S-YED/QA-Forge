@@ -236,6 +236,8 @@ export async function runTest(options: RunTestOptions): Promise<RunResult> {
     } catch (err) {
       return finish('error', `Browser failed to launch: ${readableError(err)}`);
     }
+    // CR-3: a Stop during the launch found no browser to close; end here (finally closes it) instead of running every step.
+    if (signal?.aborted) return finish('error', 'Run cancelled');
     context = await browser.newContext({ viewport });
     context.setDefaultTimeout(stepTimeoutMs);
     context.setDefaultNavigationTimeout(navigationTimeoutMs);

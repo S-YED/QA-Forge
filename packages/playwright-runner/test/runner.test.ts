@@ -219,6 +219,22 @@ describe('runTest', () => {
     expect(result.status).toBe('error');
     expect(result.error_message).toBe('Run cancelled');
   }, 30_000);
+
+  it('ends with error when cancelled while the browser is starting (CR-3)', async () => {
+    // Chromium takes far longer than 50 ms to start, so this Stop lands mid-launch, when there is no browser to close.
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 50);
+    const steps: number[] = [];
+    const result = await runTest({
+      baseUrl,
+      signal: controller.signal,
+      steps: [s(1, 'assert_visible', { selector: 'h1' })],
+      onStepStart: (n) => void steps.push(n),
+    });
+    expect(result.status).toBe('error');
+    expect(result.error_message).toBe('Run cancelled');
+    expect(steps).toEqual([]); // no step ran after the Stop
+  }, 30_000);
 });
 
 describe('SSRF guard', () => {
