@@ -1,5 +1,7 @@
 // Zero-dependency demo shop that QA Forge tests run against locally.
 // Run: node server.mjs   (PORT env, default 4100; PORT=0 picks a free port)
+// Hosted copy (DEMO-1): vercel.json serves public/ as a static site, /login -> login.html, unknown paths -> 404.html
+// with status 404. Only this server answers /500.
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
@@ -30,7 +32,7 @@ const server = http.createServer((req, res) => {
   if (path === '/500') return send(res, 500, 'error.html');
   // Only known pages and flat asset names are served, so no path can escape public/.
   const file = PAGES[path] ?? (/^\/[\w-]+\.(css|js)$/.test(path) ? path.slice(1) : null);
-  return file ? send(res, 200, file) : send(res, 404, 'not-found.html');
+  return file ? send(res, 200, file) : send(res, 404, '404.html');
 });
 
 const port = Number(process.env.PORT ?? 4100);
