@@ -146,6 +146,28 @@ describe('F9 schedules: running what is due', () => {
     expect(await batchesOf(suiteId)).toHaveLength(0);
   });
 
+  it('records a suite run that says why when the project has no base URL, instead of skipping it silently (CR-13)', async () => {
+    const suiteId = await suiteOf('no address', [PASS, PASS]);
+    await api(schedules(`/${suiteId}`), token, 'PUT', DAILY);
+    const { data: before } = await supabase.from('projects').select('base_url').eq('id', projectId).single();
+    await supabase.from('projects').update({ base_url: null }).eq('id', projectId);
+    try {
+      await makeDue(suiteId);
+      expect(await runDueSchedules(undefined)).toBe(1);
+      const [batch] = await batchesOf(suiteId);
+      expect(batch).toBeTruthy();
+      expect((await scheduleOf(suiteId)).last_batch_id).toBe(batch.id);
+      const { data: runs } = await supabase.from('test_runs').select('status, error_message, completed_at').eq('batch_id', batch.id);
+      expect(runs).toHaveLength(2);
+      for (const run of runs!) {
+        expect(run).toMatchObject({ status: 'error', error_message: expect.stringMatching(/base URL/) });
+        expect(run.completed_at).toBeTruthy();
+      }
+    } finally {
+      await supabase.from('projects').update({ base_url: before!.base_url }).eq('id', projectId);
+    }
+  });
+
   it('skips a suite with no cases but keeps its schedule for the next slot', async () => {
     const suiteId = await suiteOf('empty', []);
     await api(schedules(`/${suiteId}`), token, 'PUT', DAILY);

@@ -28,6 +28,7 @@ export async function startSuiteRun(
   userId: string,
   projectId: string,
   suiteId: string,
+  { scheduled = false }: { scheduled?: boolean } = {},
 ): Promise<{ batchId: string; runIds: string[] }> {
   const { data: suite } = await supabase
     .from('test_suites')
@@ -38,10 +39,13 @@ export async function startSuiteRun(
   if (!suite) throw new AppError('NOT_FOUND', 404, 'Suite not found');
 
   // G6: without a base URL every case would stop at once with the same error; say so before queuing any.
-  const { data: project } = await supabase.from('projects').select('base_url').eq('id', projectId).maybeSingle();
-  if (!project?.base_url) {
-    throw new AppError('BAD_REQUEST', 400, "Set the project's base URL before running a suite: every case starts there");
-  }
+  const { data: project, error: projectError } = await supabase.from('projects').select('base_url').eq('id', projectId).maybeSingle();
+  if (projectError) throw projectError; // CR-13: a failed read is not "no base URL"
+  const noBaseUrl = "Set the project's base URL before running a suite: every case starts there";
+  if (!project?.base_url && !scheduled) throw new AppError('BAD_REQUEST', 400, noBaseUrl);
+  // CR-13: a schedule has nobody to answer, so it records the suite run with every case ended for that reason,
+  // which shows on its page and in the Slack notice, instead of skipping the slot silently.
+  const blocked = project?.base_url ? null : noBaseUrl;
 
   // G4: a parent's run includes its sub-suites (one level deep: the API refuses deeper nesting), so a green run
   // never hides cases that did not run. Order: the parent's own cases, then each sub-suite's, as the Suites tab lists them.
@@ -87,7 +91,8 @@ export async function startSuiteRun(
         test_case_id: c.id,
         batch_id: batch.id,
         mode: 'ai_driven',
-        status: 'pending',
+        status: blocked ? 'error' : 'pending',
+        ...(blocked && { error_message: blocked, completed_at: new Date().toISOString() }),
         browser: 'chromium',
         created_at: new Date(base + i).toISOString(),
       })),
@@ -99,6 +104,10 @@ export async function startSuiteRun(
   }
 
   const runIds = [...runs].sort((a, b) => a.created_at.localeCompare(b.created_at)).map((r) => r.id);
+  if (blocked) {
+    void notifySuiteRun(batch.id, projectId); // already over: nothing to execute (never throws)
+    return { batchId: batch.id, runIds };
+  }
   executeBatch(io, userId, projectId, runIds)
     // F10: once every case has finished, tell the project's Slack channel if any did not pass (never throws)
     .then(() => notifySuiteRun(batch.id, projectId))

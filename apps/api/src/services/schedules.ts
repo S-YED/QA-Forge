@@ -91,7 +91,7 @@ export async function runDueSchedules(io: Server | undefined, now = new Date()):
     if (!claimed?.length) continue; // someone else took this slot
 
     try {
-      const { batchId } = await startSuiteRun(io, schedule.user_id, schedule.project_id, schedule.suite_id);
+      const { batchId } = await startSuiteRun(io, schedule.user_id, schedule.project_id, schedule.suite_id, { scheduled: true });
       await supabase.from('suite_schedules').update({ last_batch_id: batchId }).eq('id', schedule.id);
       logger.info({ event: 'schedule:started', scheduleId: schedule.id, suiteId: schedule.suite_id, batchId });
       started++;
