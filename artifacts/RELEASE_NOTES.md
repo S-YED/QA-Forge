@@ -84,9 +84,9 @@ project tabs on phones (U5, U6), and landing copy that claimed Firefox and WebKi
 - **Email in production** (sign-up confirmation, password reset) goes through Supabase's built-in mail, which reaches
   only the project team's addresses, 2 messages an hour; until custom SMTP is set up, a stranger cannot finish
   sign-up (G12).
-- **The demo** in production still shows only seeded runs from June. A "Demo shop" project that is tested every
-  morning (eleven cases pass, a planted coupon bug fails) is built and verified locally, and appears once the shop is
-  online and `DEMO_SHOP_URL` is set (DEMO-1).
+- **The demo** stays read-only for visitors. Its "Demo shop" project is tested for real every morning against a
+  hosted demo shop (eleven cases pass, a planted coupon bug fails and files a bug); 30 days of suite runs are kept.
+  (DEMO-1; production)
 - **Repeated failures** file a new bug on every run: a nightly schedule with a failing case opens a bug a night (G13).
 - **Speed**: signed-in pages take 0.5 to 2 s per API call because the API (Railway) and the database (Sydney) are far
   apart (UX-3).
@@ -103,5 +103,5 @@ project tabs on phones (U5, U6), and landing copy that claimed Firefox and WebKi
 3. Move the Railway service to the Southeast Asia region (UX-3).
 4. Rotate the keys created in June.
 5. Connect a real Slack test channel so the first real notice can be seen (F10).
-6. Put the demo shop online and set `DEMO_SHOP_URL` on Railway (DEMO-1). Decided on 19 November: the demo tests the
+6. Done 20 November: the demo shop is online and `DEMO_SHOP_URL` is set (DEMO-1). Decided on 19 November: the demo tests the
    demo shop with a daily suite run (DEMO-1, 1A and 2A), and running a parent suite includes its sub-suites (G4).
