@@ -81,6 +81,12 @@ test('a forgotten password is reset from the emailed link, and the new one signs
   await page.goto(link);
   await expect(page).toHaveURL(/\/reset-password/);
   await page.getByLabel('New password').fill('New-Pass-456!');
+  // CR-8: like the sign-in and sign-up buttons around it, the button spans the form.
+  const [field, button] = await Promise.all([
+    page.getByLabel('New password').boundingBox(),
+    page.getByRole('button', { name: 'Set new password' }).boundingBox(),
+  ]);
+  expect(button!.width).toBeGreaterThanOrEqual(field!.width - 1);
   await page.getByRole('button', { name: 'Set new password' }).click();
   await expect(page).toHaveURL(/\/dashboard\/projects/);
 

@@ -11,7 +11,8 @@ import { Spinner } from '@/components/shared/spinner';
  * Sets the signed-in person's password (Supabase `updateUser`). Used by `/reset-password` (DD-5) and by
  * Settings, Profile (G1). Supabase's own refusal (too short, same as before, sign in again) is shown as is.
  */
-export function NewPasswordForm({ submitLabel, onDone }: { submitLabel: string; onDone: () => void }) {
+/** `fullWidth`: the button spans the form, as on the sign-in pages (CR-8, /reset-password); Settings keeps it compact. */
+export function NewPasswordForm({ submitLabel, onDone, fullWidth = false }: { submitLabel: string; onDone: () => void; fullWidth?: boolean }) {
   const [supabase] = useState(createClient);
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
@@ -52,7 +53,7 @@ export function NewPasswordForm({ submitLabel, onDone }: { submitLabel: string; 
           </p>
         )}
       </div>
-      <Button type="submit" disabled={saving || !password}>
+      <Button type="submit" disabled={saving || !password} className={fullWidth ? 'w-full' : undefined}>
         {saving && <Spinner className="text-current" />}
         {saving ? 'Saving…' : submitLabel}
       </Button>

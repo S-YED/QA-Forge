@@ -59,6 +59,7 @@ export default function ResetPasswordPage() {
       <CardContent>
         <NewPasswordForm
           submitLabel="Set new password"
+          fullWidth
           onDone={() => {
             toast.success('Password changed');
             router.push('/dashboard/projects');
