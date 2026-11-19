@@ -21,10 +21,11 @@ const router: IRouter = Router();
 router.post('/demo', demoAuthLimiter, async (_req, res, next) => {
   try {
     // Use anon key client for auth operations (service_role bypasses email confirmation)
-    const anonClient = createSupabaseClient(
-      env.SUPABASE_URL,
-      env.SUPABASE_ANON_KEY,
-    );
+    // CR-7: like config/supabase.ts, no background refresh and nothing stored: one client per visit must not keep
+    // refreshing the visitor's session on its own after the response.
+    const anonClient = createSupabaseClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
     const demo = { email: 'demo@qaforge.dev', password: 'DemoPassword123!' };
     let { data, error } = await anonClient.auth.signInWithPassword(demo);
