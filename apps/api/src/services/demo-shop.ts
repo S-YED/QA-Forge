@@ -6,6 +6,7 @@ import { localDemoTestCases } from '@qaforge/ai-engine';
 import type { GeneratedTestCase } from '@qaforge/shared-types';
 import { env } from '../config/env.js';
 import { supabase } from '../config/supabase.js';
+import { removeScreenshots, screenshotsOfRuns } from '../utils/artifacts.js';
 import logger from '../utils/logger.js';
 import type { ScheduleRule } from './schedules.js';
 
@@ -101,4 +102,41 @@ export async function ensureDemoShop(url = env.DEMO_SHOP_URL): Promise<string | 
   }
   logger.info({ event: 'demo:shop_created', projectId: project.id, url });
   return project.id;
+}
+
+/**
+ * Keep the demo's last `days` days of suite runs: older suite runs of a demo account go, with their runs, bugs and
+ * screenshots, so the daily run does not fill storage. Seeded runs are not suite runs and stay; no other account is
+ * touched. Returns how many suite runs were removed (at most 50 a call; a backlog clears over later calls).
+ */
+export async function pruneDemoHistory(now = new Date(), days = 30): Promise<number> {
+  const cutoff = new Date(now.getTime() - days * 86_400_000).toISOString();
+  const { data: demos, error: demoError } = await supabase.from('profiles').select('id').eq('is_demo', true);
+  if (demoError) throw demoError;
+  if (!demos?.length) return 0;
+
+  const { data: old, error: oldError } = await supabase
+    .from('run_batches')
+    .select('id')
+    .in('user_id', demos.map((d) => d.id))
+    .lt('created_at', cutoff)
+    .limit(50);
+  if (oldError) throw oldError;
+  for (const batch of old ?? []) {
+    const shots = await screenshotsOfRuns('batch_id', batch.id); // read before the steps cascade away
+    const { data: runs, error: runsError } = await supabase.from('test_runs').select('id').eq('batch_id', batch.id);
+    if (runsError) throw runsError;
+    const runIds = (runs ?? []).map((r) => r.id);
+    if (runIds.length) {
+      // A bug only loses its run link when the run goes, so the demo's old bugs are removed here.
+      const { error: bugsError } = await supabase.from('bugs').delete().in('test_run_id', runIds);
+      if (bugsError) throw bugsError;
+      const { error: deleteError } = await supabase.from('test_runs').delete().in('id', runIds);
+      if (deleteError) throw deleteError;
+    }
+    const { error: batchError } = await supabase.from('run_batches').delete().eq('id', batch.id);
+    if (batchError) throw batchError;
+    await removeScreenshots(shots);
+  }
+  return old?.length ?? 0;
 }

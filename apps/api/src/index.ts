@@ -10,7 +10,7 @@ import { env } from './config/env.js';
 import logger from './utils/logger.js';
 import { reapInterruptedRuns, shutdownRuns } from './services/run-executor.js';
 import { startScheduler } from './services/schedules.js';
-import { ensureDemoShop } from './services/demo-shop.js';
+import { ensureDemoShop, pruneDemoHistory } from './services/demo-shop.js';
 
 const server = http.createServer(app);
 
@@ -36,6 +36,13 @@ const stopScheduler = startScheduler(io);
 
 // DEMO-1: the demo account's demo shop project and its daily suite run, once DEMO_SHOP_URL is set.
 ensureDemoShop().catch((err) => logger.error({ event: 'demo:shop_failed', error: err instanceof Error ? err.message : String(err) }));
+// DEMO-1: the demo keeps 30 days of suite runs; older ones go with their bugs and screenshots. Checked every 6 hours.
+const pruneDemo = () =>
+  pruneDemoHistory()
+    .then((removed) => removed && logger.info({ event: 'demo:history_pruned', suiteRuns: removed }))
+    .catch((err) => logger.error({ event: 'demo:prune_failed', error: err instanceof Error ? err.message : String(err) }));
+void pruneDemo();
+setInterval(pruneDemo, 6 * 3_600_000).unref();
 
 // EXE-2: on deploy/stop, cancel in-flight runs so they end as `error` instead of staying `running`.
 const shutdown = async (signal: string) => {

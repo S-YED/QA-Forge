@@ -21,8 +21,8 @@ export async function signArtifacts(values: (string | null | undefined)[]): Prom
   return values.map((v) => (!v ? null : isArtifactPath(v) ? (signed.get(v) ?? null) : v));
 }
 
-/** Every screenshot path stored by the runs of a user or a project (G2, G10: read before the rows cascade away). */
-export async function screenshotsOfRuns(column: 'user_id' | 'project_id', id: string): Promise<string[]> {
+/** Every screenshot path stored by the runs of a user, a project or a suite run (G2, G10, DEMO-1: read before the rows go). */
+export async function screenshotsOfRuns(column: 'user_id' | 'project_id' | 'batch_id', id: string): Promise<string[]> {
   const paths: string[] = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase

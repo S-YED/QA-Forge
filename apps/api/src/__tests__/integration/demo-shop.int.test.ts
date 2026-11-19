@@ -9,9 +9,10 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { supabase } from '../../config/supabase.js';
-import { DEMO_SHOP_NAME, ensureDemoShop } from '../../services/demo-shop.js';
+import { DEMO_SHOP_NAME, ensureDemoShop, pruneDemoHistory } from '../../services/demo-shop.js';
 import { readSuiteRun, startSuiteRun } from '../../services/suite-runs.js';
-import { removeScreenshots, screenshotsOfRuns } from '../../utils/artifacts.js';
+import { ARTIFACT_BUCKET, removeScreenshots, screenshotPath, screenshotsOfRuns } from '../../utils/artifacts.js';
+import { USERS } from './helpers.js';
 
 let shop: ChildProcess;
 let shopUrl: string;
@@ -86,4 +87,55 @@ describe('DEMO-1 demo shop project', () => {
     const { count: bugs } = await supabase.from('bugs').select('id', { count: 'exact', head: true }).eq('test_run_id', failed.id);
     expect(bugs).toBe(1);
   }, 240_000);
+
+  it('keeps 30 days of demo suite runs: older ones go with their bugs and screenshots, nothing else is touched', async () => {
+    const now = new Date();
+    const daysAgo = (n: number) => new Date(now.getTime() - n * 86_400_000).toISOString();
+    const { data: bob } = await supabase.from('profiles').select('id').eq('email', USERS.bob.email).single();
+    const { data: bobProject } = await supabase.from('projects').insert({ user_id: bob!.id, name: 'demo-1 prune (bob)' }).select('id').single();
+    const bucket = () => supabase.storage.from(ARTIFACT_BUCKET);
+
+    /** A failed run `age` days old (in a suite run unless `inBatch` is false) with a step screenshot and a bug. */
+    async function failedRun(userId: string, project: string, age: number, inBatch = true) {
+      const batch = inBatch
+        ? (await supabase.from('run_batches').insert({ project_id: project, user_id: userId, created_at: daysAgo(age) }).select('id').single()).data!.id
+        : null;
+      const { data: run } = await supabase
+        .from('test_runs')
+        .insert({ project_id: project, user_id: userId, batch_id: batch, mode: 'ai_driven', status: 'failed', created_at: daysAgo(age) })
+        .select('id')
+        .single();
+      const shot = screenshotPath(run!.id, 1);
+      expect((await bucket().upload(shot, Buffer.from('png'), { contentType: 'image/png' })).error).toBeNull();
+      await supabase.from('test_steps').insert({ test_run_id: run!.id, step_number: 1, action: 'click', status: 'failed', screenshot_url: shot });
+      const { data: bug } = await supabase.from('bugs').insert({ project_id: project, test_run_id: run!.id, title: 'old failure' }).select('id').single();
+      return { batch, run: run!.id, shot, bug: bug!.id };
+    }
+    const exists = async (table: 'run_batches' | 'test_runs' | 'bugs', id: string | null) =>
+      !!id && !!(await supabase.from(table).select('id').eq('id', id).maybeSingle()).data;
+    const shotExists = async (path: string) =>
+      ((await bucket().list(path.split('/').slice(0, -1).join('/'))).data ?? []).some((f) => f.name === path.split('/').pop());
+
+    try {
+      const expired = await failedRun(demoId, projectId!, 31);
+      const recent = await failedRun(demoId, projectId!, 29);
+      const seeded = await failedRun(demoId, projectId!, 200, false); // a seeded showcase run is not a suite run
+      const bobs = await failedRun(bob!.id, bobProject!.id, 31);
+
+      expect(await pruneDemoHistory(now)).toBe(1);
+      expect(await exists('run_batches', expired.batch)).toBe(false);
+      expect(await exists('test_runs', expired.run)).toBe(false);
+      expect(await exists('bugs', expired.bug)).toBe(false);
+      expect(await shotExists(expired.shot)).toBe(false);
+      for (const kept of [recent, seeded, bobs]) {
+        expect(await exists('test_runs', kept.run)).toBe(true);
+        expect(await exists('bugs', kept.bug)).toBe(true);
+        expect(await shotExists(kept.shot)).toBe(true);
+      }
+      expect(await exists('run_batches', bobs.batch)).toBe(true);
+    } finally {
+      await removeScreenshots(await screenshotsOfRuns('project_id', bobProject!.id));
+      await supabase.from('projects').delete().eq('id', bobProject!.id);
+    }
+  }, 60_000);
 });
