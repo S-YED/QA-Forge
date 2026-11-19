@@ -268,6 +268,31 @@ describe('F1 stop a running test', () => {
     expect((await api(cancelPath, token, 'POST', {})).status).toBe(409); // already finished
   }, 60_000);
 
+  it('a failed status read just after the claim does not leave the run stuck as running (CR-5)', async () => {
+    // G9 reads the run's status once after claiming it; a database hiccup on that read must not drop the run.
+    const realFrom = supabase.from.bind(supabase);
+    let failed = false;
+    const spy = vi.spyOn(supabase, 'from').mockImplementation(((table: string) => {
+      const query = realFrom(table);
+      if (table !== 'test_runs' || failed) return query;
+      const select = query.select.bind(query) as (...a: unknown[]) => unknown;
+      return Object.assign(query, {
+        select: (...a: unknown[]) => {
+          if (a[0] !== 'status' || failed) return select(...a);
+          failed = true;
+          return { eq: () => ({ maybeSingle: async () => ({ data: null, error: { message: 'fetch failed' } }) }) };
+        },
+      });
+    }) as typeof supabase.from);
+    try {
+      const detail = await runCase([{ step_number: 1, action: 'assert_visible', instruction: 'Heading', selector: 'h1' }]);
+      expect(failed).toBe(true); // the read really failed
+      expect(detail.test_run.status).toBe('passed');
+    } finally {
+      spy.mockRestore();
+    }
+  }, 90_000);
+
   it('a Stop that closes the run just after it is picked up keeps its browser from starting (G9)', async () => {
     const caseId = await createCase([{ step_number: 1, action: 'assert_visible', instruction: 'Heading', selector: 'h1' }]);
     const { data: run, error } = await supabase
