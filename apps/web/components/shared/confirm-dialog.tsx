@@ -1,6 +1,7 @@
 'use client';
 
-import { createContext, useCallback, useContext, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   Dialog,
@@ -42,6 +43,11 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     answer.current = null;
     setOpen(false);
   }, []);
+
+  // CR-10: the provider outlives pages (it sits in the dashboard layout); a question still open when the address
+  // changes is answered "no", so it can never act for a page that is gone (e.g. delete a project after Back).
+  const pathname = usePathname();
+  useEffect(() => settle(false), [pathname, settle]);
 
   const ask = useCallback<Ask>((next) => {
     answer.current?.(false); // a second question cancels the first

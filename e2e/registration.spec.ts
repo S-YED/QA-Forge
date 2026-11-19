@@ -138,6 +138,19 @@ test('a person deletes their account in Settings after confirming, and can no lo
   await page.getByRole('button', { name: 'Delete account' }).click();
   await box.getByRole('button', { name: 'Cancel' }).click();
   await expect(box).toBeHidden();
+
+  // CR-10: a question left open when the page changes is cancelled, never answered over the next page. Reached by
+  // in-app links, so Back stays in the app (the dashboard layout, and the box with it, stays mounted).
+  await page.getByRole('link', { name: 'Projects' }).first().click();
+  await expect(page).toHaveURL(/\/dashboard\/projects$/);
+  await page.getByRole('link', { name: 'Profile' }).first().click();
+  await expect(page).toHaveURL(/\/dashboard\/settings\/profile/);
+  await page.getByRole('button', { name: 'Delete account' }).click();
+  await expect(box).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/dashboard\/projects/);
+  await expect(box).toBeHidden();
+  await page.goto('/dashboard/settings/profile');
   await expect(page).toHaveURL(/\/dashboard\/settings\/profile/);
 
   await page.getByRole('button', { name: 'Delete account' }).click();
