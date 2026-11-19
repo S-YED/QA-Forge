@@ -223,12 +223,19 @@ router.post('/:id/cancel', validate(uuidParamsSchema, 'params'), async (req, res
 
     if (!stopRun(run.id)) {
       // Not executing in this process (never started, or left behind): close it here, only if still open.
-      const { error } = await supabase
+      const { data: closed, error } = await supabase
         .from('test_runs')
         .update({ status: 'error', error_message: STOPPED, completed_at: new Date().toISOString() })
         .eq('id', run.id)
-        .in('status', ['pending', 'running']);
+        .in('status', ['pending', 'running'])
+        .select('id');
       if (error) return next(error);
+      // CR-9: nothing executes this run to report its end, so tell its page here, as the executor's finish does.
+      if (closed?.length) {
+        const room = req.app.get('io')?.to(`test:${run.id}`);
+        room?.emit('test:error', { test_run_id: run.id, message: STOPPED });
+        room?.emit('test:complete', { test_run_id: run.id, status: 'error', error_message: STOPPED });
+      }
       // G9: picked up by the executor between the check above and that update? It is in flight now: stop it.
       stopRun(run.id);
     }
