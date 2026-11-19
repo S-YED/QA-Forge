@@ -10,7 +10,7 @@ ticket is **Verified** in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 | LOW | Railway trial ends about 10 Dec 2026 or when its credit runs out (seen 11 Nov: "29 days or $4.86 left"; 20 Nov: "21 days or $4.65 left"); the API stops then unless billing is added (owner) | REL-3 |
 | LOW | Production latency: authenticated API calls took 0.5–2 s with Railway and Supabase (Sydney) far apart; on 20 Nov the Railway service shows region Southeast Asia (moved by the owner), latency not re-measured yet | UX-3 |
 | MED | A case that keeps failing files a new bug on every run, so a nightly schedule opens a bug a night (no de-duplication) | G13 |
-| MED | Code review 19 Nov, open findings: replay can overwrite a duplicated case (needs a migration), account or project deletion can miss a just-claimed run, deleting a recording mid-launch leaves Chromium running, a scheduled run without a base URL vanishes silently, blocked HTTPS redirects are misclassified, socketAuth can hang (list in IMPLEMENTATION_STATUS) | CR-12 to CR-16 |
+| MED | Code review 19 Nov, open findings: account or project deletion can miss a just-claimed run, deleting a recording mid-launch leaves Chromium running, blocked HTTPS redirects are misclassified, socketAuth can hang (list in IMPLEMENTATION_STATUS) | CR-14 to CR-16 |
 | MED | SSRF guard: WebKit may bypass the proxy for loopback (up-front URL checks still apply). Prod: keep `ALLOW_PRIVATE_HOSTS` unset | SEC-3 (ceiling, TD-8) |
 | LOW | 21 `no-explicit-any` lint warnings in `apps/api`; Next.js ESLint plugin not configured | CI-1 |
 | LOW | Test files compile into `apps/api/dist` (inert, but shipped) | P1 |
