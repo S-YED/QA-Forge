@@ -32,6 +32,8 @@ interface ActiveRecording {
 const activeRecordings = new Map<string, ActiveRecording>();
 /** Sessions whose browser is being launched, so a second start for the same session never launches another. */
 const launching = new Set<string>();
+/** CR-15: sessions closed (deleted, or their project or account) while their browser was still starting. */
+const closedWhileLaunching = new Set<string>();
 
 /**
  * A recording whose page was closed or left without pressing Stop would keep its browser open until the API restarts.
@@ -217,6 +219,8 @@ async function captureAndStreamFrame(io: Server, roomName: string, sessionId: st
 export async function closeRecordingSession(sessionId: string) {
   const active = activeRecordings.get(sessionId);
   if (!active) {
+    // CR-15: its browser is still starting: that launch closes the browser once it is up instead of recording.
+    if (launching.has(sessionId)) closedWhileLaunching.add(sessionId);
     // No browser here (the API restarted mid-recording): still end the session, keeping what it captured.
     await supabase
       .from('recorded_sessions')
@@ -347,6 +351,11 @@ export function registerRecordingHandlers(io: Server, socket: Socket) {
       const browser = await launchGuardedBrowser('chromium', env.ALLOWED_PRIVATE_HOSTS);
       const context = await browser.newContext({ viewport: VIEWPORT });
       const page = await context.newPage();
+      if (closedWhileLaunching.delete(session_id)) {
+        await browser.close().catch(() => {});
+        logger.info({ event: 'recording:closed_while_launching', session_id });
+        return;
+      }
 
       // Store in memory
       const entry: ActiveRecording = {
@@ -450,7 +459,10 @@ export function registerRecordingHandlers(io: Server, socket: Socket) {
         activeRecordings.delete(session_id);
       }
     } finally {
-      if (ownsLaunch) launching.delete(session_id);
+      if (ownsLaunch) {
+        launching.delete(session_id);
+        closedWhileLaunching.delete(session_id); // a launch that failed leaves no mark behind
+      }
     }
   });
 

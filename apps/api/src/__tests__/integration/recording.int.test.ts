@@ -13,7 +13,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import app from '../../app.js';
 import { supabase } from '../../config/supabase.js';
 import { createSocketServer } from '../../websocket/socket-server.js';
-import { recordingLimits } from '../../websocket/handlers/recording.handler.js';
+import { closeRecordingSession, recordingLimits } from '../../websocket/handlers/recording.handler.js';
 import { USERS, signIn } from './helpers.js';
 
 let server: http.Server;
@@ -225,6 +225,26 @@ describe('A4 recording from the workbench viewport', () => {
     };
     expect(saved.recorded_session.status).toBe('completed');
   }, 60_000);
+
+  it('a recording closed while its browser is still starting never goes on recording (CR-15)', async () => {
+    const created = await api(`/projects/${projectId}/recorded-sessions`, alice.token, 'POST', { name: 'closed mid-launch', base_url: `${demoUrl}/login` });
+    const sessionId = ((await created.json()) as { recorded_session: { id: string } }).recorded_session.id;
+    const s = open(alice.token);
+    try {
+      await next(s, 'connect');
+      s.emit('recording:join', { session_id: sessionId });
+      let started = false;
+      s.on('recording:started', () => (started = true));
+      s.emit('recording:start', { session_id: sessionId });
+      // As a delete (or its project's or account's) does: the session lookup is done, Chromium is still starting.
+      await new Promise((r) => setTimeout(r, 100));
+      await closeRecordingSession(sessionId);
+      await new Promise((r) => setTimeout(r, 5_000));
+      expect(started).toBe(false); // before: the launch finished, kept its browser and armed a 15-minute idle timer
+    } finally {
+      s.close();
+    }
+  }, 30_000);
 
   it('lets a reloaded page or reconnected socket watch the running recording', async () => {
     const created = await api(`/projects/${projectId}/recorded-sessions`, alice.token, 'POST', { name: 'reload rec', base_url: `${demoUrl}/login` });
