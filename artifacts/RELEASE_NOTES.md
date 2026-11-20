@@ -34,8 +34,8 @@ are planned for 28 to 31 December ([roadmap](../docs/DECEMBER_2026_ROADMAP.md), 
 - **Schedule** a suite daily or weekly. (F9; production)
 - **Run from CI** (for example GitHub Actions) with a project token that is shown once and can be deleted. (F8;
   production)
-- **Slack notice** when a suite run ends with a failure. (F10; settings verified in production, sending tested with
-  Slack replaced; a message arriving in a real Slack channel has not been seen yet, see below)
+- **Slack notice** when a suite run ends with a failure: coming soon. It is built and tested with Slack replaced, and
+  shows as "Coming soon" until a message has reached a real Slack channel. (F10; owner's call, 20 November)
 - A live run or recording page that loses its connection comes back with the current sign-in. (G7; production)
 
 ### See results
@@ -76,14 +76,23 @@ cases (G6), duplicate replay cases (G8), a Stop race (G9), screenshots left behi
 panel without padding, "1 steps" and similar counts, an Integrations page that called live features "planned", hidden
 project tabs on phones (U5, U6), and landing copy that claimed Firefox and WebKit runs (U7). U5 to U7 are verified in production (U7 for the landing page; the demo part waits for DEMO-1).
 
+The code review of 19 November found 15 more; 14 are fixed, tested and in production (CR-3 to CR-16): a run stopped
+while its browser was starting, a sign-in repair that ran on any sign-in error, a failed database read mid-run that
+abandoned the run, bug steps shown as raw JSON, a narrow new-password form, a stopped run whose live page kept waiting,
+a confirm box that stayed open after leaving the page and lost the focus, replays found by description rather than a
+link (migration 32), a scheduled run of a project with no address, a shutdown that left waiting runs open, a recording
+closed during start-up that kept recording, and HTTPS hops to private addresses reported as test failures. The
+end-to-end pass of 20 November found one more: a hovered primary button's label fell below AA contrast (A11Y-1; local).
+
 ## Known limitations
 
 - **Chromium only.** Runs and recordings use Chromium; the API refuses any other browser (DD-3 and G11; production).
-- **Slack**: a real message in a real channel has not been seen yet; the Integrations page keeps "Soon" until it has
-  (F10).
-- **Email in production** (sign-up confirmation, password reset) goes through Supabase's built-in mail, which reaches
-  only the project team's addresses, 2 messages an hour; until custom SMTP is set up, a stranger cannot finish
-  sign-up (G12).
+- **Slack** notices show as "Coming soon" until a real message has reached a real channel (F10).
+- **Email in production** (sign-up confirmation, password reset) goes through Supabase's built-in mail, at most 2
+  messages an hour. The owner has seen sign-up work for any address and accepts the limit for demoing the prototype;
+  custom SMTP comes before wider use (G12).
+- **AI generation in production needs the user's own AI key.** Without one, AI generate says to add a key in Settings.
+  The labelled local demo drafts (no AI) are a local-development switch, `AI_LOCAL_DEMO`, which is off in production.
 - **The demo** stays read-only for visitors. Its "Demo shop" project is tested for real every morning against a
   hosted demo shop (eleven cases pass, a planted coupon bug fails and files a bug); 30 days of suite runs are kept.
   (DEMO-1; production)
@@ -92,16 +101,20 @@ project tabs on phones (U5, U6), and landing copy that claimed Firefox and WebKi
   apart (UX-3).
 - **Address guard ceiling**: WebKit may bypass the browser-level guard for loopback addresses; production does not
   install WebKit, and the up-front checks still apply (SEC-3, TD-8).
+- **A failed session read** makes a live page wait 45 s before it says so (CR-17, the last open review finding).
 - Development only: rare local test flakes (QA-2), 21 lint warnings (CI-1), test files compiled into `apps/api/dist`
   (P1), a Windows path-length limit for very deep clone paths (REL-1).
 
 ## Before the release (owner)
 
-1. Set up custom SMTP in Supabase Auth (an email provider and a sending domain), then sign up and reset a password with
-   an address outside the team (G12). The reset redirect URL is allowed since 19 November (DD-5).
+1. Before wider use, not needed for the prototype demo (owner, 20 November): set up custom SMTP in Supabase Auth (an
+   email provider and a sending domain) to lift the 2-an-hour email limit (G12). The reset redirect URL is allowed
+   since 19 November (DD-5).
 2. Add billing to Railway before the trial ends, about 10 December (REL-3).
-3. Move the Railway service to the Southeast Asia region (UX-3).
-4. Rotate the keys created in June.
-5. Connect a real Slack test channel so the first real notice can be seen (F10).
+3. Done 20 November: the Railway service runs in Southeast Asia. Signed-in calls still take about 1 s because the
+   database is in Sydney (UX-3).
+4. Rotate the keys created in June (later, owner's call 20 November).
+5. Connect a real Slack test channel, build the web app with `NEXT_PUBLIC_SLACK_NOTICES=on`, and see the first real
+   notice; then set it in Vercel to switch Slack on for everyone (F10).
 6. Done 20 November: the demo shop is online and `DEMO_SHOP_URL` is set (DEMO-1). Decided on 19 November: the demo tests the
    demo shop with a daily suite run (DEMO-1, 1A and 2A), and running a parent suite includes its sub-suites (G4).
