@@ -181,14 +181,48 @@ describe('DD-2 profile edits', () => {
 describe('CR-2 one sign-in check per request', () => {
   it('checks the token once for a route nested under /projects', async () => {
     await withBobProject('auth-once', async (projectId, token) => {
-      const getUser = vi.spyOn(supabase.auth, 'getUser');
+      const getClaims = vi.spyOn(supabase.auth, 'getClaims');
       try {
         expect((await api(`/projects/${projectId}/test-suites`, token)).status).toBe(200);
-        expect(getUser).toHaveBeenCalledTimes(1);
+        expect(getClaims).toHaveBeenCalledTimes(1);
       } finally {
-        getUser.mockRestore();
+        getClaims.mockRestore();
       }
     });
+  });
+});
+
+describe('PERF-1 sign-in checked on this server', () => {
+  it('answers signed-in requests without asking Supabase Auth, and reads the profile at most once a minute', async () => {
+    await withBobProject('perf-1', async (projectId, token) => {
+      const getUser = vi.spyOn(supabase.auth, 'getUser');
+      const realFrom = supabase.from.bind(supabase);
+      let profileReads = 0;
+      const from = vi.spyOn(supabase, 'from').mockImplementation(((table: string) => {
+        if (table === 'profiles') profileReads++;
+        return realFrom(table);
+      }) as typeof supabase.from);
+      try {
+        for (let i = 0; i < 3; i++) expect((await api(`/projects/${projectId}/test-suites`, token)).status).toBe(200);
+        expect(getUser).not.toHaveBeenCalled(); // the token is checked against the published signing keys
+        expect(profileReads).toBeLessThanOrEqual(1); // none when an earlier request already kept it
+      } finally {
+        getUser.mockRestore();
+        from.mockRestore();
+      }
+    });
+  });
+
+  it('still refuses a token whose signature does not match, and keys that are not a user', async () => {
+    const bob = await signIn(USERS.bob);
+    const alice = await signIn(USERS.alice);
+    const [head, body, sig] = bob.token.split('.');
+    const claims = JSON.parse(Buffer.from(body, 'base64url').toString());
+    const forged = [head, Buffer.from(JSON.stringify({ ...claims, sub: alice.id })).toString('base64url'), sig].join('.');
+    expect((await api('/projects', forged)).status).toBe(401);
+    expect((await api('/projects', `${bob.token}x`)).status).toBe(401);
+    expect((await api('/projects', ANON_KEY)).status).toBe(401);
+    expect((await api('/projects', bob.token)).status).toBe(200);
   });
 });
 

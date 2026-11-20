@@ -1,7 +1,7 @@
 import { Router, type IRouter } from 'express';
 import { z } from 'zod';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-import { authenticate } from '../middleware/auth.middleware.js';
+import { authenticate, forgetProfile } from '../middleware/auth.middleware.js';
 import { demoAuthLimiter } from '../middleware/rate-limiter.js';
 import { httpUrl, validate } from '../middleware/validation.js';
 import { demoGuard } from '../middleware/demo-guard.js';
@@ -135,6 +135,7 @@ router.delete('/me', authenticate, demoGuard, async (req, res, next) => {
       logger.error({ event: 'account:delete_failed', userId, error: error.message });
       return next(new AppError('INTERNAL_ERROR', 500, 'Could not delete your account. Try again.'));
     }
+    forgetProfile(userId); // PERF-1: its token still verifies until it expires; without a profile it opens nothing
     await removeScreenshots(screenshots);
     logger.info({ event: 'account:deleted', userId, screenshots: screenshots.length });
     res.status(204).end();
