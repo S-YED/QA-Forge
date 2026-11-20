@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="88" height="88" viewBox="0 0 88 88" role="img" aria-label="QA Forge">
+  <rect width="88" height="88" rx="20" fill="#007578"/>
+  <g transform="translate(18.5 18.5) scale(2.125)" fill="none" stroke="#fcfcfc" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 12a9 9 0 1 1-5.6-8.33"/>
+    <path d="m8.5 12 2.5 2.5L21 5"/>
+  </g>
+</svg>
