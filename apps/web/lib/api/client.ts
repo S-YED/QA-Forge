@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { sendSocketToken } from '@/lib/socket-token';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
@@ -36,9 +37,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
  * current token (refreshed by Supabase), not the one the page opened with, which expires after an hour.
  */
 export function socketAuth(cb: (data: { token?: string }) => void): void {
-  void createClient()
-    .auth.getSession()
-    .then(({ data }) => cb({ token: data.session?.access_token }));
+  sendSocketToken(createClient().auth.getSession(), cb);
 }
 
 /**
