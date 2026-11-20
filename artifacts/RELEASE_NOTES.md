@@ -76,13 +76,14 @@ cases (G6), duplicate replay cases (G8), a Stop race (G9), screenshots left behi
 panel without padding, "1 steps" and similar counts, an Integrations page that called live features "planned", hidden
 project tabs on phones (U5, U6), and landing copy that claimed Firefox and WebKit runs (U7). U5 to U7 are verified in production (U7 for the landing page; the demo part waits for DEMO-1).
 
-The code review of 19 November found 15 more; 14 are fixed, tested and in production (CR-3 to CR-16): a run stopped
+The code review of 19 November found 15 more, all fixed and tested (CR-3 to CR-17, all in production): a run stopped
 while its browser was starting, a sign-in repair that ran on any sign-in error, a failed database read mid-run that
 abandoned the run, bug steps shown as raw JSON, a narrow new-password form, a stopped run whose live page kept waiting,
 a confirm box that stayed open after leaving the page and lost the focus, replays found by description rather than a
 link (migration 32), a scheduled run of a project with no address, a shutdown that left waiting runs open, a recording
-closed during start-up that kept recording, and HTTPS hops to private addresses reported as test failures. The
-end-to-end pass of 20 November found one more: a hovered primary button's label fell below AA contrast (A11Y-1; local).
+closed during start-up that kept recording, HTTPS hops to private addresses reported as test failures, and a live page
+that waited 45 s when the session could not be read (CR-17). The
+end-to-end pass of 20 November found one more: a hovered primary button's label fell below AA contrast (A11Y-1; production).
 
 ## Known limitations
 
@@ -101,7 +102,6 @@ end-to-end pass of 20 November found one more: a hovered primary button's label 
   apart (UX-3).
 - **Address guard ceiling**: WebKit may bypass the browser-level guard for loopback addresses; production does not
   install WebKit, and the up-front checks still apply (SEC-3, TD-8).
-- **A failed session read** makes a live page wait 45 s before it says so (CR-17, the last open review finding).
 - Development only: rare local test flakes (QA-2), 21 lint warnings (CI-1), test files compiled into `apps/api/dist`
   (P1), a Windows path-length limit for very deep clone paths (REL-1).
 
