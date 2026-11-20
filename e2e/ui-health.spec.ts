@@ -64,7 +64,15 @@ for (const [size, viewport] of Object.entries(VIEWPORTS)) {
       problems.length = 0; // requests cut off by the redirect after sign-in are not page faults
       await check(page, 'projects', problems);
 
-      await page.getByRole('button', { name: 'New project' }).click();
+      // A11Y-1: a primary button under the pointer, which a page scan never sees. Its hover used to lighten the
+      // teal toward white, leaving the white text at 4.45:1 in light mode.
+      const primary = page.getByRole('button', { name: 'New project' });
+      await primary.hover();
+      await primary.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+      const hovered = await new AxeBuilder({ page }).withRules(['color-contrast']).analyze();
+      expect.soft(hovered.violations.flatMap((v) => v.nodes.map((n) => `${n.target.join(' ')} | ${n.failureSummary?.split('\n')[1]?.trim()}`)), 'hovered primary button: contrast').toEqual([]);
+
+      await primary.click();
       await check(page, 'new project dialog', problems);
       await page.keyboard.press('Escape');
 

@@ -30,7 +30,7 @@ const config: Config = {
         ring: c('--ring'),
         background: c('--background'),
         foreground: c('--foreground'),
-        primary: { DEFAULT: c('--primary'), foreground: c('--primary-foreground') },
+        primary: { DEFAULT: c('--primary'), foreground: c('--primary-foreground'), hover: c('--primary-hover') },
         secondary: { DEFAULT: c('--secondary'), foreground: c('--secondary-foreground') },
         destructive: { DEFAULT: c('--destructive'), foreground: c('--destructive-foreground') },
         success: { DEFAULT: c('--success'), foreground: c('--success-foreground') },
