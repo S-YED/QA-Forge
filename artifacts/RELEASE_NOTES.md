@@ -1,12 +1,11 @@
 # QA Forge release notes
 
-## v1.0, December 2026 (draft of 18 November 2026)
+## v1.0.0, 20 November 2026
 
-This draft lists what the December release contains today. Every item is verified, and where it was verified is in
-brackets: **production** (checked on https://qa-forge-gamma.vercel.app), **CI** (both CI runs green and live in
-production, but not exercised there), or **local** (local build and full test suites only). The evidence for each
-ticket is in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). The final pass, the tag and a refresh of these notes
-are planned for 28 to 31 December ([roadmap](../docs/DECEMBER_2026_ROADMAP.md), phase 8).
+The first release. Every item is verified, and where it was verified is in brackets: **production** (checked on
+https://qa-forge-gamma.vercel.app), **CI** (both CI runs green and live in production, but not exercised there), or
+**local** (local build and full test suites only). The evidence for each ticket is in
+[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). QA Forge is open source under the AGPL-3.0 licence.
 
 ### Write tests
 
@@ -46,6 +45,8 @@ are planned for 28 to 31 December ([roadmap](../docs/DECEMBER_2026_ROADMAP.md), 
   screenshot, and the auto-filed bug carries the same. (F7; production)
 - **Bugs**: each bug opens on its own with its evidence and a link to the run that found it; bugs can be filed by hand.
   A step blocked by the address guard ends the run as an error and files no bug. (G5, G6; production)
+- **One bug per failing case**: a case that keeps failing adds to its open bug, which counts the failures and points
+  at the latest failing run; once the bug is resolved, the next failure files a new one. (G13; production)
 
 ### Accounts
 
@@ -64,6 +65,8 @@ are planned for 28 to 31 December ([roadmap](../docs/DECEMBER_2026_ROADMAP.md), 
 - API keys and secret variables are encrypted with AES-256-GCM; plaintext keys are never returned or logged. (local)
 - Row-Level Security on every table, checked by the cross-user and RLS test suites. (SEC-1, SEC-2; local)
 - Rate limits count the real visitor behind Railway's proxies. (SEC-4; production)
+- Sign-in tokens are checked on the API's own server against Supabase's signing keys, which made signed-in calls
+  about 0.1 to 0.4 s faster; forged and tampered tokens are refused. (PERF-1; production)
 - Deleting a project or an account stops its runs and removes its screenshots. (G10, G2; CI)
 
 ### Fixed since the 14 November plan
@@ -97,24 +100,18 @@ end-to-end pass of 20 November found one more: a hovered primary button's label 
 - **The demo** stays read-only for visitors. Its "Demo shop" project is tested for real every morning against a
   hosted demo shop (eleven cases pass, a planted coupon bug fails and files a bug); 30 days of suite runs are kept.
   (DEMO-1; production)
-- **Repeated failures** file a new bug on every run: a nightly schedule with a failing case opens a bug a night (G13).
-- **Speed**: signed-in pages take 0.5 to 2 s per API call because the API (Railway) and the database (Sydney) are far
-  apart (UX-3).
+- **Speed**: a signed-in API call takes about 0.4 to 0.75 s, mostly database round trips between the API (Railway,
+  Southeast Asia) and the database (Sydney) (UX-3).
 - **Address guard ceiling**: WebKit may bypass the browser-level guard for loopback addresses; production does not
   install WebKit, and the up-front checks still apply (SEC-3, TD-8).
 - Development only: rare local test flakes (QA-2), 21 lint warnings (CI-1), test files compiled into `apps/api/dist`
   (P1), a Windows path-length limit for very deep clone paths (REL-1).
 
-## Before the release (owner)
+## Owner steps after the release
 
 1. Before wider use, not needed for the prototype demo (owner, 20 November): set up custom SMTP in Supabase Auth (an
-   email provider and a sending domain) to lift the 2-an-hour email limit (G12). The reset redirect URL is allowed
-   since 19 November (DD-5).
+   email provider and a sending domain) to lift the 2-an-hour email limit (G12).
 2. Add billing to Railway before the trial ends, about 10 December (REL-3).
-3. Done 20 November: the Railway service runs in Southeast Asia. Signed-in calls still take about 1 s because the
-   database is in Sydney (UX-3).
-4. Rotate the keys created in June (later, owner's call 20 November).
-5. Connect a real Slack test channel, build the web app with `NEXT_PUBLIC_SLACK_NOTICES=on`, and see the first real
+3. Rotate the keys created in June (later, owner's call 20 November).
+4. Connect a real Slack test channel, build the web app with `NEXT_PUBLIC_SLACK_NOTICES=on`, and see the first real
    notice; then set it in Vercel to switch Slack on for everyone (F10).
-6. Done 20 November: the demo shop is online and `DEMO_SHOP_URL` is set (DEMO-1). Decided on 19 November: the demo tests the
-   demo shop with a daily suite run (DEMO-1, 1A and 2A), and running a parent suite includes its sub-suites (G4).
