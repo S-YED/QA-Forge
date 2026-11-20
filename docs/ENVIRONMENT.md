@@ -27,6 +27,7 @@ AI provider keys are **not** env vars. Each user adds them in Settings → API K
 | `NEXT_PUBLIC_SUPABASE_URL` | yes | Same as `SUPABASE_URL` |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | yes | Public (publishable/anon) key. Never the secret key: `NEXT_PUBLIC_` values reach the browser |
 | `NEXT_PUBLIC_API_URL` | default `http://localhost:4000` | REST and socket.io base URL (no separate WS var) |
+| `NEXT_PUBLIC_SLACK_NOTICES` | default off | `on` shows the Slack notice settings on the Automation tab. Off ("Coming soon") until a notice has reached a real Slack channel. Read at build time |
 
 Template: `apps/web/.env.example`. A test keeps it equal to the `NEXT_PUBLIC_` variables the web code reads.
 The root `.env.example` only points to the two per-app templates.

@@ -420,8 +420,21 @@ test('a suite can be scheduled, paused and unscheduled', async ({ page }) => {
   await expect(page.getByRole('button', { name: `Schedule ${suite}`, exact: true })).toBeVisible();
 });
 
+// Same switch as the web build (slack-notifications.tsx): off until a real Slack channel has received a notice.
+const slackOn = process.env.NEXT_PUBLIC_SLACK_NOTICES === 'on';
+
+test('Slack notices show as coming soon, with nothing to fill in', async ({ page }) => {
+  test.skip(slackOn, 'the build has Slack switched on');
+  await page.goto(projectUrl);
+  await page.getByRole('tab', { name: /Automation/ }).click();
+  await expect(page.getByText('Slack notice on failure')).toBeVisible();
+  await expect(page.getByText('Coming soon', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Slack incoming-webhook address')).toHaveCount(0);
+});
+
 // Last: it renames the suite the tests above open by name.
 test('a Slack address can be saved without ever being shown again, and removed', async ({ page }) => {
+  test.skip(!slackOn, 'Slack is "Coming soon" until tested in a real channel');
   // F10. A made-up address: it is only stored here, no message is sent.
   const address = 'https://hooks.slack.com/services/T000FAKE/B000FAKE/e2e-synthetic-address-Zk4q';
   await page.goto(projectUrl);

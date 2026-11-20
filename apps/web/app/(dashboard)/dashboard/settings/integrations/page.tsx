@@ -13,7 +13,7 @@ export default function IntegrationsPage() {
       <EmptyState
         icon={Plug}
         title="Set up on each project"
-        description="Slack notices when a suite run fails, and tokens that let a build such as GitHub Actions run your suites, are under Automation on each project page. Filing bugs into Jira or GitHub is not available yet."
+        description="Tokens that let a build such as GitHub Actions run your suites are under Automation on each project page. Slack notices when a suite run fails are coming soon. Filing bugs into Jira or GitHub is not available yet."
       />
     </div>
   );

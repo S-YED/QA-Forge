@@ -20,8 +20,28 @@ interface NotificationSettings {
 
 const PREFIX = 'https://hooks.slack.com/services/';
 
-/** F10: post to a Slack channel when a suite run of this project ends with failures. The address is write-only. */
+// ponytail: owner's call (20 Nov): Slack stays "Coming soon" until a notice has reached a real channel.
+// Build the web app with NEXT_PUBLIC_SLACK_NOTICES=on to show the settings and test it.
+const SLACK_ON = process.env.NEXT_PUBLIC_SLACK_NOTICES === 'on';
+
 export function SlackNotifications({ projectId }: { projectId: string }) {
+  if (SLACK_ON) return <SlackSettings projectId={projectId} />;
+  return (
+    <section className="space-y-1">
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-foreground">Slack notice on failure</h3>
+        <Badge variant="secondary">Coming soon</Badge>
+      </div>
+      <p className="max-w-2xl text-sm text-muted-foreground">
+        QA Forge will post to a Slack channel when a suite run ends with a failed test case. It is switched on once it
+        has been tested with a real Slack workspace.
+      </p>
+    </section>
+  );
+}
+
+/** F10: post to a Slack channel when a suite run of this project ends with failures. The address is write-only. */
+function SlackSettings({ projectId }: { projectId: string }) {
   const ask = useConfirm();
   const isDemo = useDemoMode();
   const path = `/api/projects/${projectId}/notifications`;
