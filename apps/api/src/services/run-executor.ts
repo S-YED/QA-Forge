@@ -6,6 +6,7 @@ import logger from '../utils/logger.js';
 import { ARTIFACT_BUCKET, screenshotPath, signArtifacts } from '../utils/artifacts.js';
 import { acquireSlot, releaseSlot } from '../middleware/concurrency-limiter.js';
 import { loadVariables, maskSecrets, resolveSteps, usesVariables } from './run-variables.js';
+import { isNotMigrated } from './suite-runs.js';
 
 const INTERRUPTED = 'Interrupted: the API stopped while this run was in progress. Start it again.';
 
@@ -82,6 +83,25 @@ export async function executeBatch(io: Server | undefined, userId: string, proje
       logger.error({ event: 'run:batch_item_failed', testRunId: test_run_id, error: err instanceof Error ? err.message : String(err) }),
     );
   }
+}
+
+/**
+ * G13: the case's bug that is still open (or known as won't fix), which a repeat failure joins. Null when there is
+ * none, and before migration 33 (no `occurrences` column), so a failure then files a new bug as it always did.
+ */
+async function openBugOf(testCaseId: string): Promise<{ id: string; occurrences: number } | null> {
+  // ponytail: read then write, so two failures of one case finishing in the same instant can both file or both count
+  // once; runs of one case are sequential in a suite run. An atomic RPC if that ever matters.
+  const { data, error } = await supabase
+    .from('bugs')
+    .select('id, occurrences, test_runs!inner(test_case_id)')
+    .eq('test_runs.test_case_id', testCaseId)
+    .in('status', ['open', 'in_progress', 'wont_fix'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error && !isNotMigrated(error)) logger.warn({ event: 'run:open_bug_lookup_failed', testCaseId, error: error.message });
+  return error || !data ? null : { id: data.id, occurrences: data.occurrences };
 }
 
 export interface ExecuteRunPayload {
@@ -297,41 +317,52 @@ export async function executeTestOrchestration(
       const failedStep = result.steps.find((s) => s.status === 'failed');
       const shot = failedStep && screenshotPaths.get(failedStep.step_number);
       const now = new Date().toISOString();
-      const { data: bug, error: bugError } = await supabase
-        .from('bugs')
-        .insert({
-          project_id,
-          test_run_id,
-          title: failedStep
-            ? `Test failure at step ${failedStep.step_number}: ${failedStep.instruction.substring(0, 100)}`
-            : `Test run ${test_run_id} failed`,
-          description: [
-            errorMessage ?? 'Test run failed',
-            // F7: the evidence a developer asks for first, so the bug stands on its own.
-            ...((ev) =>
-              ev
-                ? [
-                    `Page address: ${ev.url}`,
-                    ...(ev.console.length ? [`Console errors:\n${ev.console.map((l) => `- ${l}`).join('\n')}`] : []),
-                    ...(ev.requests.length ? [`Failed requests:\n${ev.requests.map((l) => `- ${l}`).join('\n')}`] : []),
-                  ]
-                : [])(evidenceOf(failedStep)),
-          ].join('\n\n'),
-          actual_behavior: mask(failedStep?.error_message) ?? errorMessage ?? 'Unknown failure',
-          severity: 'medium',
-          status: 'open',
-          screenshot_urls: shot ? [shot] : [],
-          browser: claimed.browser ?? 'chromium',
-          created_at: now,
-          updated_at: now,
-        })
-        .select('id, title')
-        .single();
+      // G13: a case that keeps failing adds to its open bug (count, latest run and screenshot) instead of filing a
+      // new one each run. The bug's own text is left alone: people edit it.
+      const repeat = claimed.test_case_id ? await openBugOf(claimed.test_case_id) : null;
+      const { data: bug, error: bugError } = repeat
+        ? await supabase
+            .from('bugs')
+            .update({ test_run_id, occurrences: repeat.occurrences + 1, ...(shot && { screenshot_urls: [shot] }), updated_at: now })
+            .eq('id', repeat.id)
+            .select('id, title, occurrences')
+            .single()
+        : await supabase
+            .from('bugs')
+            .insert({
+              project_id,
+              test_run_id,
+              title: failedStep
+                ? `Test failure at step ${failedStep.step_number}: ${failedStep.instruction.substring(0, 100)}`
+                : `Test run ${test_run_id} failed`,
+              description: [
+                errorMessage ?? 'Test run failed',
+                // F7: the evidence a developer asks for first, so the bug stands on its own.
+                ...((ev) =>
+                  ev
+                    ? [
+                        `Page address: ${ev.url}`,
+                        ...(ev.console.length ? [`Console errors:\n${ev.console.map((l) => `- ${l}`).join('\n')}`] : []),
+                        ...(ev.requests.length ? [`Failed requests:\n${ev.requests.map((l) => `- ${l}`).join('\n')}`] : []),
+                      ]
+                    : [])(evidenceOf(failedStep)),
+              ].join('\n\n'),
+              actual_behavior: mask(failedStep?.error_message) ?? errorMessage ?? 'Unknown failure',
+              severity: 'medium',
+              status: 'open',
+              screenshot_urls: shot ? [shot] : [],
+              browser: claimed.browser ?? 'chromium',
+              created_at: now,
+              updated_at: now,
+            })
+            .select('id, title')
+            .single();
       if (bugError || !bug) {
         logger.error({ event: 'run:bug_insert_failed', testRunId: test_run_id, error: bugError?.message });
         errorMessage = `${errorMessage ?? 'Test failed'} (bug could not be filed: ${bugError?.message ?? 'unknown'})`;
       } else {
-        room?.emit('test:bug_created', { test_run_id, bug_id: bug.id, bug_title: bug.title });
+        if (repeat) logger.info({ event: 'run:bug_repeat', testRunId: test_run_id, bugId: bug.id, occurrences: repeat.occurrences + 1 });
+        room?.emit('test:bug_created', { test_run_id, bug_id: bug.id, bug_title: bug.title, ...(repeat && { occurrences: repeat.occurrences + 1 }) });
       }
     }
 

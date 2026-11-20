@@ -22,6 +22,7 @@ export interface ProjectBug {
   severity: string;
   status: string;
   test_run_id: string | null;
+  occurrences?: number;
   created_at: string;
 }
 
@@ -129,6 +130,9 @@ export function TestBugsTab({ projectId, bugs, totalCount, onRefresh, onLoadMore
               <>
                 <SeverityBadge severity={bug.severity} />
                 <p className="min-w-0 truncate text-sm font-medium">{bug.title}</p>
+                {(bug.occurrences ?? 1) > 1 && (
+                  <span className="shrink-0 text-xs text-muted-foreground">failed {bug.occurrences} times</span>
+                )}
                 <span className="ml-auto hidden shrink-0 text-xs text-muted-foreground sm:inline">
                   {new Date(bug.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </span>

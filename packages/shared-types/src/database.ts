@@ -128,6 +128,8 @@ export interface Bug {
   assigned_to?: string | null;
   external_id?: string | null;
   external_url?: string | null;
+  /** G13: failed runs of its case counted here instead of a new bug each time (migration 33; absent before it). */
+  occurrences?: number;
   created_at: string;
   updated_at: string;
 }

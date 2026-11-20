@@ -562,6 +562,8 @@ test('cases can be searched, duplicated, reordered and moved, and runs and bugs 
   await expect(page.getByText('No bugs match these filters.')).toBeVisible();
   await page.getByLabel('Search bugs').fill('test failure');
   await expect(page.getByRole('tabpanel').locator('li').first()).toBeVisible();
+  // G13: the planted coupon bug failed on its own and again in the suite runs: one bug that counts, not one per run.
+  await expect(page.getByRole('tabpanel').getByText(/^failed \d+ times$/).first()).toBeVisible();
 });
 
 test('the case editor keeps up with the keyboard and asks before losing changes', async ({ page }) => {
@@ -725,7 +727,9 @@ test('a bug opens on its own with its evidence, and one can be filed by hand', a
   expect(headingBox!.x - panelBox!.x).toBeGreaterThanOrEqual(16);
   await expect(sheet.getByText(/\$108\.00/).first()).toBeVisible();
   await expect(sheet.getByRole('img', { name: /The page when/ })).toBeVisible();
-  await sheet.getByRole('link', { name: 'Open the run that found it' }).click();
+  // G13: the coupon case failed on its own and in the suite runs, so this one bug counts them and leads to the latest.
+  await expect(sheet.getByText(/failed \d+ times, last /)).toBeVisible();
+  await sheet.getByRole('link', { name: 'Open the latest failing run' }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]{36}$/);
 
   // Last test of the file: a bug filed by hand does not disturb the bug filters checked above.

@@ -349,12 +349,18 @@ export function RunDetailClient({ projectId, runId }: { projectId: string; runId
       },
     );
 
-    socket.on('test:bug_created', (data: { bug_id: string; bug_title: string }) => {
+    socket.on('test:bug_created', (data: { bug_id: string; bug_title: string; occurrences?: number }) => {
       setBugs((prev) => [
-        ...prev,
+        ...prev.filter((b) => b.id !== data.bug_id),
         { id: data.bug_id, title: data.bug_title, severity: 'medium', status: 'open' },
       ]);
-      addTerminalLine(`Bug created: ${data.bug_title}`, 'error');
+      // G13: a case that keeps failing adds to its open bug rather than filing another.
+      addTerminalLine(
+        data.occurrences
+          ? `Failed again: added to the open bug "${data.bug_title}" (${data.occurrences} failures)`
+          : `Bug created: ${data.bug_title}`,
+        'error',
+      );
     });
 
     // The executor always follows test:error with test:complete, which settles the run.

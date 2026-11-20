@@ -369,3 +369,63 @@ describe('F1 stop a running test', () => {
     }
   }, 60_000);
 });
+
+describe('G13 a case that keeps failing adds to its open bug', () => {
+  const FAILING = [{ step_number: 1, action: 'assert_text', instruction: 'Wrong heading', selector: 'h1', value: 'Goodbye' }];
+  const run = async (caseId: string) => {
+    const res = await api(`/projects/${projectId}/test-runs`, token, 'POST', { test_case_id: caseId, mode: 'ai_driven' });
+    expect(res.status).toBe(201);
+    return waitForRun(((await res.json()) as { test_run: { id: string } }).test_run.id);
+  };
+  // A bug belongs to a case through its run; the run moves forward, the case stays.
+  const bugsOf = async (caseId: string) =>
+    (await supabase.from('bugs').select('id, occurrences, test_run_id, test_runs!inner(test_case_id)').eq('test_runs.test_case_id', caseId))
+      .data ?? [];
+
+  it('three failures make one bug that counts them and points at the latest run; once resolved, the next one files anew', async () => {
+    const caseId = await createCase(FAILING);
+    const first = await run(caseId);
+    expect(first.bugs).toHaveLength(1);
+    await run(caseId);
+    const third = await run(caseId);
+    expect(third.test_run.status).toBe('failed');
+    expect(third.bugs.map((b) => b.id)).toEqual([first.bugs[0].id]); // the latest run's page shows that bug
+    const bugs = await bugsOf(caseId);
+    expect(bugs.map((b) => [b.id, b.occurrences, b.test_run_id])).toEqual([[first.bugs[0].id, 3, third.test_run.id]]);
+
+    // Fixed and failing again is a new bug, not a count on the resolved one.
+    expect((await api(`/projects/${projectId}/bugs/${first.bugs[0].id}`, token, 'PUT', { status: 'resolved' })).status).toBe(200);
+    const fourth = await run(caseId);
+    expect(fourth.bugs).toHaveLength(1);
+    expect(fourth.bugs[0].id).not.toBe(first.bugs[0].id);
+    expect((await bugsOf(caseId)).map((b) => b.occurrences).sort()).toEqual([1, 3]);
+  }, 180_000);
+
+  it('before migration 33 every failure still files its own bug', async () => {
+    const realFrom = supabase.from.bind(supabase);
+    let lookups = 0;
+    const missing = { data: null, error: { code: '42703', message: 'column bugs.occurrences does not exist' } };
+    const chain: Record<string, unknown> = {};
+    for (const k of ['eq', 'in', 'order', 'limit']) chain[k] = () => chain;
+    chain.maybeSingle = async () => missing;
+    const spy = vi.spyOn(supabase, 'from').mockImplementation(((table: string) => {
+      const query = realFrom(table);
+      if (table !== 'bugs') return query;
+      const select = query.select.bind(query) as (...a: unknown[]) => unknown;
+      return Object.assign(query, {
+        select: (...a: unknown[]) => (String(a[0]).startsWith('id, occurrences') ? (lookups++, chain) : select(...a)),
+      });
+    }) as typeof supabase.from);
+    try {
+      const caseId = await createCase(FAILING);
+      const first = await run(caseId);
+      const second = await run(caseId);
+      expect(lookups).toBe(2); // the lookup was tried and refused both times
+      expect(first.bugs).toHaveLength(1);
+      expect(second.bugs).toHaveLength(1);
+      expect(second.bugs[0].id).not.toBe(first.bugs[0].id);
+    } finally {
+      spy.mockRestore();
+    }
+  }, 120_000);
+});

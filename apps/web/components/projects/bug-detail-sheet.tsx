@@ -83,6 +83,8 @@ export function BugDetailSheet({ projectId, bugId, onClose }: { projectId: strin
               <SheetDescription>
                 {BUG_STATUSES.find(([value]) => value === bug.status)?.[1] ?? bug.status} · filed{' '}
                 {new Date(bug.created_at).toLocaleString()}
+                {(bug.occurrences ?? 1) > 1 &&
+                  ` · failed ${bug.occurrences} times, last ${new Date(bug.updated_at).toLocaleString()}`}
                 {bug.browser ? ` · ${bug.browser}` : ''}
               </SheetDescription>
             </SheetHeader>
@@ -90,7 +92,7 @@ export function BugDetailSheet({ projectId, bugId, onClose }: { projectId: strin
             {bug.test_run_id && (
               <Button asChild variant="outline" size="sm" className="self-start">
                 <Link href={`/dashboard/projects/${projectId}/runs/${bug.test_run_id}`}>
-                  Open the run that found it
+                  {(bug.occurrences ?? 1) > 1 ? 'Open the latest failing run' : 'Open the run that found it'}
                   <ArrowRight />
                 </Link>
               </Button>
